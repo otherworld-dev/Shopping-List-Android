@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../website/style.css">
+<style>
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background-attachment: scroll; }
+  body { display: flex; flex-direction: column; align-items: center; }
+  .cap { font-family: var(--font); color: var(--text); font-weight: 800; font-size: 62px;
+         text-align: center; margin: 100px 70px 0; line-height: 1.12; letter-spacing: -0.02em; }
+  .cap span { background: linear-gradient(110deg, var(--green-dim), var(--green) 55%, #8fd6ff);
+              -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+  .scaler { transform: scale(2.45); transform-origin: center; }
+</style>
+</head>
+<body>
+  <div class="cap">Your household's list,<br><span>always in sync</span></div>
+  <div class="stage"><div class="scaler">
+    <div class="phone"><div class="phone-screen">
+      <div class="app-titlebar"><span class="back">‹</span><span class="app-title">Weekly Shopping</span><span class="dots">⋮</span></div>
+      <div class="app-card">
+        <div class="app-add"><span class="plus">+</span><span class="placeholder">Add an item to list…</span></div>
+        <div class="app-section"><span class="bar bar-green"></span>PRODUCE <span class="count">3</span></div>
+        <div class="app-item"><span class="cb"></span><span class="qty">1</span><span class="name">Bananas</span><span class="tag"><i class="dot green"></i>Produce</span></div>
+        <div class="app-item alt"><span class="cb"></span><span class="qty">2</span><span class="name">Avocados</span><span class="tag"><i class="dot green"></i>Produce</span></div>
+        <div class="app-item"><span class="cb"></span><span class="qty">1</span><span class="name">Mixed salad</span><span class="tag"><i class="dot green"></i>Produce</span></div>
+        <div class="app-section"><span class="bar bar-blue"></span>DAIRY <span class="count">2</span></div>
+        <div class="app-item"><span class="cb"></span><span class="qty">2</span><span class="name">Milk</span><span class="tag"><i class="dot blue"></i>Dairy</span></div>
+        <div class="app-item alt"><span class="cb"></span><span class="qty">1</span><span class="name">Cheddar</span><span class="tag"><i class="dot blue"></i>Dairy</span></div>
+        <div class="app-section"><span class="bar bar-orange"></span>BAKERY <span class="count">1</span></div>
+        <div class="app-item"><span class="cb"></span><span class="qty">1</span><span class="name">Sourdough</span><span class="tag"><i class="dot orange"></i>Bakery</span></div>
+        <div class="app-section app-section-muted">CHECKED <span class="count">1</span></div>
+        <div class="app-item done"><span class="cb checked">✓</span><span class="qty">1</span><span class="name">Eggs</span></div>
+      </div>
+    </div></div>
+  </div></div>
+</body>
+</html>

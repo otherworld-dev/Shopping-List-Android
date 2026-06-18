@@ -10,7 +10,9 @@ build/
 .cxx
 local.properties
 *.keystore
+*.jks
 !debug.keystore
+keystore.properties
 /app/release/
 /.scratch/
 
