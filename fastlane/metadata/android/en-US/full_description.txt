@@ -1,0 +1,24 @@
+The official Android client for the Shopping List server app for Nextcloud.
+
+This is a companion app for a self-hosted Nextcloud. It requires your own Nextcloud server (v30-35) with the free "Shopping List" server app installed (github.com/otherworld-dev/Shopping-List) — it will not work on its own.
+
+Shopping List for Nextcloud is a clean, fast shopping-list app that keeps your lists in sync through your own Nextcloud server — not a third-party cloud. Add items in a tap, check them off as you shop, and share a list with the people in your household.
+
+Your data stays yours: lists sync only to the Nextcloud server you choose, and the app keeps no account of its own. There are no ads, no trackers, and no analytics.
+
+Features:
+
+* Multiple lists, with quick add and one-tap check-off
+* Works offline — changes sync automatically when you're back online
+* Items grouped into colour-coded shop areas (aisles)
+* Reorder items by dragging
+* Shared lists for the whole household
+* Clean design that adopts your Nextcloud server's accent colour
+* Lightweight, with minimal permissions (internet access only, to reach your server)
+
+Requirements:
+
+* Your own Nextcloud server (v30-35) with the free "Shopping List" server app installed.
+* Your Nextcloud login (an app password is recommended).
+
+An independent app made by Otherworld. Not affiliated with or endorsed by Nextcloud GmbH; "Nextcloud" is a trademark of its owner.

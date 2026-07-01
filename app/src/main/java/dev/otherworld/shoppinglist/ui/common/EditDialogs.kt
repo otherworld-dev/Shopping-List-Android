@@ -13,7 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import dev.otherworld.shoppinglist.R
 
 /** Generic single-field text-entry dialog used for creating/renaming lists and similar. */
 @Composable
@@ -21,7 +23,7 @@ fun TextEntryDialog(
     title: String,
     label: String,
     initialValue: String = "",
-    confirmLabel: String = "Save",
+    confirmLabel: String = stringResource(R.string.action_save),
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -48,7 +50,7 @@ fun TextEntryDialog(
                 enabled = text.isNotBlank(),
             ) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
@@ -57,7 +59,7 @@ fun TextEntryDialog(
 fun ConfirmDialog(
     title: String,
     message: String,
-    confirmLabel: String = "Delete",
+    confirmLabel: String = stringResource(R.string.action_delete),
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -66,6 +68,6 @@ fun ConfirmDialog(
         title = { Text(title) },
         text = { Text(message) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }

@@ -30,7 +30,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.ui.common.openCustomTab
 
 @Composable
@@ -54,10 +56,10 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Shopping List", style = MaterialTheme.typography.headlineLarge)
+        Text(stringResource(R.string.header_shopping_list), style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Connect to your Nextcloud",
+            stringResource(R.string.login_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
@@ -68,19 +70,19 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Finish signing in in your browser, then return here.",
+                    stringResource(R.string.login_awaiting),
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(8.dp))
-                TextButton(onClick = viewModel::cancel) { Text("Cancel") }
+                TextButton(onClick = viewModel::cancel) { Text(stringResource(R.string.action_cancel)) }
             }
 
             else -> {
                 OutlinedTextField(
                     value = server,
                     onValueChange = { server = it },
-                    label = { Text("Server address") },
-                    placeholder = { Text("cloud.example.com") },
+                    label = { Text(stringResource(R.string.login_server_label)) },
+                    placeholder = { Text(stringResource(R.string.login_server_placeholder)) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -108,7 +110,7 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                             strokeWidth = 2.dp,
                         )
                     } else {
-                        Text("Log in")
+                        Text(stringResource(R.string.login_button))
                     }
                 }
             }

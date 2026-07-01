@@ -15,8 +15,3 @@ local.properties
 keystore.properties
 /app/release/
 /.scratch/
-
-# Claude Code
-.claude/
-CLAUDE.md
-.claudeignore

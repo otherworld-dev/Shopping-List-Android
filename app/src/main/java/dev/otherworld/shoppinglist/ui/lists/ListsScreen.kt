@@ -39,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.ui.common.ConfirmDialog
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
@@ -68,7 +70,7 @@ fun ListsScreen(
                 ),
                 title = {
                     Column {
-                        Text("Shopping List", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text(stringResource(R.string.header_shopping_list), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         if (viewModel.accountLabel.isNotEmpty()) {
                             Text(
                                 viewModel.accountLabel,
@@ -79,18 +81,18 @@ fun ListsScreen(
                 },
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.cd_refresh))
                     }
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("Manage tags") },
+                            text = { Text(stringResource(R.string.menu_manage_tags)) },
                             onClick = { menuOpen = false; onManageTags() },
                         )
                         DropdownMenuItem(
-                            text = { Text("Log out") },
+                            text = { Text(stringResource(R.string.menu_log_out)) },
                             onClick = { menuOpen = false; viewModel.logout() },
                         )
                     }
@@ -101,7 +103,7 @@ fun ListsScreen(
             ExtendedFloatingActionButton(
                 onClick = { showCreate = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("New list") },
+                text = { Text(stringResource(R.string.fab_new_list)) },
             )
         },
     ) { padding ->
@@ -120,7 +122,7 @@ fun ListsScreen(
                 }
                 state.lists.isEmpty() -> {
                     Text(
-                        "No lists yet. Tap “New list” to create one.",
+                        stringResource(R.string.lists_empty),
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                         textAlign = TextAlign.Center,
                     )
@@ -159,17 +161,17 @@ fun ListsScreen(
 
     if (showCreate) {
         TextEntryDialog(
-            title = "New list",
-            label = "List name",
-            confirmLabel = "Create",
+            title = stringResource(R.string.dialog_new_list_title),
+            label = stringResource(R.string.dialog_list_name_label),
+            confirmLabel = stringResource(R.string.action_create),
             onConfirm = { showCreate = false; viewModel.createList(it) },
             onDismiss = { showCreate = false },
         )
     }
     renameTarget?.let { target ->
         TextEntryDialog(
-            title = "Rename list",
-            label = "List name",
+            title = stringResource(R.string.dialog_rename_list_title),
+            label = stringResource(R.string.dialog_list_name_label),
             initialValue = target.title,
             onConfirm = { renameTarget = null; viewModel.renameList(target.id, it) },
             onDismiss = { renameTarget = null },
@@ -177,8 +179,8 @@ fun ListsScreen(
     }
     deleteTarget?.let { target ->
         ConfirmDialog(
-            title = "Delete list?",
-            message = "“${target.title}” and all its items will be permanently deleted.",
+            title = stringResource(R.string.dialog_delete_list_title),
+            message = stringResource(R.string.dialog_delete_list_message, target.title),
             onConfirm = { deleteTarget = null; viewModel.deleteList(target.id) },
             onDismiss = { deleteTarget = null },
         )
@@ -209,25 +211,25 @@ private fun ListRow(
         },
         headlineContent = { Text(list.title) },
         supportingContent = if (!list.isOwner) {
-            { Text(if (list.canWrite) "Shared with you" else "Shared (read-only)") }
+            { Text(if (list.canWrite) stringResource(R.string.list_shared_with_you) else stringResource(R.string.list_shared_readonly)) }
         } else null,
         trailingContent = {
             Box {
                 IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "List options")
+                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     if (list.isOwner) {
                         DropdownMenuItem(
-                            text = { Text("Share") },
+                            text = { Text(stringResource(R.string.action_share)) },
                             onClick = { menu = false; onShare() },
                         )
                         DropdownMenuItem(
-                            text = { Text("Rename") },
+                            text = { Text(stringResource(R.string.action_rename)) },
                             onClick = { menu = false; onRename() },
                         )
                         DropdownMenuItem(
-                            text = { Text("Delete") },
+                            text = { Text(stringResource(R.string.action_delete)) },
                             onClick = { menu = false; onDelete() },
                         )
                     }

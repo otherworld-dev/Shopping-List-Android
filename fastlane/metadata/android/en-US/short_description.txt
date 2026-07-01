@@ -1,0 +1,1 @@
+A fast, offline-friendly shopping list that syncs with your Nextcloud server.

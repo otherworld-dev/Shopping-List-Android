@@ -45,7 +45,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.ui.common.ConfirmDialog
 import dev.otherworld.shoppinglist.ui.common.parseHexColor
@@ -77,17 +79,17 @@ fun ManageAreasScreen(
                 ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
-                title = { Text("Shop areas", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = { Text(stringResource(R.string.areas_title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 actions = {
                     IconButton(onClick = { overflow = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more))
                     }
                     DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
                         DropdownMenuItem(
-                            text = { Text("Copy from another list") },
+                            text = { Text(stringResource(R.string.menu_copy_from_list)) },
                             enabled = otherLists.isNotEmpty(),
                             onClick = { overflow = false; showCopy = true },
                         )
@@ -99,7 +101,7 @@ fun ManageAreasScreen(
             ExtendedFloatingActionButton(
                 onClick = { showCreate = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("New area") },
+                text = { Text(stringResource(R.string.fab_new_area)) },
             )
         },
     ) { padding ->
@@ -114,8 +116,8 @@ fun ManageAreasScreen(
                     headlineContent = { Text(area.name) },
                     supportingContent = {
                         Text(
-                            if (area.keywords.isEmpty()) "No keywords"
-                            else "${area.keywords.size} keyword(s)",
+                            if (area.keywords.isEmpty()) stringResource(R.string.area_no_keywords)
+                            else stringResource(R.string.area_keywords_count, area.keywords.size),
                         )
                     },
                 )
@@ -126,7 +128,7 @@ fun ManageAreasScreen(
 
     if (showCreate) {
         AreaEditDialog(
-            title = "New area",
+            title = stringResource(R.string.dialog_new_area_title),
             initial = null,
             onSave = { name, color, keywords ->
                 showCreate = false
@@ -138,7 +140,7 @@ fun ManageAreasScreen(
     }
     editTarget?.let { area ->
         AreaEditDialog(
-            title = "Edit area",
+            title = stringResource(R.string.dialog_edit_area_title),
             initial = area,
             onSave = { name, color, keywords ->
                 editTarget = null
@@ -151,7 +153,7 @@ fun ManageAreasScreen(
     if (showCopy) {
         AlertDialog(
             onDismissRequest = { showCopy = false },
-            title = { Text("Copy areas from") },
+            title = { Text(stringResource(R.string.dialog_copy_areas_title)) },
             text = {
                 Column {
                     otherLists.forEach { list ->
@@ -166,7 +168,7 @@ fun ManageAreasScreen(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showCopy = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showCopy = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }
@@ -192,11 +194,11 @@ private fun AreaEditDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.field_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Colour", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
+                Text(stringResource(R.string.field_colour), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AREA_COLORS.forEach { hex ->
                         val swatch = parseHexColor(hex) ?: Color.Gray
@@ -220,7 +222,7 @@ private fun AreaEditDialog(
                 OutlinedTextField(
                     value = keywords,
                     onValueChange = { keywords = it },
-                    label = { Text("Keywords (comma-separated)") },
+                    label = { Text(stringResource(R.string.field_keywords)) },
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 )
             }
@@ -232,15 +234,15 @@ private fun AreaEditDialog(
                     if (name.isNotBlank()) onSave(name, color, kw)
                 },
                 enabled = name.isNotBlank(),
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
             if (onDelete != null) {
                 TextButton(onClick = onDelete) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             }
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

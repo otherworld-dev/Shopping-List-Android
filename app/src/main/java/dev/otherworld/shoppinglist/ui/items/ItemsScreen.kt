@@ -59,7 +59,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.ui.common.PollEffect
@@ -161,7 +163,7 @@ fun ItemsScreen(
         // Title header
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 12.dp)) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
             }
             Text(
                 state.title,
@@ -173,14 +175,14 @@ fun ItemsScreen(
             )
             Box {
                 IconButton(onClick = { overflow = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more))
                 }
                 DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
-                    DropdownMenuItem(text = { Text("Refresh") }, onClick = { overflow = false; viewModel.refresh() })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_refresh)) }, onClick = { overflow = false; viewModel.refresh() })
                     if (state.canWrite) {
-                        DropdownMenuItem(text = { Text("Manage areas") }, onClick = { overflow = false; onManageAreas() })
-                        DropdownMenuItem(text = { Text("Restore checked") }, onClick = { overflow = false; viewModel.uncheckAll() })
-                        DropdownMenuItem(text = { Text("Clear checked") }, onClick = { overflow = false; viewModel.clearChecked() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; viewModel.uncheckAll() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; viewModel.clearChecked() })
                     }
                 }
             }
@@ -205,7 +207,7 @@ fun ItemsScreen(
                     state.items.isEmpty() ->
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
-                                if (state.canWrite) "Nothing here yet — add an item above." else "No items yet.",
+                                if (state.canWrite) stringResource(R.string.items_empty_writable) else stringResource(R.string.items_empty_readonly),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(24.dp),
                             )
@@ -214,8 +216,8 @@ fun ItemsScreen(
                         items(rows, key = { it.key }) { row ->
                             ReorderableItem(reorderState, key = row.key) { _ ->
                                 when (row) {
-                                    is Row.AreaHeaderRow -> SectionHeader(row.area?.name ?: "Other", parseHexColor(row.area?.color), row.count)
-                                    is Row.CheckedHeaderRow -> SectionHeader("Checked", null, row.count)
+                                    is Row.AreaHeaderRow -> SectionHeader(row.area?.name ?: stringResource(R.string.section_other), parseHexColor(row.area?.color), row.count)
+                                    is Row.CheckedHeaderRow -> SectionHeader(stringResource(R.string.section_checked), null, row.count)
                                     is Row.ItemRowData -> {
                                         val dragModifier = if (row.draggable && state.canWrite) {
                                             Modifier.longPressDraggableHandle(
@@ -345,7 +347,7 @@ private fun AreaTag(area: ShopAreaModel?) {
         Box(Modifier.size(8.dp).background(color, CircleShape))
         Spacer(Modifier.width(6.dp))
         Text(
-            area?.name ?: "Other",
+            area?.name ?: stringResource(R.string.section_other),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -386,7 +388,7 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
             decorationBox = { inner ->
                 if (text.isEmpty()) {
                     Text(
-                        "Add an item to list…",
+                        stringResource(R.string.item_add_placeholder),
                         style = MaterialTheme.typography.bodyLarge,
                         fontStyle = FontStyle.Italic,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -410,17 +412,17 @@ private fun ItemEditDialog(
     var quantity by remember { mutableStateOf(item.quantity.orEmpty()) }
     var areaId by remember { mutableStateOf(item.shopAreaId) }
     var areaMenu by remember { mutableStateOf(false) }
-    val areaName = areas.firstOrNull { it.id == areaId }?.name ?: "No area"
+    val areaName = areas.firstOrNull { it.id == areaId }?.name ?: stringResource(R.string.item_no_area)
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit item") },
+        title = { Text(stringResource(R.string.dialog_edit_item_title)) },
         text = {
             Column {
                 androidx.compose.material3.OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.field_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -428,15 +430,15 @@ private fun ItemEditDialog(
                 androidx.compose.material3.OutlinedTextField(
                     value = quantity,
                     onValueChange = { quantity = it },
-                    label = { Text("Quantity") },
+                    label = { Text(stringResource(R.string.field_quantity)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.size(8.dp))
                 Box {
-                    TextButton(onClick = { areaMenu = true }) { Text("Area: $areaName") }
+                    TextButton(onClick = { areaMenu = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
                     DropdownMenu(expanded = areaMenu, onDismissRequest = { areaMenu = false }) {
-                        DropdownMenuItem(text = { Text("No area") }, onClick = { areaId = null; areaMenu = false })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
                         areas.sortedBy { it.sortOrder }.forEach { area ->
                             DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
                         }
@@ -446,13 +448,13 @@ private fun ItemEditDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (name.isNotBlank()) onSave(name, quantity, areaId) }, enabled = name.isNotBlank()) {
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDelete) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             }
         },
     )

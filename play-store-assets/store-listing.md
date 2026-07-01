@@ -10,6 +10,10 @@ Shopping List for Nextcloud   _(27 chars)_
 A fast, offline-friendly shopping list that syncs with your Nextcloud server.
 
 ## Full description (max 4000 chars)
+Note: this is a companion app for a self-hosted Nextcloud. It requires your own
+Nextcloud server (v30–35) with the free "Shopping List" server app installed — it
+will not work on its own. Server app: github.com/otherworld-dev/Shopping-List
+
 Shopping List for Nextcloud is a clean, fast shopping-list app that keeps your
 lists in sync through your own Nextcloud server — not a third-party cloud. Add
 items in a tap, check them off as you shop, and share a list with the people in
@@ -24,15 +28,16 @@ FEATURES
 • Works offline — changes sync automatically when you're back online
 • Reorder items by dragging
 • Shared lists for the whole household
-• Designed to be easy on the eyes, including e-ink readers
+• Clean design that adopts your Nextcloud server's accent colour
 • Lightweight, with minimal permissions (internet access only, to reach your server)
 
 REQUIREMENTS
-• A Nextcloud server you can reach, with the shopping-list backend enabled.  **[VERIFY: name the exact server-side app/endpoint users need]**
+• Your own Nextcloud server (v30–35) with the free "Shopping List" server app installed (github.com/otherworld-dev/Shopping-List).
 • Your Nextcloud login (an app password is recommended).
 
-This is an unofficial, independent app. "Nextcloud" is a trademark of Nextcloud
-GmbH; this app is not affiliated with or endorsed by Nextcloud GmbH.
+An independent app made by Otherworld and the official client for the Shopping
+List server app. "Nextcloud" is a trademark of Nextcloud GmbH; this app is not
+affiliated with or endorsed by Nextcloud GmbH.
 
 Questions or feedback: contact@otherworld.dev
 

@@ -40,7 +40,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
 
@@ -63,11 +65,11 @@ fun SharingScreen(
                 ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 title = {
-                    Text("Share “${viewModel.listTitle}”", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.share_title, viewModel.listTitle), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
             )
         },
@@ -84,10 +86,10 @@ fun SharingScreen(
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
 
-            SectionTitle("People & groups")
+            SectionTitle(stringResource(R.string.section_people_groups))
             AddShareRow(onAdd = viewModel::addShare)
             if (state.people.isEmpty()) {
-                Text("Not shared with anyone yet.", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.share_none_yet), style = MaterialTheme.typography.bodyMedium)
             } else {
                 state.people.forEach { share ->
                     PersonShareRow(
@@ -100,7 +102,7 @@ fun SharingScreen(
             }
 
             Spacer(Modifier.size(8.dp))
-            SectionTitle("Public link")
+            SectionTitle(stringResource(R.string.section_public_link))
             LinkSection(
                 link = state.link,
                 onCreate = { viewModel.createLink(write = false) },
@@ -115,9 +117,9 @@ fun SharingScreen(
 
     passwordTarget?.let { target ->
         TextEntryDialog(
-            title = "Set link password",
-            label = "Password",
-            confirmLabel = "Set",
+            title = stringResource(R.string.dialog_set_link_password_title),
+            label = stringResource(R.string.field_password),
+            confirmLabel = stringResource(R.string.action_set),
             onConfirm = { passwordTarget = null; viewModel.setLinkPassword(target, it) },
             onDismiss = { passwordTarget = null },
         )
@@ -140,15 +142,15 @@ private fun AddShareRow(onAdd: (String, Int, Boolean) -> Unit) {
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text(if (isGroup) "Group name" else "Username") },
+            label = { Text(if (isGroup) stringResource(R.string.field_group_name) else stringResource(R.string.field_username)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !isGroup, onClick = { isGroup = false }, label = { Text("User") })
-            FilterChip(selected = isGroup, onClick = { isGroup = true }, label = { Text("Group") })
+            FilterChip(selected = !isGroup, onClick = { isGroup = false }, label = { Text(stringResource(R.string.label_user)) })
+            FilterChip(selected = isGroup, onClick = { isGroup = true }, label = { Text(stringResource(R.string.label_group)) })
             Spacer(Modifier.size(8.dp))
-            Text("Can edit")
+            Text(stringResource(R.string.label_can_edit))
             Switch(checked = canEdit, onCheckedChange = { canEdit = it })
         }
         Button(
@@ -159,7 +161,7 @@ private fun AddShareRow(onAdd: (String, Int, Boolean) -> Unit) {
                 }
             },
             enabled = name.isNotBlank(),
-        ) { Text("Add") }
+        ) { Text(stringResource(R.string.action_add)) }
     }
 }
 
@@ -176,15 +178,15 @@ private fun PersonShareRow(
         Column(Modifier.weight(1f)) {
             Text(share.displayName, style = MaterialTheme.typography.bodyLarge)
             Text(
-                if (share.type == dev.otherworld.shoppinglist.domain.model.ShareType.GROUP) "Group" else "User",
+                if (share.type == dev.otherworld.shoppinglist.domain.model.ShareType.GROUP) stringResource(R.string.label_group) else stringResource(R.string.label_user),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text("Edit", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.label_edit), style = MaterialTheme.typography.labelMedium)
         Switch(checked = share.canWrite, onCheckedChange = onToggleWrite)
         IconButton(onClick = onRemove) {
-            Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.cd_remove), tint = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -200,29 +202,29 @@ private fun LinkSection(
     onRemove: () -> Unit,
 ) {
     if (link == null) {
-        OutlinedButton(onClick = onCreate) { Text("Create public link") }
+        OutlinedButton(onClick = onCreate) { Text(stringResource(R.string.link_create)) }
         return
     }
     Card {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                link.token?.let { "…/s/${it.take(10)}…" } ?: "Public link",
+                link.token?.let { "…/s/${it.take(10)}…" } ?: stringResource(R.string.link_public),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Can edit", modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.label_can_edit), modifier = Modifier.weight(1f))
                 Switch(checked = link.canWrite, onCheckedChange = onToggleWrite)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                link.token?.let { token -> TextButton(onClick = { onCopy(token) }) { Text("Copy link") } }
+                link.token?.let { token -> TextButton(onClick = { onCopy(token) }) { Text(stringResource(R.string.link_copy)) } }
                 if (link.hasPassword) {
-                    TextButton(onClick = onClearPassword) { Text("Remove password") }
+                    TextButton(onClick = onClearPassword) { Text(stringResource(R.string.link_remove_password)) }
                 } else {
-                    TextButton(onClick = onPassword) { Text("Set password") }
+                    TextButton(onClick = onPassword) { Text(stringResource(R.string.link_set_password)) }
                 }
             }
             TextButton(onClick = onRemove) {
-                Text("Delete link", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.link_delete), color = MaterialTheme.colorScheme.error)
             }
         }
     }

@@ -41,7 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
 
 data class TagsUiState(
@@ -106,17 +108,17 @@ fun ManageTagsScreen(
                 ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
-                title = { Text("Tags") },
+                title = { Text(stringResource(R.string.tags_title)) },
             )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showCreate = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("New tag") },
+                text = { Text(stringResource(R.string.fab_new_tag)) },
             )
         },
     ) { padding ->
@@ -127,7 +129,7 @@ fun ManageTagsScreen(
 
                 state.tags.isEmpty() ->
                     Text(
-                        "No tags yet. Tap “New tag” to create one.",
+                        stringResource(R.string.tags_empty),
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                         textAlign = TextAlign.Center,
                     )
@@ -140,7 +142,7 @@ fun ManageTagsScreen(
                                 IconButton(onClick = { viewModel.deleteTag(tag.id) }) {
                                     Icon(
                                         Icons.Filled.Delete,
-                                        contentDescription = "Delete",
+                                        contentDescription = stringResource(R.string.cd_delete),
                                         tint = MaterialTheme.colorScheme.error,
                                     )
                                 }
@@ -155,9 +157,9 @@ fun ManageTagsScreen(
 
     if (showCreate) {
         TextEntryDialog(
-            title = "New tag",
-            label = "Tag name",
-            confirmLabel = "Create",
+            title = stringResource(R.string.dialog_new_tag_title),
+            label = stringResource(R.string.dialog_tag_name_label),
+            confirmLabel = stringResource(R.string.action_create),
             onConfirm = { showCreate = false; viewModel.createTag(it) },
             onDismiss = { showCreate = false },
         )

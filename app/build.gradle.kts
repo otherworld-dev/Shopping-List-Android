@@ -44,7 +44,12 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            // Sign locally only when keystore.properties is present. F-Droid's build server
+            // has no keystore and signs with its own key, so guarding this lets the keyless
+            // release build succeed there (and in any keyless CI).
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
