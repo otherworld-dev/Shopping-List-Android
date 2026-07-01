@@ -1,11 +1,14 @@
 # Shopping List for Nextcloud — Android
 
-The **official** Android client for the [Shopping List](https://github.com/otherworld-dev/Shopping-List)
-server app for Nextcloud. A fast, shared, offline-first shopping list that syncs through your own
-Nextcloud server — no third-party cloud, no accounts, no trackers.
+**The official Android app** for the [Shopping List server app](https://github.com/otherworld-dev/Shopping-List)
+for Nextcloud — from the team that builds the server. A fast, shared, offline-first shopping list that
+syncs through your own Nextcloud server: no third-party cloud, no accounts, no trackers.
 
-> An independent app made by Otherworld. Not affiliated with or endorsed by Nextcloud GmbH;
-> "Nextcloud" is a trademark of its owner.
+- 🌐 **Website** — <https://shoppinglist.otherworld.dev>
+- ▶️ **Google Play** — <https://play.google.com/store/apps/details?id=dev.otherworld.shoppinglist>
+
+> An independent app made by Otherworld, and the **official** client for the Shopping List server app.
+> Not affiliated with or endorsed by Nextcloud GmbH; "Nextcloud" is a trademark of its owner.
 
 ## Features
 
@@ -22,9 +25,13 @@ Nextcloud server — no third-party cloud, no accounts, no trackers.
 
 ## Install
 
-- **F-Droid** — coming soon (free)
-- **Google Play** — coming soon (paid, for the convenience of automatic updates)
+As the official app, it's available through:
+
+- **[Google Play](https://play.google.com/store/apps/details?id=dev.otherworld.shoppinglist)** — the easiest way to install and stay updated (a small price supports development; the app is equally free to build from source)
+- **F-Droid** — free, coming soon
 - **APK** — from the [Releases](https://github.com/otherworld-dev/Shopping-List-Android/releases) page
+
+More at **<https://shoppinglist.otherworld.dev>**.
 
 ## Build
 
