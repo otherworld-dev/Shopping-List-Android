@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nextcloud is very often self-hosted behind a private or enterprise CA. Since Android 7.0
+  (API 24) apps do NOT trust user-installed CAs by default, so a server whose certificate
+  chains to a CA the owner added in Android settings ("Install a certificate > CA
+  certificate"; the exact menu path varies by version/OEM) fails the TLS handshake with
+  "Trust anchor for certification path not found". Same pattern as Nextcloud Talk and
+  Home Assistant; the official Nextcloud files app ships this too. Like the official app we
+  additionally offer a trust-on-first-use accept prompt (see data/tls/) for certificates the
+  platform can't validate at all.
+
+  Trusting the "user" store only adds the owner's explicitly installed anchors: chain
+  building, expiry checks, and hostname verification all still run, and certificates the
+  user never installed are still rejected. (A self-signed cert installed as its own anchor
+  is accepted; Android's installer requires it to carry CA:TRUE basicConstraints.)
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

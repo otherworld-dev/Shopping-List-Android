@@ -1,10 +1,26 @@
 package dev.otherworld.shoppinglist.ui
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -18,7 +34,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.Account
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
+import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.theme.ServerTheme
+import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.tls.CertAlertController
+import dev.otherworld.shoppinglist.data.tls.CertInfo
+import dev.otherworld.shoppinglist.ui.common.CertTrustDialog
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import dev.otherworld.shoppinglist.ui.areas.ManageAreasScreen
@@ -39,9 +60,13 @@ object Routes {
 class AppViewModel @Inject constructor(
     credentialStore: CredentialStore,
     serverTheme: ServerTheme,
-    realtime: RealtimeController,
+    private val realtime: RealtimeController,
+    private val syncEngine: SyncEngine,
+    private val certAlerts: CertAlertController,
 ) : ViewModel() {
     val account: StateFlow<Account?> = credentialStore.accountFlow
+    val certAlert: StateFlow<CertInfo?> = certAlerts.alert
+    val suppressedCert: StateFlow<CertInfo?> = certAlerts.suppressed
 
     init {
         // On login: adopt the server's brand colour and open the real-time push connection.
@@ -52,10 +77,25 @@ class AppViewModel @Inject constructor(
                     realtime.ensureConnected()
                 } else {
                     serverTheme.clear()
+                    certAlerts.onLoggedOut()
                 }
             }
             .launchIn(viewModelScope)
+
+        // After the user approves a changed certificate, drain queued edits, reopen push, and
+        // pull fresh data so the visible screen isn't stale.
+        certAlerts.retry
+            .onEach {
+                syncEngine.requestSync()
+                realtime.ensureConnected()
+                realtime.signalRefresh()
+            }
+            .launchIn(viewModelScope)
     }
+
+    fun onTrustCert() = certAlerts.trust()
+    fun onDismissCert() = certAlerts.dismiss()
+    fun reviewCert() = certAlerts.review()
 }
 
 @Composable
@@ -64,12 +104,21 @@ fun AppRoot(
     viewModel: AppViewModel = hiltViewModel(),
 ) {
     val account by viewModel.account.collectAsStateWithLifecycle()
+    val certAlert by viewModel.certAlert.collectAsStateWithLifecycle()
+    val suppressedCert by viewModel.suppressedCert.collectAsStateWithLifecycle()
     val navController = rememberNavController()
+
+    Column(modifier.fillMaxSize()) {
+        // Persistent banner when the user dismissed a changed-certificate prompt but sync is
+        // still failing — so the app never silently stops syncing without any indication.
+        if (account != null && suppressedCert != null) {
+            CertPausedBanner(onClick = viewModel::reviewCert)
+        }
 
     NavHost(
         navController = navController,
         startDestination = if (account == null) Routes.LOGIN else Routes.HOME,
-        modifier = modifier,
+        modifier = Modifier.weight(1f),
     ) {
         composable(Routes.LOGIN) { LoginScreen() }
 
@@ -128,6 +177,20 @@ fun AppRoot(
             ManageTagsScreen(onBack = { navController.popBackStack() })
         }
     }
+    } // Column
+
+    // A server certificate that changed after login: prompt to re-approve, app-wide. Gated on
+    // an active account so a stale alert can't outlive logout.
+    if (account != null) {
+        certAlert?.let { info ->
+            CertTrustDialog(
+                info = info,
+                showBrowserNote = false,
+                onTrust = viewModel::onTrustCert,
+                onDismiss = viewModel::onDismissCert,
+            )
+        }
+    }
 
     // React to login/logout from anywhere by switching the active destination.
     LaunchedEffect(account) {
@@ -141,6 +204,28 @@ fun AppRoot(
                 popUpTo(0) { inclusive = true }
                 launchSingleTop = true
             }
+        }
+    }
+}
+
+@Composable
+private fun CertPausedBanner(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                stringResource(R.string.cert_paused_banner),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }

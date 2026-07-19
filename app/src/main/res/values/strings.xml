@@ -27,6 +27,22 @@
     <string name="login_server_placeholder">cloud.example.com</string>
     <string name="login_button">Log in</string>
 
+    <!-- Certificate approval prompt -->
+    <string name="cert_dialog_title">Trust this server?</string>
+    <string name="cert_dialog_intro">This server’s security certificate isn’t trusted by your device. Only continue if you run this server or trust whoever does.</string>
+    <string name="cert_dialog_mismatch_intro">This server’s certificate doesn’t match the address you entered. Only continue if you’re sure this is your server.</string>
+    <string name="cert_dialog_both_intro">This server’s security certificate isn’t trusted by your device, and it doesn’t match the address you entered. Only continue if you’re sure this is your server.</string>
+    <string name="cert_field_server">Server</string>
+    <string name="cert_field_subject">Issued to</string>
+    <string name="cert_field_issuer">Issued by</string>
+    <string name="cert_field_validity">Valid</string>
+    <string name="cert_field_fingerprint">SHA-256 fingerprint</string>
+    <string name="cert_issuer_self_signed">Same as subject (self-signed)</string>
+    <string name="cert_validity_expired">%1$s — expired</string>
+    <string name="cert_dialog_browser_note">Your browser will show its own certificate warning during sign-in. Choose Advanced and continue to finish.</string>
+    <string name="cert_action_trust">Trust</string>
+    <string name="cert_paused_banner">Server certificate changed — syncing is paused. Tap to review.</string>
+
     <!-- Lists -->
     <string name="menu_manage_tags">Manage tags</string>
     <string name="menu_log_out">Log out</string>

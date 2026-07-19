@@ -33,6 +33,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.ui.common.CertTrustDialog
 import dev.otherworld.shoppinglist.ui.common.openCustomTab
 
 @Composable
@@ -115,5 +116,14 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                 }
             }
         }
+    }
+
+    // Approval prompt for a certificate the platform couldn't validate on its own.
+    state.pendingCert?.let { cert ->
+        CertTrustDialog(
+            info = cert,
+            onTrust = viewModel::trustPendingCert,
+            onDismiss = viewModel::dismissPendingCert,
+        )
     }
 }

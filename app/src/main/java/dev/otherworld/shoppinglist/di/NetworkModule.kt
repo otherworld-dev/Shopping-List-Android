@@ -3,6 +3,8 @@ package dev.otherworld.shoppinglist.di
 import dev.otherworld.shoppinglist.data.remote.JsonConverterFactory
 import dev.otherworld.shoppinglist.data.remote.OcsAuthInterceptor
 import dev.otherworld.shoppinglist.data.remote.OcsService
+import dev.otherworld.shoppinglist.data.tls.TlsFailureInterceptor
+import dev.otherworld.shoppinglist.data.tls.TofuTls
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,8 +41,8 @@ object NetworkModule {
     @Provides
     @Singleton
     @LoginClient
-    fun provideLoginClient(logging: HttpLoggingInterceptor): OkHttpClient =
-        OkHttpClient.Builder()
+    fun provideLoginClient(logging: HttpLoggingInterceptor, tofuTls: TofuTls): OkHttpClient =
+        tofuTls.applyTo(OkHttpClient.Builder())
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .header("User-Agent", "Shopping List (Android)")
@@ -59,8 +61,12 @@ object NetworkModule {
     fun provideApiClient(
         authInterceptor: OcsAuthInterceptor,
         logging: HttpLoggingInterceptor,
+        tofuTls: TofuTls,
+        tlsFailure: TlsFailureInterceptor,
     ): OkHttpClient =
-        OkHttpClient.Builder()
+        tofuTls.applyTo(OkHttpClient.Builder())
+            // Outermost, so it observes handshake failures from any inner interceptor + the network.
+            .addInterceptor(tlsFailure)
             .addInterceptor(authInterceptor)
             .addInterceptor(logging)
             // Generous timeouts: this can run on slow e-ink-device Wi-Fi where a cold TLS
