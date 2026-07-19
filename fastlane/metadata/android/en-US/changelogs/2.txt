@@ -1,0 +1,3 @@
+Support for self-hosted servers with self-signed or private-CA certificates: the app now trusts CAs installed in Android's settings, and adds an in-app "Trust this server?" prompt to approve a certificate without leaving the app. If a server's certificate changes later, you're prompted to re-approve it.
+
+Reorder shop-area groups (Bakery, Produce, Dairy…) by drag-and-drop to match the store you're in — works offline.
