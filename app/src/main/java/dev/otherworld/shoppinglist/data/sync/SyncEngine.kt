@@ -9,13 +9,17 @@ import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
+import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -52,6 +56,11 @@ class SyncEngine @Inject constructor(
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing.asStateFlow()
 
+    // Emits when a mutation is given up on (dropped after max retries) — a durable, user-visible
+    // sync failure the UI should surface, unlike transient retryable errors.
+    private val _failures = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val failures: SharedFlow<Unit> = _failures.asSharedFlow()
+
     val pendingCount get() = mutationDao.count()
 
     /** Fire-and-forget drain request. */
@@ -75,11 +84,12 @@ class SyncEngine @Inject constructor(
                     is IOException -> return true // network down — retry on reconnect
                     is HttpException -> {
                         if (e.code() == 404) {
-                            mutationDao.deleteBySeq(m.seq) // gone on server — discard
+                            mutationDao.deleteBySeq(m.seq) // gone on server — discard (benign)
                         } else {
                             val attempts = m.attempts + 1
                             if (attempts >= MAX_ATTEMPTS) {
                                 mutationDao.deleteBySeq(m.seq)
+                                _failures.tryEmit(Unit) // gave up — surface it
                             } else {
                                 mutationDao.update(m.copy(attempts = attempts))
                                 return true // back off; retry later
@@ -88,8 +98,12 @@ class SyncEngine @Inject constructor(
                     }
                     else -> {
                         val attempts = m.attempts + 1
-                        if (attempts >= MAX_ATTEMPTS) mutationDao.deleteBySeq(m.seq)
-                        else { mutationDao.update(m.copy(attempts = attempts)); return true }
+                        if (attempts >= MAX_ATTEMPTS) {
+                            mutationDao.deleteBySeq(m.seq)
+                            _failures.tryEmit(Unit) // gave up — surface it
+                        } else {
+                            mutationDao.update(m.copy(attempts = attempts)); return true
+                        }
                     }
                 }
             }
@@ -103,6 +117,22 @@ class SyncEngine @Inject constructor(
         when (m.entity) {
             MutationEntities.ITEM -> executeItem(m)
             MutationEntities.LIST -> executeList(m)
+            MutationEntities.AREA -> executeArea(m)
+        }
+    }
+
+    private suspend fun executeArea(m: MutationEntity) {
+        when (m.type) {
+            MutationTypes.REORDER -> {
+                // No bulk area-reorder endpoint: push each area's sortOrder. Re-running the whole
+                // loop on retry is idempotent. Areas deleted on the server (404) are skipped; other
+                // failures propagate so drain halts/retries.
+                val p = json.decodeFromString<ReorderPayload>(m.payload)
+                p.sortedIds.forEachIndexed { index, areaId ->
+                    runCatching { service.updateArea(m.listId, areaId, UpdateAreaRequest(sortOrder = index)) }
+                        .onFailure { e -> if (e !is HttpException || e.code() != 404) throw e }
+                }
+            }
         }
     }
 

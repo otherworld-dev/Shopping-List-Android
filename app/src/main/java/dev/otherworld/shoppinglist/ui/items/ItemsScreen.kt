@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,10 +51,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -96,7 +103,7 @@ private fun buildRows(items: List<ItemModel>, areas: List<ShopAreaModel>): List<
     val byArea = unchecked.groupBy { it.shopAreaId }
     val known = areas.map { it.id }.toSet()
     val rows = mutableListOf<Row>()
-    areas.sortedBy { it.sortOrder }.forEach { area ->
+    areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
         val list = byArea[area.id]?.sortedBy { it.sortOrder } ?: return@forEach
         rows += Row.AreaHeaderRow(area, list.size)
         list.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = true, alt = i % 2 == 1) }
@@ -125,7 +132,14 @@ fun ItemsScreen(
     PollEffect { viewModel.poll() }
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
-    var showReorderAreas by remember { mutableStateOf(false) }
+    var showReorderAreas by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(state.error) {
+        state.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeError()
+        }
+    }
 
     val areaById = remember(state.areas) { state.areas.associateBy { it.id } }
     var rows by remember { mutableStateOf(buildRows(state.items, state.areas)) }
@@ -255,6 +269,7 @@ fun ItemsScreen(
             }
         }
       }
+      SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 
     editTarget?.let { item ->
@@ -283,21 +298,18 @@ private fun ReorderAreasSheet(
     onReorder: (List<Long>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // Seed once from the areas at open time (no key) so a background poll refresh can't reset
-    // an in-progress drag.
+    // Seed once from the areas at open time (no key) so a background poll refresh can't reset an
+    // in-progress drag. Every reorder — a drag drop or an accessibility action — commits
+    // immediately, so the order is durable and survives rotation / process death (no reliance on
+    // a dismiss-time commit).
     var order by remember { mutableStateOf(areas.sortedBy { it.sortOrder }) }
-    val initialIds = remember { order.map { it.id } }
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
         order = order.toMutableList().apply { add(to.index, removeAt(from.index)) }
     }
-    ModalBottomSheet(
-        onDismissRequest = {
-            val ids = order.map { it.id }
-            if (ids != initialIds) onReorder(ids)
-            onDismiss()
-        },
-    ) {
+    val moveUpLabel = stringResource(R.string.a11y_move_up)
+    val moveDownLabel = stringResource(R.string.a11y_move_down)
+    ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -321,10 +333,34 @@ private fun ReorderAreasSheet(
                 state = lazyListState,
                 modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
             ) {
-                items(order, key = { it.id }) { area ->
+                itemsIndexed(order, key = { _, area -> area.id }) { index, area ->
                     ReorderableItem(reorderState, key = area.id) { _ ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // Screen readers can't perform the drag gesture, so expose the
+                                // reorder as Move up / Move down custom actions on the row.
+                                .semantics {
+                                    customActions = buildList {
+                                        if (index > 0) add(
+                                            CustomAccessibilityAction(moveUpLabel) {
+                                                val moved = order.toMutableList().apply { add(index - 1, removeAt(index)) }
+                                                order = moved
+                                                onReorder(moved.map { it.id })
+                                                true
+                                            },
+                                        )
+                                        if (index < order.size - 1) add(
+                                            CustomAccessibilityAction(moveDownLabel) {
+                                                val moved = order.toMutableList().apply { add(index + 1, removeAt(index)) }
+                                                order = moved
+                                                onReorder(moved.map { it.id })
+                                                true
+                                            },
+                                        )
+                                    }
+                                }
+                                .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(
@@ -344,7 +380,9 @@ private fun ReorderAreasSheet(
                                 Icons.Filled.DragHandle,
                                 contentDescription = stringResource(R.string.cd_drag_reorder),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.draggableHandle(),
+                                modifier = Modifier.draggableHandle(
+                                    onDragStopped = { onReorder(order.map { it.id }) },
+                                ),
                             )
                         }
                     }
@@ -534,7 +572,7 @@ private fun ItemEditDialog(
                     TextButton(onClick = { areaMenu = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
                     DropdownMenu(expanded = areaMenu, onDismissRequest = { areaMenu = false }) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
-                        areas.sortedBy { it.sortOrder }.forEach { area ->
+                        areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
                             DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
                         }
                     }

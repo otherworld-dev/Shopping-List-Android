@@ -78,14 +78,18 @@ interface ItemDao {
 
 @Dao
 interface AreaDao {
-    @Query("SELECT * FROM areas WHERE listId = :listId ORDER BY sortOrder")
+    // id is a deterministic tiebreak so equal sortOrder never renders in an arbitrary order.
+    @Query("SELECT * FROM areas WHERE listId = :listId ORDER BY sortOrder, id")
     fun observeByList(listId: Long): Flow<List<AreaEntity>>
 
-    @Query("SELECT * FROM areas WHERE listId = :listId ORDER BY sortOrder")
+    @Query("SELECT * FROM areas WHERE listId = :listId ORDER BY sortOrder, id")
     suspend fun getByList(listId: Long): List<AreaEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(areas: List<AreaEntity>)
+
+    @Query("DELETE FROM areas WHERE id = :id")
+    suspend fun deleteById(id: Long)
 
     @Query("DELETE FROM areas WHERE listId = :listId")
     suspend fun deleteByList(listId: Long)
@@ -122,6 +126,14 @@ interface MutationDao {
 
     @Query("SELECT * FROM mutations WHERE type = 'reorder'")
     suspend fun reorderMutations(): List<MutationEntity>
+
+    /** Count of pending shop-area mutations for a list (currently only reorders). */
+    @Query("SELECT COUNT(*) FROM mutations WHERE entity = 'area' AND listId = :listId")
+    suspend fun pendingAreaCount(listId: Long): Int
+
+    /** Drops any queued area reorder for a list so a newer one supersedes it. */
+    @Query("DELETE FROM mutations WHERE entity = 'area' AND type = 'reorder' AND listId = :listId")
+    suspend fun deleteAreaReorders(listId: Long)
 
     @Query("SELECT DISTINCT targetId FROM mutations WHERE entity = 'list'")
     suspend fun pendingListIds(): List<Long>

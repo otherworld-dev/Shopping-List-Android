@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.repo.AreaRepository
 import dev.otherworld.shoppinglist.data.repo.ItemRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
+import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.text.SmartInput
@@ -37,6 +38,7 @@ class ItemsViewModel @Inject constructor(
     private val smartInput: SmartInput,
     private val connectivity: ConnectivityObserver,
     private val realtime: RealtimeController,
+    private val syncEngine: SyncEngine,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -64,6 +66,10 @@ class ItemsViewModel @Inject constructor(
         refresh()
         realtime.ensureConnected()
         viewModelScope.launch { realtime.events.collect { poll() } }
+        // Surface durable background-sync failures (a queued mutation was given up on).
+        viewModelScope.launch {
+            syncEngine.failures.collect { _error.value = "Some changes couldn't be saved to the server." }
+        }
     }
 
     fun refresh() {

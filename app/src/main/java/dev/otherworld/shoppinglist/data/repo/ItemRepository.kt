@@ -56,8 +56,12 @@ class ItemRepository @Inject constructor(
         withContext(NonCancellable) {
             coroutineScope {
                 launch {
+                    // A queued area reorder owns the local order until it syncs; don't let the
+                    // server's (stale) order clobber it.
+                    if (mutationDao.pendingAreaCount(listId) > 0) return@launch
                     val areas = service.getAreas(listId).ocs.data
                     db.withTransaction {
+                        if (mutationDao.pendingAreaCount(listId) > 0) return@withTransaction
                         areaDao.deleteByList(listId)
                         areaDao.upsertAll(areas.map { it.toEntity(listId) })
                     }

@@ -35,6 +35,7 @@ data class TitlePayload(val title: String)
 object MutationEntities {
     const val ITEM = "item"
     const val LIST = "list"
+    const val AREA = "area"
 }
 
 object MutationTypes {

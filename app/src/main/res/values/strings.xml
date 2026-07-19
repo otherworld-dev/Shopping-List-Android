@@ -65,6 +65,8 @@
     <string name="reorder_areas_title">Reorder areas</string>
     <string name="reorder_areas_hint">Drag to match the order of the store you\'re visiting.</string>
     <string name="cd_drag_reorder">Drag to reorder</string>
+    <string name="a11y_move_up">Move up</string>
+    <string name="a11y_move_down">Move down</string>
     <string name="items_empty_writable">Nothing here yet — add an item above.</string>
     <string name="items_empty_readonly">No items yet.</string>
     <string name="section_other">Other</string>
