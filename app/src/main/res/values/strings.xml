@@ -59,8 +59,12 @@
     <!-- Items -->
     <string name="menu_refresh">Refresh</string>
     <string name="menu_manage_areas">Manage areas</string>
+    <string name="menu_reorder_areas">Reorder areas</string>
     <string name="menu_restore_checked">Restore checked</string>
     <string name="menu_clear_checked">Clear checked</string>
+    <string name="reorder_areas_title">Reorder areas</string>
+    <string name="reorder_areas_hint">Drag to match the order of the store you\'re visiting.</string>
+    <string name="cd_drag_reorder">Drag to reorder</string>
     <string name="items_empty_writable">Nothing here yet — add an item above.</string>
     <string name="items_empty_readonly">No items yet.</string>
     <string name="section_other">Other</string>

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -27,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -37,6 +39,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -122,6 +125,7 @@ fun ItemsScreen(
     PollEffect { viewModel.poll() }
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
+    var showReorderAreas by remember { mutableStateOf(false) }
 
     val areaById = remember(state.areas) { state.areas.associateBy { it.id } }
     var rows by remember { mutableStateOf(buildRows(state.items, state.areas)) }
@@ -181,6 +185,11 @@ fun ItemsScreen(
                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_refresh)) }, onClick = { overflow = false; viewModel.refresh() })
                     if (state.canWrite) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_reorder_areas)) },
+                            enabled = state.areas.size >= 2,
+                            onClick = { overflow = false; showReorderAreas = true },
+                        )
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; viewModel.uncheckAll() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; viewModel.clearChecked() })
                     }
@@ -256,6 +265,92 @@ fun ItemsScreen(
             onDelete = { editTarget = null; viewModel.deleteItem(item) },
             onDismiss = { editTarget = null },
         )
+    }
+
+    if (showReorderAreas) {
+        ReorderAreasSheet(
+            areas = state.areas,
+            onReorder = viewModel::reorderAreas,
+            onDismiss = { showReorderAreas = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReorderAreasSheet(
+    areas: List<ShopAreaModel>,
+    onReorder: (List<Long>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // Seed once from the areas at open time (no key) so a background poll refresh can't reset
+    // an in-progress drag.
+    var order by remember { mutableStateOf(areas.sortedBy { it.sortOrder }) }
+    val initialIds = remember { order.map { it.id } }
+    val lazyListState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        order = order.toMutableList().apply { add(to.index, removeAt(from.index)) }
+    }
+    ModalBottomSheet(
+        onDismissRequest = {
+            val ids = order.map { it.id }
+            if (ids != initialIds) onReorder(ids)
+            onDismiss()
+        },
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 12.dp),
+        ) {
+            Text(
+                stringResource(R.string.reorder_areas_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.size(4.dp))
+            Text(
+                stringResource(R.string.reorder_areas_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.size(12.dp))
+            LazyColumn(
+                state = lazyListState,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+            ) {
+                items(order, key = { it.id }) { area ->
+                    ReorderableItem(reorderState, key = area.id) { _ ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(16.dp)
+                                    .background(parseHexColor(area.color) ?: MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                area.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                Icons.Filled.DragHandle,
+                                contentDescription = stringResource(R.string.cd_drag_reorder),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.draggableHandle(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

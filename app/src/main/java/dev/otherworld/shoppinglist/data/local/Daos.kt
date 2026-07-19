@@ -81,6 +81,9 @@ interface AreaDao {
     @Query("SELECT * FROM areas WHERE listId = :listId ORDER BY sortOrder")
     fun observeByList(listId: Long): Flow<List<AreaEntity>>
 
+    @Query("SELECT * FROM areas WHERE listId = :listId ORDER BY sortOrder")
+    suspend fun getByList(listId: Long): List<AreaEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(areas: List<AreaEntity>)
 

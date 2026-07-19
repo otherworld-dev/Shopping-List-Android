@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.otherworld.shoppinglist.data.repo.AreaRepository
 import dev.otherworld.shoppinglist.data.repo.ItemRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
@@ -32,6 +33,7 @@ data class ItemsUiState(
 @HiltViewModel
 class ItemsViewModel @Inject constructor(
     private val repository: ItemRepository,
+    private val areaRepository: AreaRepository,
     private val smartInput: SmartInput,
     private val connectivity: ConnectivityObserver,
     private val realtime: RealtimeController,
@@ -141,6 +143,14 @@ class ItemsViewModel @Inject constructor(
     fun moveToArea(item: ItemModel, areaId: Long?) {
         if (item.shopAreaId == areaId || areaId == null) return
         viewModelScope.launch { repository.updateItem(item, shopAreaId = areaId, areaExplicit = true) }
+    }
+
+    /** Persists a new ordering of the shop-area groups (drag-and-drop). */
+    fun reorderAreas(orderedIds: List<Long>) {
+        viewModelScope.launch {
+            runCatching { areaRepository.reorderAreas(listId, orderedIds) }
+                .onFailure { _error.value = it.message ?: "Couldn't save the area order" }
+        }
     }
 
     fun clearChecked() {
