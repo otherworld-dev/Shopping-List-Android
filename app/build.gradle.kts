@@ -12,7 +12,7 @@ plugins {
 
 android {
     namespace = "dev.otherworld.shoppinglist"
-    compileSdk = 35
+    compileSdk = 36
 
     val keystorePropertiesFile = rootProject.file("keystore.properties")
     val keystoreProperties = Properties()
@@ -34,7 +34,7 @@ android {
     defaultConfig {
         applicationId = "dev.otherworld.shoppinglist"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 2
         versionName = "0.2.0"
 
@@ -123,4 +123,6 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    debugImplementation(libs.androidx.ui.test.manifest)
 }

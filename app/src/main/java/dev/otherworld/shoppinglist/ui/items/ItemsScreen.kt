@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -48,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -82,7 +86,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 
 // ---- Flattened display rows (headers + items) so the list can be drag-reordered ----
 
-private sealed interface Row {
+internal sealed interface Row {
     val key: String
 
     data class AreaHeaderRow(val area: ShopAreaModel?, val count: Int) : Row {
@@ -235,35 +239,42 @@ fun ItemsScreen(
                                 modifier = Modifier.padding(24.dp),
                             )
                         }
-                    else -> LazyColumn(state = lazyListState, modifier = Modifier.fillMaxSize()) {
-                        items(rows, key = { it.key }) { row ->
-                            ReorderableItem(reorderState, key = row.key) { _ ->
-                                when (row) {
-                                    is Row.AreaHeaderRow -> SectionHeader(row.area?.name ?: stringResource(R.string.section_other), parseHexColor(row.area?.color), row.count)
-                                    is Row.CheckedHeaderRow -> SectionHeader(stringResource(R.string.section_checked), null, row.count)
-                                    is Row.ItemRowData -> {
-                                        val dragModifier = if (row.draggable && state.canWrite) {
-                                            Modifier.longPressDraggableHandle(
-                                                onDragStarted = { dragging = true },
-                                                onDragStopped = { commitReorder() },
+                    else -> Box(Modifier.fillMaxSize()) {
+                        LazyColumn(state = lazyListState, modifier = Modifier.fillMaxSize()) {
+                            items(rows, key = { it.key }) { row ->
+                                ReorderableItem(reorderState, key = row.key) { _ ->
+                                    when (row) {
+                                        is Row.AreaHeaderRow -> SectionHeader(row.area?.name ?: stringResource(R.string.section_other), parseHexColor(row.area?.color), row.count)
+                                        is Row.CheckedHeaderRow -> SectionHeader(stringResource(R.string.section_checked), null, row.count)
+                                        is Row.ItemRowData -> {
+                                            val dragModifier = if (row.draggable && state.canWrite) {
+                                                Modifier.longPressDraggableHandle(
+                                                    onDragStarted = { dragging = true },
+                                                    onDragStopped = { commitReorder() },
+                                                )
+                                            } else {
+                                                Modifier
+                                            }
+                                            ItemRow(
+                                                item = row.item,
+                                                area = row.item.shopAreaId?.let { areaById[it] },
+                                                // Grouped rows sit under their area's header, so repeating
+                                                // the name on each one is noise. Checked items are listed
+                                                // together across areas, so there it still carries meaning.
+                                                showAreaName = row.item.checked,
+                                                enabled = state.canWrite,
+                                                alt = row.alt,
+                                                onToggle = { viewModel.toggleCheck(row.item) },
+                                                onClick = { if (state.canWrite) editTarget = row.item },
+                                                handleModifier = dragModifier,
                                             )
-                                        } else {
-                                            Modifier
+                                            RowDivider()
                                         }
-                                        ItemRow(
-                                            item = row.item,
-                                            area = row.item.shopAreaId?.let { areaById[it] },
-                                            enabled = state.canWrite,
-                                            alt = row.alt,
-                                            onToggle = { viewModel.toggleCheck(row.item) },
-                                            onClick = { if (state.canWrite) editTarget = row.item },
-                                            handleModifier = dragModifier,
-                                        )
-                                        RowDivider()
                                     }
                                 }
                             }
                         }
+                        PinnedSectionHeader(rows, lazyListState)
                     }
                 }
             }
@@ -397,16 +408,46 @@ private fun RowDivider() {
     Box(Modifier.fillMaxWidth().size(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)))
 }
 
+/**
+ * A copy of the section the list is currently scrolled into, drawn over the top of the list.
+ * Item rows no longer repeat the area name, so this keeps it on screen for groups that run
+ * longer than the viewport. It is an overlay rather than a real `stickyHeader` because the
+ * headers must stay ordinary list entries — `commitReorder` derives an item's area from the
+ * header it was dropped under, so pulling them out of the list would break drag-to-recategorise.
+ */
 @Composable
-private fun SectionHeader(name: String, color: Color?, count: Int) {
+internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState) {
+    val pinned by remember(rows) {
+        derivedStateOf {
+            rows.take(lazyListState.firstVisibleItemIndex + 1)
+                .lastOrNull { it is Row.AreaHeaderRow || it is Row.CheckedHeaderRow }
+        }
+    }
+    when (val header = pinned) {
+        is Row.AreaHeaderRow ->
+            SectionHeader(header.area?.name ?: stringResource(R.string.section_other), parseHexColor(header.area?.color), header.count)
+        is Row.CheckedHeaderRow ->
+            SectionHeader(stringResource(R.string.section_checked), null, header.count)
+        else -> Unit
+    }
+}
+
+@Composable
+internal fun SectionHeader(name: String, color: Color?, count: Int) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .heightIn(min = 40.dp),
+            // Card-coloured rather than a filled contrasting bar: the stripe and small caps
+            // are enough to mark a section. Opaque (not transparent) so the pinned copy can
+            // sit over scrolling rows.
+            .background(MaterialTheme.colorScheme.surface)
+            .heightIn(min = 44.dp)
+            .padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(4.dp).fillMaxHeight().heightIn(min = 40.dp).background(color ?: MaterialTheme.colorScheme.onSurfaceVariant))
+        // Fixed height, not fillMaxHeight: this is also drawn as the pinned copy inside a
+        // fillMaxSize Box, where filling the height would blow the header up to cover the list.
+        Box(Modifier.width(4.dp).height(28.dp).background(color ?: MaterialTheme.colorScheme.onSurfaceVariant))
         Spacer(Modifier.width(12.dp))
         Text(
             name.uppercase(),
@@ -425,9 +466,10 @@ private fun SectionHeader(name: String, color: Color?, count: Int) {
 }
 
 @Composable
-private fun ItemRow(
+internal fun ItemRow(
     item: ItemModel,
     area: ShopAreaModel?,
+    showAreaName: Boolean,
     enabled: Boolean,
     alt: Boolean,
     onToggle: () -> Unit,
@@ -469,24 +511,34 @@ private fun ItemRow(
             modifier = Modifier.weight(1f).then(handleModifier),
         )
         Spacer(Modifier.width(8.dp))
-        AreaTag(area)
+        AreaTag(area, showName = showAreaName)
     }
 }
 
 @Composable
-private fun AreaTag(area: ShopAreaModel?) {
+private fun AreaTag(area: ShopAreaModel?, showName: Boolean) {
     val color = parseHexColor(area?.color) ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val name = area?.name ?: stringResource(R.string.section_other)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(color, CircleShape))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            area?.name ?: stringResource(R.string.section_other),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 110.dp),
+        // With the name hidden the dot is the only cue on the row, so it carries the
+        // area name for TalkBack instead of leaving it as colour-only.
+        Box(
+            Modifier
+                .size(8.dp)
+                .background(color, CircleShape)
+                .semantics { contentDescription = name },
         )
+        if (showName) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                name,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 110.dp),
+            )
+        }
     }
 }
 

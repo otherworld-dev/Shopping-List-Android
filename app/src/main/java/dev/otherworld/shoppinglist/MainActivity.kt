@@ -1,7 +1,9 @@
 package dev.otherworld.shoppinglist
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.LocalContentColor
@@ -25,7 +27,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // The UI is always dark (navy gradient), so pin the system bars to light icons
+        // rather than letting them follow the system light/dark setting. Targeting SDK 36
+        // otherwise leaves dark icons sitting on the dark background, unreadable.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         setContent {
             val brandHex by serverTheme.brandHex.collectAsStateWithLifecycle()
             val brand = parseHexColor(brandHex) ?: DefaultBrand
