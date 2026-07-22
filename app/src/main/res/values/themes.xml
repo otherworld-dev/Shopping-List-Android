@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ShoppingList" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      Dark parent, not Light: the UI is always a dark navy gradient, so a light window theme
+      meant a near-white flash before Compose drew, and dark system-bar icons on a dark ground.
+    -->
+    <style name="Theme.ShoppingList" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
 </resources>

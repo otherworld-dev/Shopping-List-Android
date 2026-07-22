@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#0082C9</color>
+    <!--
+      Shown by the window before Compose draws, so it should match the top of AppBackground's
+      gradient: lerp(DefaultBrand #0082C9, #0A0D15, 0.8). A static resource can't follow a
+      server's brand colour, but any brand lands on a dark navy, so this stays close.
+    -->
+    <color name="splash_background">#08243A</color>
 </resources>

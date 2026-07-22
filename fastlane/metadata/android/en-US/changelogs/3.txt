@@ -1,0 +1,5 @@
+Less clutter while you shop: the shop-area name no longer repeats on every item — each row now carries just its area colour, and the area name stays pinned at the top of the list as you scroll past it. Section headings are lighter, so more of your list fits on screen. Checked-off items still show their area name, since those are listed together across areas.
+
+The splash no longer flashes white before the app appears.
+
+Updated for Android 16.
