@@ -62,6 +62,8 @@
     <string name="menu_reorder_areas">Reorder areas</string>
     <string name="menu_restore_checked">Restore checked</string>
     <string name="menu_clear_checked">Clear checked</string>
+    <string name="menu_rows_compact">Compact rows</string>
+    <string name="menu_rows_comfortable">Comfortable rows</string>
     <string name="reorder_areas_title">Reorder areas</string>
     <string name="reorder_areas_hint">Drag to match the order of the store you\'re visiting.</string>
     <string name="cd_drag_reorder">Drag to reorder</string>

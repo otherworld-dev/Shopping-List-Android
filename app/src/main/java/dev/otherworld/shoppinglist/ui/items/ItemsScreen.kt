@@ -41,6 +41,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
@@ -49,6 +50,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -76,6 +78,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.prefs.Density
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.ui.common.PollEffect
@@ -201,6 +204,19 @@ fun ItemsScreen(
                 }
                 DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_refresh)) }, onClick = { overflow = false; viewModel.refresh() })
+                    // Display-only, so available even in read-only lists. Labelled by what it
+                    // switches to, matching the app's other menu-verb entries.
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (state.density == Density.COMPACT) R.string.menu_rows_comfortable
+                                    else R.string.menu_rows_compact,
+                                ),
+                            )
+                        },
+                        onClick = { overflow = false; viewModel.toggleDensity() },
+                    )
                     if (state.canWrite) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
                         DropdownMenuItem(
@@ -266,6 +282,7 @@ fun ItemsScreen(
                                                 alt = row.alt,
                                                 onToggle = { viewModel.toggleCheck(row.item) },
                                                 onClick = { if (state.canWrite) editTarget = row.item },
+                                                compact = state.density == Density.COMPACT,
                                                 handleModifier = dragModifier,
                                             )
                                             RowDivider()
@@ -465,6 +482,7 @@ internal fun SectionHeader(name: String, color: Color?, count: Int) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ItemRow(
     item: ItemModel,
@@ -474,6 +492,7 @@ internal fun ItemRow(
     alt: Boolean,
     onToggle: () -> Unit,
     onClick: () -> Unit,
+    compact: Boolean = false,
     handleModifier: Modifier = Modifier,
 ) {
     Row(
@@ -481,18 +500,31 @@ internal fun ItemRow(
             .fillMaxWidth()
             .background(if (alt) NcRowAlt else Color.Transparent)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = if (compact) 4.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(
-            checked = item.checked,
-            onCheckedChange = { onToggle() },
-            enabled = enabled,
-            colors = CheckboxDefaults.colors(
-                checkedColor = MaterialTheme.colorScheme.primary,
-                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-        )
+        val checkbox = @Composable {
+            Checkbox(
+                checked = item.checked,
+                onCheckedChange = { onToggle() },
+                enabled = enabled,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = MaterialTheme.colorScheme.primary,
+                    uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        }
+        if (compact) {
+            // The 48dp min touch target is what makes rows tall. Shrink it to a 36dp box in
+            // compact mode -- still a workable one-handed tap point, but far shorter rows.
+            Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
+                    checkbox()
+                }
+            }
+        } else {
+            checkbox()
+        }
         Spacer(Modifier.width(8.dp))
         Text(
             (item.quantity?.takeIf { it.isNotBlank() } ?: "1"),

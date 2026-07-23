@@ -1,0 +1,3 @@
+New: choose how tightly your list is packed. Pick “Compact rows” from the ⋮ menu to fit more items on screen at once, or “Comfortable rows” to switch back. Your choice is remembered on this device.
+
+Smaller download and a leaner, faster app.

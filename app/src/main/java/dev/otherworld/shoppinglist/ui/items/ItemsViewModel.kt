@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.otherworld.shoppinglist.data.prefs.Density
+import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.repo.AreaRepository
 import dev.otherworld.shoppinglist.data.repo.ItemRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
@@ -29,6 +31,7 @@ data class ItemsUiState(
     val items: List<ItemModel> = emptyList(),
     val areas: List<ShopAreaModel> = emptyList(),
     val error: String? = null,
+    val density: Density = Density.COMFY,
 )
 
 @HiltViewModel
@@ -39,6 +42,7 @@ class ItemsViewModel @Inject constructor(
     private val connectivity: ConnectivityObserver,
     private val realtime: RealtimeController,
     private val syncEngine: SyncEngine,
+    private val displayPrefs: DisplayPrefs,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -54,12 +58,19 @@ class ItemsViewModel @Inject constructor(
         repository.observeAreas(listId),
         _loading,
         _error,
-    ) { items, areas, loading, error ->
-        ItemsUiState(listId, title, canWrite, loading, items, areas, error)
+        displayPrefs.density,
+    ) { items, areas, loading, error, density ->
+        ItemsUiState(listId, title, canWrite, loading, items, areas, error, density)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        ItemsUiState(listId = listId, title = title, canWrite = canWrite, loading = true),
+        ItemsUiState(
+            listId = listId,
+            title = title,
+            canWrite = canWrite,
+            loading = true,
+            density = displayPrefs.density.value,
+        ),
     )
 
     init {
@@ -166,6 +177,9 @@ class ItemsViewModel @Inject constructor(
     fun uncheckAll() {
         viewModelScope.launch { repository.uncheckAll(listId) }
     }
+
+    /** Flips the item list between comfy and compact row spacing (persists locally). */
+    fun toggleDensity() = displayPrefs.toggleDensity()
 
     fun consumeError() = _error.update { null }
 }

@@ -108,6 +108,34 @@ class ItemsListScreenshotTest {
         composeRule.onRoot().captureToImage().save("items-before-after.png")
     }
 
+    /** Comfy (today, ~68dp rows) vs compact (~46dp) so the density trade-off can be eyeballed. */
+    @Test
+    fun capturesDensity() {
+        val rows = listOf("Cheese" to "2", "Yoghurt" to null, "Milk" to "1", "Cream" to null)
+        composeRule.setContent {
+            ShoppingListTheme(brandColor = DefaultBrand) {
+                Surface(color = MaterialTheme.colorScheme.surface) {
+                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        Caption("COMFY — today, 48dp tap target")
+                        SectionHeader("Dairy", Color(0xFF3B82F6), rows.size)
+                        rows.forEachIndexed { i, (n, q) ->
+                            ItemRow(item(i + 1L, n, dairy, q), dairy, false, true, i % 2 == 1, {}, {}, compact = false)
+                        }
+
+                        Spacer(Modifier.heightIn(min = 28.dp).fillMaxWidth())
+
+                        Caption("COMPACT — 36dp tap target, tighter rows")
+                        SectionHeader("Dairy", Color(0xFF3B82F6), rows.size)
+                        rows.forEachIndexed { i, (n, q) ->
+                            ItemRow(item(i + 1L, n, dairy, q), dairy, false, true, i % 2 == 1, {}, {}, compact = true)
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.onRoot().captureToImage().save("density.png")
+    }
+
     /** Checked items are listed together across areas, so the name has to survive there. */
     @Test
     fun capturesCheckedSection() {
