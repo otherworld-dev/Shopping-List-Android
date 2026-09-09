@@ -62,8 +62,14 @@ class ItemRepository @Inject constructor(
                     val areas = service.getAreas(listId).ocs.data
                     db.withTransaction {
                         if (mutationDao.pendingAreaCount(listId) > 0) return@withTransaction
-                        areaDao.deleteByList(listId)
+                        // Upsert first, then delete orphans (matching items pattern) to avoid
+                        // emitting an empty areas list between delete and insert, which would
+                        // break auto-detection for items added during the refresh window.
+                        val serverIds = areas.map { it.id }.toSet()
                         areaDao.upsertAll(areas.map { it.toEntity(listId) })
+                        val current = areaDao.getByList(listId)
+                        val toDelete = current.filter { it.id !in serverIds }
+                        toDelete.forEach { areaDao.deleteById(it.id) }
                     }
                 }
                 launch {
