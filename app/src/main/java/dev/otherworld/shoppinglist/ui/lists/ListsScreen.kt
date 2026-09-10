@@ -271,21 +271,22 @@ private fun ListRow(
                     Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    if (list.isOwner) {
-                        // Pin/Unpin action
-                        if (isPinned && onUnpin != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_unpin)) },
-                                onClick = { menu = false; onUnpin() },
-                            )
-                        }
-                        if (!isPinned && onPin != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_pin)) },
-                                onClick = { menu = false; onPin() },
-                            )
-                        }
+                    // Pin/Unpin action (available for ALL lists - owned and shared)
+                    if (isPinned && onUnpin != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_unpin)) },
+                            onClick = { menu = false; onUnpin() },
+                        )
+                    }
+                    if (!isPinned && onPin != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_pin)) },
+                            onClick = { menu = false; onPin() },
+                        )
+                    }
 
+                    // Owner-only actions
+                    if (list.isOwner) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_share)) },
                             onClick = { menu = false; onShare() },
