@@ -9,6 +9,7 @@ data class ListDto(
     val userId: String? = null,
     val permission: Int = 1,
     val isOwner: Boolean = true,
+    val isPinned: Boolean? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
@@ -44,6 +45,9 @@ data class TagDto(
     val id: Long,
     val name: String = "",
 )
+
+@Serializable
+data class UpdatePreferencesRequest(val isPinned: Boolean)
 
 @Serializable
 data class CreateTagRequest(val name: String)

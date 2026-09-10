@@ -19,10 +19,12 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.UpdatePreferencesRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.PUT
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -48,6 +50,12 @@ interface OcsService {
 
     @DELETE("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}")
     suspend fun deleteList(@Path("id") id: Long)
+
+    @PATCH("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}/preferences")
+    suspend fun updatePreferences(
+        @Path("id") id: Long,
+        @Body body: UpdatePreferencesRequest,
+    )
 
     // ---- Items ----
 

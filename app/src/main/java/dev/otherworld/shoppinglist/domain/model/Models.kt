@@ -16,6 +16,7 @@ data class ShoppingListModel(
     val title: String,
     val permission: Int,
     val isOwner: Boolean,
+    val isPinned: Boolean?,
 ) {
     val canWrite: Boolean get() = permission >= Permission.WRITE
 }
@@ -83,6 +84,7 @@ fun ListDto.toModel() = ShoppingListModel(
     title = title,
     permission = permission,
     isOwner = isOwner,
+    isPinned = isPinned,
 )
 
 fun TagDto.toModel() = TagModel(id = id, name = name)

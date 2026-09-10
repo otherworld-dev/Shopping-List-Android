@@ -19,6 +19,7 @@ data class ListEntity(
     val title: String,
     val permission: Int,
     val isOwner: Boolean,
+    val isPinned: Boolean?,
     val sortOrder: Int,
     val updatedAt: String?,
 )

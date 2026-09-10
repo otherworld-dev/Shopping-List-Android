@@ -60,6 +60,7 @@ class ListRepository @Inject constructor(
                 title = title,
                 permission = Permission.WRITE,
                 isOwner = true,
+                isPinned = null,
                 sortOrder = -1, // surface new lists at the top until next refresh
                 updatedAt = null,
             ),
