@@ -27,6 +27,9 @@ interface ListDao {
     @Update
     suspend fun update(list: ListEntity)
 
+    @Query("UPDATE lists SET isPinned = :isPinned WHERE id = :listId")
+    suspend fun updateIsPinned(listId: Long, isPinned: Boolean)
+
     @Query("DELETE FROM lists WHERE id = :id")
     suspend fun deleteById(id: Long)
 

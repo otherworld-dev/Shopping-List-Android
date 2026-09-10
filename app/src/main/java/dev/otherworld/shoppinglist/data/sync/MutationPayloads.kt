@@ -32,6 +32,9 @@ data class ReorderPayload(val sortedIds: List<Long>)
 @Serializable
 data class TitlePayload(val title: String)
 
+@Serializable
+data class PinPayload(val isPinned: Boolean)
+
 object MutationEntities {
     const val ITEM = "item"
     const val LIST = "list"
@@ -47,4 +50,5 @@ object MutationTypes {
     const val CLEAR_CHECKED = "clearChecked"
     const val UNCHECK_ALL = "uncheckAll"
     const val RENAME = "rename"
+    const val UPDATE_PREFERENCES = "updatePreferences"
 }

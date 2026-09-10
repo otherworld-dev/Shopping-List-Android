@@ -12,6 +12,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.UpdatePreferencesRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -181,6 +182,10 @@ class SyncEngine @Inject constructor(
             MutationTypes.RENAME -> {
                 val p = json.decodeFromString<TitlePayload>(m.payload)
                 service.updateList(m.targetId, UpdateListRequest(p.title))
+            }
+            MutationTypes.UPDATE_PREFERENCES -> {
+                val p = json.decodeFromString<PinPayload>(m.payload)
+                service.updatePreferences(m.targetId, UpdatePreferencesRequest(p.isPinned))
             }
             MutationTypes.DELETE -> service.deleteList(m.targetId)
         }
