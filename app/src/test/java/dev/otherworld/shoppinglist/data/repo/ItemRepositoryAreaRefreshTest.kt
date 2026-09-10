@@ -1,12 +1,15 @@
 package dev.otherworld.shoppinglist.data.repo
 
+import androidx.room.withTransaction
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.AreaDao
 import dev.otherworld.shoppinglist.data.local.AreaEntity
 import dev.otherworld.shoppinglist.data.local.ItemDao
 import dev.otherworld.shoppinglist.data.local.MutationDao
+import dev.otherworld.shoppinglist.data.remote.OcsBody
+import dev.otherworld.shoppinglist.data.remote.OcsMeta
+import dev.otherworld.shoppinglist.data.remote.OcsResponse
 import dev.otherworld.shoppinglist.data.remote.OcsService
-import dev.otherworld.shoppinglist.data.remote.dto.OcsResponse
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
@@ -73,11 +76,11 @@ class ItemRepositoryAreaRefreshTest {
 
         // Server response: 2 areas (one is new)
         val serverAreas = listOf(
-            ShopAreaDto(1L, "Dairy", 0, "#FF5722", listOf("milk", "cheese")),
-            ShopAreaDto(3L, "Bakery", 2, "#FFC107", listOf("bread")), // New area
+            ShopAreaDto(1L, listId, "Dairy", 0, "#FF5722", listOf("milk", "cheese")),
+            ShopAreaDto(3L, listId, "Bakery", 2, "#FFC107", listOf("bread")), // New area
         )
         coEvery { mockService.getAreas(listId) } returns OcsResponse(
-            OcsResponse.Ocs(serverAreas)
+            OcsBody(OcsMeta(),serverAreas)
         )
 
         // Current local areas: 3 areas (area 2 will become orphan)
@@ -97,7 +100,7 @@ class ItemRepositoryAreaRefreshTest {
 
         // Mock items call (not testing items here, but it's called in parallel)
         coEvery { mockService.getItems(listId) } returns OcsResponse(
-            OcsResponse.Ocs(emptyList())
+            OcsBody(OcsMeta(),emptyList())
         )
         coEvery { mockItemDao.getByList(listId) } returns emptyList()
         coEvery { mockItemDao.deleteByIds(any()) } just Runs
@@ -138,10 +141,10 @@ class ItemRepositoryAreaRefreshTest {
         val listId = 1L
 
         val serverAreas = listOf(
-            ShopAreaDto(1L, "Dairy", 0, null, listOf("milk")),
+            ShopAreaDto(1L, listId, "Dairy", 0, null, listOf("milk")),
         )
         coEvery { mockService.getAreas(listId) } returns OcsResponse(
-            OcsResponse.Ocs(serverAreas)
+            OcsBody(OcsMeta(),serverAreas)
         )
 
         val localAreas = listOf(
@@ -152,7 +155,7 @@ class ItemRepositoryAreaRefreshTest {
         coEvery { mockAreaDao.upsertAll(any()) } just Runs
 
         coEvery { mockService.getItems(listId) } returns OcsResponse(
-            OcsResponse.Ocs(emptyList())
+            OcsBody(OcsMeta(),emptyList())
         )
         coEvery { mockItemDao.getByList(listId) } returns emptyList()
         coEvery { mockItemDao.deleteByIds(any()) } just Runs
@@ -178,17 +181,17 @@ class ItemRepositoryAreaRefreshTest {
         val listId = 1L
 
         val serverAreas = listOf(
-            ShopAreaDto(1L, "Dairy", 0, null, listOf("milk")),
+            ShopAreaDto(1L, listId, "Dairy", 0, null, listOf("milk")),
         )
         coEvery { mockService.getAreas(listId) } returns OcsResponse(
-            OcsResponse.Ocs(serverAreas)
+            OcsBody(OcsMeta(),serverAreas)
         )
         coEvery { mockAreaDao.getByList(listId) } returns emptyList()
         coEvery { mockMutationDao.pendingAreaCount(listId) } returns 0
         coEvery { mockAreaDao.upsertAll(any()) } just Runs
 
         coEvery { mockService.getItems(listId) } returns OcsResponse(
-            OcsResponse.Ocs(emptyList())
+            OcsBody(OcsMeta(),emptyList())
         )
         coEvery { mockItemDao.getByList(listId) } returns emptyList()
         coEvery { mockItemDao.deleteByIds(any()) } just Runs
@@ -214,7 +217,7 @@ class ItemRepositoryAreaRefreshTest {
         coEvery { mockMutationDao.pendingAreaCount(listId) } returns 1
 
         coEvery { mockService.getItems(listId) } returns OcsResponse(
-            OcsResponse.Ocs(emptyList())
+            OcsBody(OcsMeta(),emptyList())
         )
         coEvery { mockItemDao.getByList(listId) } returns emptyList()
         coEvery { mockItemDao.deleteByIds(any()) } just Runs
