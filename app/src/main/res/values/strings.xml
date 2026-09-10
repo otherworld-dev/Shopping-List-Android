@@ -10,6 +10,8 @@
     <string name="action_set">Set</string>
     <string name="action_share">Share</string>
     <string name="action_rename">Rename</string>
+    <string name="action_pin">Pin</string>
+    <string name="action_unpin">Unpin</string>
 
     <!-- Content descriptions -->
     <string name="cd_back">Back</string>
@@ -47,14 +49,16 @@
     <string name="menu_manage_tags">Manage tags</string>
     <string name="menu_log_out">Log out</string>
     <string name="fab_new_list">New list</string>
-    <string name="lists_empty">No lists yet. Tap “New list” to create one.</string>
+    <string name="lists_empty">No lists yet. Tap "New list" to create one.</string>
+    <string name="lists_section_pinned">Pinned</string>
+    <string name="lists_section_others">Others</string>
     <string name="list_shared_with_you">Shared with you</string>
     <string name="list_shared_readonly">Shared (read-only)</string>
     <string name="dialog_new_list_title">New list</string>
     <string name="dialog_list_name_label">List name</string>
     <string name="dialog_rename_list_title">Rename list</string>
     <string name="dialog_delete_list_title">Delete list?</string>
-    <string name="dialog_delete_list_message">“%1$s” and all its items will be permanently deleted.</string>
+    <string name="dialog_delete_list_message">"%1$s" and all its items will be permanently deleted.</string>
 
     <!-- Items -->
     <string name="menu_refresh">Refresh</string>
@@ -95,12 +99,12 @@
     <!-- Tags -->
     <string name="tags_title">Tags</string>
     <string name="fab_new_tag">New tag</string>
-    <string name="tags_empty">No tags yet. Tap “New tag” to create one.</string>
+    <string name="tags_empty">No tags yet. Tap "New tag" to create one.</string>
     <string name="dialog_new_tag_title">New tag</string>
     <string name="dialog_tag_name_label">Tag name</string>
 
     <!-- Sharing -->
-    <string name="share_title">Share “%1$s”</string>
+    <string name="share_title">Share "%1$s"</string>
     <string name="section_people_groups">People &amp; groups</string>
     <string name="share_none_yet">Not shared with anyone yet.</string>
     <string name="section_public_link">Public link</string>

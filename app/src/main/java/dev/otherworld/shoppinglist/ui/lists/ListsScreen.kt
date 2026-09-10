@@ -128,6 +128,11 @@ fun ListsScreen(
                     )
                 }
                 else -> {
+                    val pinnedLists = state.lists.filter { it.isPinned == true }
+                        .sortedByDescending { it.id }
+                    val unpinnedLists = state.lists.filter { it.isPinned != true }
+                        .sortedByDescending { it.id }
+
                     androidx.compose.material3.Surface(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surface,
@@ -139,18 +144,62 @@ fun ListsScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
                         LazyColumn(Modifier.fillMaxSize()) {
-                            itemsIndexed(
-                                state.lists,
-                                key = { _, item -> item.id },
-                            ) { index, list ->
-                                ListRow(
-                                    list = list,
-                                    alt = index % 2 == 1,
-                                    onClick = { onOpenList(list) },
-                                    onRename = { renameTarget = list },
-                                    onDelete = { deleteTarget = list },
-                                    onShare = { onShareList(list) },
-                                )
+                            // Pinned section
+                            if (pinnedLists.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = stringResource(R.string.lists_section_pinned),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                }
+
+                                itemsIndexed(
+                                    pinnedLists,
+                                    key = { _, item -> item.id },
+                                ) { index, list ->
+                                    ListRow(
+                                        list = list,
+                                        alt = index % 2 == 1,
+                                        onClick = { onOpenList(list) },
+                                        onRename = { renameTarget = list },
+                                        onDelete = { deleteTarget = list },
+                                        onShare = { onShareList(list) },
+                                        onUnpin = { viewModel.unpinList(list.id) },
+                                        isPinned = true,
+                                    )
+                                }
+                            }
+
+                            // Others section
+                            if (unpinnedLists.isNotEmpty()) {
+                                if (pinnedLists.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            text = stringResource(R.string.lists_section_others),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                }
+
+                                itemsIndexed(
+                                    unpinnedLists,
+                                    key = { _, item -> item.id },
+                                ) { index, list ->
+                                    ListRow(
+                                        list = list,
+                                        alt = index % 2 == 1,
+                                        onClick = { onOpenList(list) },
+                                        onRename = { renameTarget = list },
+                                        onDelete = { deleteTarget = list },
+                                        onShare = { onShareList(list) },
+                                        onPin = { viewModel.pinList(list.id) },
+                                        isPinned = false,
+                                    )
+                                }
                             }
                         }
                     }
@@ -195,6 +244,9 @@ private fun ListRow(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onShare: () -> Unit,
+    onPin: (() -> Unit)? = null,
+    onUnpin: (() -> Unit)? = null,
+    isPinned: Boolean,
 ) {
     var menu by remember { mutableStateOf(false) }
     ListItem(
@@ -220,6 +272,20 @@ private fun ListRow(
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     if (list.isOwner) {
+                        // Pin/Unpin action
+                        if (isPinned && onUnpin != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_unpin)) },
+                                onClick = { menu = false; onUnpin() },
+                            )
+                        }
+                        if (!isPinned && onPin != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_pin)) },
+                                onClick = { menu = false; onPin() },
+                            )
+                        }
+
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_share)) },
                             onClick = { menu = false; onShare() },

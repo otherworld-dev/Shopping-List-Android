@@ -81,6 +81,18 @@ class ListsViewModel @Inject constructor(
         viewModelScope.launch { repository.renameList(id, title.trim()) }
     }
 
+    fun pinList(listId: Long) {
+        viewModelScope.launch {
+            repository.pinList(listId)
+        }
+    }
+
+    fun unpinList(listId: Long) {
+        viewModelScope.launch {
+            repository.unpinList(listId)
+        }
+    }
+
     fun deleteList(id: Long) {
         viewModelScope.launch { repository.deleteList(id) }
     }
