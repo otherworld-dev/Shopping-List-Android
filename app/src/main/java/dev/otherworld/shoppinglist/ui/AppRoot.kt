@@ -68,6 +68,24 @@ class AppViewModel @Inject constructor(
     val certAlert: StateFlow<CertInfo?> = certAlerts.alert
     val suppressedCert: StateFlow<CertInfo?> = certAlerts.suppressed
 
+    // Track previous account state to detect login/logout transitions (survives rotation)
+    private var previouslyLoggedIn: Boolean? = null
+
+    fun shouldNavigateOnAccountChange(currentAccount: Account?): NavigationAction? {
+        val wasLoggedIn = previouslyLoggedIn
+        val isLoggedIn = currentAccount != null
+        previouslyLoggedIn = isLoggedIn
+
+        return when {
+            wasLoggedIn == null -> null  // First call, no navigation
+            !wasLoggedIn && isLoggedIn -> NavigationAction.TO_HOME
+            wasLoggedIn && !isLoggedIn -> NavigationAction.TO_LOGIN
+            else -> null  // No state change
+        }
+    }
+
+    enum class NavigationAction { TO_HOME, TO_LOGIN }
+
     init {
         // On login: adopt the server's brand colour and open the real-time push connection.
         account
@@ -193,16 +211,23 @@ fun AppRoot(
     }
 
     // React to login/logout from anywhere by switching the active destination.
+    // ViewModel tracks previous state and survives rotation.
     LaunchedEffect(account) {
-        if (account != null) {
-            navController.navigate(Routes.HOME) {
-                popUpTo(Routes.LOGIN) { inclusive = true }
-                launchSingleTop = true
+        when (viewModel.shouldNavigateOnAccountChange(account)) {
+            AppViewModel.NavigationAction.TO_HOME -> {
+                navController.navigate(Routes.HOME) {
+                    popUpTo(Routes.LOGIN) { inclusive = true }
+                    launchSingleTop = true
+                }
             }
-        } else {
-            navController.navigate(Routes.LOGIN) {
-                popUpTo(0) { inclusive = true }
-                launchSingleTop = true
+            AppViewModel.NavigationAction.TO_LOGIN -> {
+                navController.navigate(Routes.LOGIN) {
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+            null -> {
+                // No navigation needed (first composition or rotation)
             }
         }
     }

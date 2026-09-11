@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,7 +41,7 @@ import dev.otherworld.shoppinglist.ui.common.openCustomTab
 fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var server by remember { mutableStateOf("") }
+    var server by rememberSaveable { mutableStateOf("") }
 
     // Open the Custom Tab once the login URL is issued.
     LaunchedEffect(state.launchUrl) {

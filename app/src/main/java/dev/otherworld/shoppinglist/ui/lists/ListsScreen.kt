@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +58,7 @@ fun ListsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     dev.otherworld.shoppinglist.ui.common.PollEffect { viewModel.poll() }
     var menuOpen by remember { mutableStateOf(false) }
-    var showCreate by remember { mutableStateOf(false) }
+    var showCreate by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<ShoppingListModel?>(null) }
     var deleteTarget by remember { mutableStateOf<ShoppingListModel?>(null) }
 

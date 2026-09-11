@@ -577,13 +577,14 @@ private fun AreaTag(area: ShopAreaModel?, showName: Boolean) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddItemRow(onAdd: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+    var text by rememberSaveable { mutableStateOf("") }
     val submit = {
         if (text.isNotBlank()) {
             onAdd(text)
             text = ""
         }
     }
+
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -625,8 +626,8 @@ private fun ItemEditDialog(
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by remember { mutableStateOf(item.name) }
-    var quantity by remember { mutableStateOf(item.quantity.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(item.name) }
+    var quantity by rememberSaveable { mutableStateOf(item.quantity.orEmpty()) }
     var areaId by remember { mutableStateOf(item.shopAreaId) }
     var areaMenu by remember { mutableStateOf(false) }
     val areaName = areas.firstOrNull { it.id == areaId }?.name ?: stringResource(R.string.item_no_area)
