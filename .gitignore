@@ -17,7 +17,7 @@ keystore.properties
 /app/release/
 /.scratch/
 
-# Claude Code
+# Claude
 .claude/
 CLAUDE.md
-.claudeignore
+.mcp.json
