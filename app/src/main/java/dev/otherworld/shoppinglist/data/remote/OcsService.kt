@@ -11,6 +11,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.CreateShareRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateTagRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ListDto
+import dev.otherworld.shoppinglist.data.remote.dto.MoveItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ShareDto
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
@@ -86,6 +87,13 @@ interface OcsService {
     @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/reorder")
     suspend fun reorder(@Path("listId") listId: Long, @Body body: ReorderRequest)
 
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/move")
+    suspend fun moveItem(
+        @Path("listId") listId: Long,
+        @Path("id") id: Long,
+        @Body body: MoveItemRequest,
+    )
+
     // ---- Shop areas ----
 
     @GET("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/areas")
@@ -112,6 +120,9 @@ interface OcsService {
         @Path("listId") listId: Long,
         @Body body: CopyAreasRequest,
     ): OcsResponse<List<ShopAreaDto>>
+
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/areas/apply-keywords")
+    suspend fun applyKeywords(@Path("listId") listId: Long): OcsResponse<List<ShopAreaDto>>
 
     // ---- Shares ----
 

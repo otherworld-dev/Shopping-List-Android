@@ -20,7 +20,7 @@ class SmartInput(
 ) {
     // ---- Result types ----
 
-    data class ParsedIngredient(val name: String, val quantity: String?)
+    data class ParsedIngredient(val name: String, val quantity: String?, val checked: Boolean = false)
 
     sealed interface AddPlan {
         /** No existing match — create a new item. */
@@ -29,6 +29,7 @@ class SmartInput(
             val quantity: String,
             val shopAreaId: Long?,
             val areaExplicit: Boolean,
+            val checked: Boolean = false,
         ) : AddPlan
 
         /** Matches an existing unchecked item — merge quantities (and maybe pluralize). */
@@ -54,7 +55,9 @@ class SmartInput(
         if (parsed.name.isBlank()) return null
         val incoming = parsed.quantity ?: "1"
 
-        val match = findMatchingItem(existing, parsed.name)
+        // A line pasted as already checked off ("[x] Milk") records something bought, not more
+        // of something outstanding, so it never merges into an open item (web app 1.7.1).
+        val match = if (parsed.checked) null else findMatchingItem(existing, parsed.name)
         if (match != null) {
             val merged = mergeQuantities(match.quantity, incoming)
             val oldQty = leadingNumber(match.quantity)
@@ -68,7 +71,7 @@ class SmartInput(
         }
 
         val areaId = explicitAreaId ?: detectArea(parsed.name, areas)
-        return AddPlan.Create(parsed.name, incoming, areaId, explicitAreaId != null)
+        return AddPlan.Create(parsed.name, incoming, areaId, explicitAreaId != null, parsed.checked)
     }
 
     // ---- Duplicate detection / normalization ----
@@ -229,7 +232,14 @@ class SmartInput(
             .replace(Regex("^\\s*,\\s*"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
-        if (name.isNotEmpty()) name = name[0].uppercaseChar() + name.substring(1)
+        // Capitalize the first letter, but leave intercapped product names alone: an uppercase
+        // second letter means the case is deliberate ("iPhone", "eBay"), and forcing it would
+        // corrupt the name.
+        if (name.isNotEmpty()) {
+            val second = name.getOrNull(1)?.toString()
+            val secondIsUpper = second != null && second != second.lowercase()
+            if (!secondIsUpper) name = name[0].uppercaseChar() + name.substring(1)
+        }
         return name
     }
 
@@ -239,8 +249,49 @@ class SmartInput(
         return r.trim()
     }
 
+    private data class MarkupResult(val rest: String, val checked: Boolean)
+
+    /**
+     * Normalises the list markup people paste in from notes apps and chats, so the quantity
+     * logic in [parseLine] sees a plain line, and reports whether the line carried a ticked
+     * checkbox so "[x] Milk" can import as already checked off.
+     *
+     * A bracketed number is rewritten rather than removed, because it IS the quantity:
+     * "[ 10 ] Aepfel" becomes "10 Aepfel". An ordered-list index is removed rather than read
+     * as a quantity, because "1." numbers the line, it doesn't count the item. Markers can nest
+     * in either order ("[x] - Milk" from a chat, "- [x] Milk" from a Markdown checklist), so
+     * the passes repeat until the line stops changing.
+     */
+    private fun readListMarkup(line: String): MarkupResult {
+        var out = line.trim()
+        var checked = false
+        var prev = ""
+        while (prev != out) {
+            prev = out
+            // [ ] / [x] / [X] checkbox. Deliberately does not match "[ 10 ]".
+            CHECKBOX_MARKUP.find(out)?.let { box ->
+                if (box.groupValues[1].isNotEmpty()) checked = true
+                out = out.substring(box.value.length)
+            }
+            // [ 10 ] bracketed quantity -> plain leading quantity.
+            out = out.replace(BRACKETED_QTY_MARKUP, "$1 ")
+            // Bullet markers. The trailing space requirement keeps "-3" intact.
+            out = out.replace(BULLET_MARKUP, "")
+            // Ordered-list index. Requires the separator and a space, so "1.5 kg" is untouched.
+            out = out.replace(ORDERED_INDEX_MARKUP, "")
+        }
+        return MarkupResult(out.trim(), checked)
+    }
+
+    fun stripListMarkup(line: String): String = readListMarkup(line).rest
+
     fun parseIngredient(line: String): ParsedIngredient {
-        val trimmed = line.trim()
+        val markup = readListMarkup(line)
+        return parseLine(markup.rest).copy(checked = markup.checked)
+    }
+
+    /** The quantity and name logic, on a line whose list markup is already gone. */
+    private fun parseLine(trimmed: String): ParsedIngredient {
         if (trimmed.isEmpty()) return ParsedIngredient("", null)
 
         val trimmedLower = trimmed.lowercase()
@@ -257,6 +308,24 @@ class SmartInput(
         val commaDecimal = pack.decimalSeparators.contains(",")
         val qtyStr = if (commaDecimal) match.groupValues[1].trim().replace(",", ".") else match.groupValues[1].trim()
         var rest = trimmed.substring(match.value.length).trim()
+
+        // "2x Milk" / "2 x Milk" / "2 × Milk": the x is a count marker, not part of the name.
+        // Everyday notation in English and German alike.
+        val mult = MULTIPLIER.find(rest)
+        if (mult != null) {
+            rest = rest.substring(mult.value.length).trim()
+            return ParsedIngredient(cleanName(rest.ifEmpty { trimmed }), qtyStr)
+        }
+
+        // Digits glued straight onto a word only count as a quantity when that word is a unit:
+        // "500ml Milk" stays a quantity, but "7up", "7-Eleven" and "3M tape" are names, and
+        // splitting them would corrupt them. A comma is a separator ("10, Aepfel"), not a glued
+        // word.
+        val qtyLen = match.groupValues[1].length
+        val attached = trimmed.length > qtyLen && !(trimmed[qtyLen].isWhitespace() || trimmed[qtyLen] == ',')
+        if (attached && matchUnit(rest).isEmpty()) {
+            return ParsedIngredient(cleanName(trimmed), null)
+        }
 
         val matchedUnit = matchUnit(rest)
         var finalQty = qtyStr
@@ -301,5 +370,19 @@ class SmartInput(
         }
 
         fun english() = SmartInput(ParsingPack.ENGLISH, morphology = true)
+
+        /**
+         * Splits pasted text into candidate item lines: any line-ending style, trimmed, blanks
+         * dropped (mirrors the web app's paste handler).
+         */
+        fun splitLines(text: String): List<String> =
+            text.split(LINE_BREAK).map { it.trim() }.filter { it.isNotEmpty() }
+
+        private val LINE_BREAK = Regex("\\r?\\n")
+        private val CHECKBOX_MARKUP = Regex("^\\[\\s*([xX]?)\\s*\\]\\s*")
+        private val BRACKETED_QTY_MARKUP = Regex("^\\[\\s*(\\d+(?:[.,]\\d+)?)\\s*\\]\\s*")
+        private val BULLET_MARKUP = Regex("^[-*•]\\s+")
+        private val ORDERED_INDEX_MARKUP = Regex("^\\d+[.)]\\s+")
+        private val MULTIPLIER = Regex("^[x×]\\s+", RegexOption.IGNORE_CASE)
     }
 }

@@ -31,10 +31,13 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,13 +68,23 @@ fun ManageAreasScreen(
 ) {
     val areas by viewModel.areas.collectAsStateWithLifecycle()
     val otherLists by viewModel.otherLists.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
     var overflow by remember { mutableStateOf(false) }
     var showCreate by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ShopAreaModel?>(null) }
     var showCopy by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(error) {
+        error?.let { snackbarHostState.showSnackbar(it); viewModel.consumeError() }
+    }
+    LaunchedEffect(notice) {
+        notice?.let { snackbarHostState.showSnackbar(it); viewModel.consumeNotice() }
+    }
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
@@ -92,6 +105,10 @@ fun ManageAreasScreen(
                             text = { Text(stringResource(R.string.menu_copy_from_list)) },
                             enabled = otherLists.isNotEmpty(),
                             onClick = { overflow = false; showCopy = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_load_keywords)) },
+                            onClick = { overflow = false; viewModel.loadLanguageKeywords() },
                         )
                     }
                 },

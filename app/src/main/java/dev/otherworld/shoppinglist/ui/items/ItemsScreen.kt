@@ -1,5 +1,6 @@
 package dev.otherworld.shoppinglist.ui.items
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -56,15 +57,18 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -81,9 +85,13 @@ import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.prefs.Density
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
+import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
+import dev.otherworld.shoppinglist.domain.text.SmartInput
+import dev.otherworld.shoppinglist.domain.text.formatListAsText
 import dev.otherworld.shoppinglist.ui.common.PollEffect
 import dev.otherworld.shoppinglist.ui.common.parseHexColor
 import dev.otherworld.shoppinglist.ui.theme.NcRowAlt
+import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -141,10 +149,19 @@ fun ItemsScreen(
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
     var showReorderAreas by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    val copiedMessage = stringResource(R.string.list_copied)
     LaunchedEffect(state.error) {
         state.error?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.consumeError()
+        }
+    }
+    LaunchedEffect(state.notice) {
+        state.notice?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeNotice()
         }
     }
 
@@ -216,6 +233,21 @@ fun ItemsScreen(
                             )
                         },
                         onClick = { overflow = false; viewModel.toggleDensity() },
+                    )
+                    // Read-only, so offered on shared read-only lists too. Writes the outstanding
+                    // items in the same shape the add box parses, so a list round-trips through
+                    // a chat message (mirrors the web app's "Copy list as text").
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.menu_copy_as_text)) },
+                        enabled = state.items.any { !it.checked },
+                        onClick = {
+                            overflow = false
+                            clipboard.setText(AnnotatedString(formatListAsText(state.items)))
+                            // Android 13+ shows its own system "Copied" confirmation.
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
+                            }
+                        },
                     )
                     if (state.canWrite) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
@@ -304,7 +336,9 @@ fun ItemsScreen(
         ItemEditDialog(
             item = item,
             areas = state.areas,
+            moveTargets = state.otherLists,
             onSave = { name, qty, areaId -> editTarget = null; viewModel.editItem(item, name, qty, areaId) },
+            onMove = { target -> editTarget = null; viewModel.moveItem(item, target) },
             onDelete = { editTarget = null; viewModel.deleteItem(item) },
             onDismiss = { editTarget = null },
         )
@@ -592,7 +626,23 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
         Spacer(Modifier.width(8.dp))
         androidx.compose.foundation.text.BasicTextField(
             value = text,
-            onValueChange = { text = it },
+            onValueChange = { new ->
+                // A multi-line paste is a whole list: add one item per line straight away, like
+                // the web app's paste handler. A single (possibly newline-padded) line just lands
+                // in the field for editing. singleLine only shapes the IME/layout — pasted
+                // newlines do arrive here.
+                if (new.contains('\n')) {
+                    val lines = SmartInput.splitLines(new)
+                    if (lines.size > 1) {
+                        onAdd(new)
+                        text = ""
+                    } else {
+                        text = lines.firstOrNull().orEmpty()
+                    }
+                } else {
+                    text = new
+                }
+            },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.merge(TextStyle(color = MaterialTheme.colorScheme.onSurface)),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
@@ -621,7 +671,9 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
 private fun ItemEditDialog(
     item: ItemModel,
     areas: List<ShopAreaModel>,
+    moveTargets: List<ShoppingListModel>,
     onSave: (String, String?, Long?) -> Unit,
+    onMove: (ShoppingListModel) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -629,6 +681,7 @@ private fun ItemEditDialog(
     var quantity by remember { mutableStateOf(item.quantity.orEmpty()) }
     var areaId by remember { mutableStateOf(item.shopAreaId) }
     var areaMenu by remember { mutableStateOf(false) }
+    var moveMenu by remember { mutableStateOf(false) }
     val areaName = areas.firstOrNull { it.id == areaId }?.name ?: stringResource(R.string.item_no_area)
 
     androidx.compose.material3.AlertDialog(
@@ -658,6 +711,18 @@ private fun ItemEditDialog(
                         DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
                         areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
                             DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
+                        }
+                    }
+                }
+                // Moves right away when a target is picked (online-only), like the web app's
+                // per-row "Move to list" menu — it isn't part of Save.
+                if (moveTargets.isNotEmpty()) {
+                    Box {
+                        TextButton(onClick = { moveMenu = true }) { Text(stringResource(R.string.item_move_to_list)) }
+                        DropdownMenu(expanded = moveMenu, onDismissRequest = { moveMenu = false }) {
+                            moveTargets.forEach { list ->
+                                DropdownMenuItem(text = { Text(list.title) }, onClick = { moveMenu = false; onMove(list) })
+                            }
                         }
                     }
                 }

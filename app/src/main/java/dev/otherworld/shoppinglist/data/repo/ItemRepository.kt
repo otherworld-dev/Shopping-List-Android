@@ -7,6 +7,7 @@ import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
 import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
+import dev.otherworld.shoppinglist.data.remote.dto.MoveItemRequest
 import dev.otherworld.shoppinglist.data.sync.CheckPayload
 import dev.otherworld.shoppinglist.data.sync.ItemCreatePayload
 import dev.otherworld.shoppinglist.data.sync.ItemUpdatePayload
@@ -89,6 +90,7 @@ class ItemRepository @Inject constructor(
         unit: String? = null,
         shopAreaId: Long? = null,
         areaExplicit: Boolean = false,
+        checked: Boolean = false,
     ): ItemModel {
         val id = tempIds.next()
         val entity = ItemEntity(
@@ -98,7 +100,7 @@ class ItemRepository @Inject constructor(
             quantity = quantity,
             unit = unit,
             shopAreaId = shopAreaId,
-            checked = false,
+            checked = checked,
             checkedBy = null,
             sortOrder = itemDao.maxSortOrder(listId) + 1,
             updatedAt = null,
@@ -106,7 +108,7 @@ class ItemRepository @Inject constructor(
         itemDao.upsert(entity)
         enqueue(
             MutationTypes.CREATE, id, listId,
-            json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload(name, quantity, unit, shopAreaId, areaExplicit)),
+            json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload(name, quantity, unit, shopAreaId, areaExplicit, checked)),
         )
         sync.requestSync()
         return entity.toModel()
@@ -156,6 +158,17 @@ class ItemRepository @Inject constructor(
             }
         }
         sync.requestSync()
+    }
+
+    /**
+     * Moves an item to another list. Online-direct, matching the web app: a cross-list move
+     * isn't offline-queueable (the target list's state is unknown offline), so callers check
+     * connectivity first. The item leaves the source list at once; the target list picks it up
+     * on its next refresh.
+     */
+    suspend fun moveItem(item: ItemModel, targetListId: Long) {
+        service.moveItem(item.listId, item.id, MoveItemRequest(targetListId))
+        itemDao.deleteById(item.id)
     }
 
     suspend fun clearChecked(listId: Long) {

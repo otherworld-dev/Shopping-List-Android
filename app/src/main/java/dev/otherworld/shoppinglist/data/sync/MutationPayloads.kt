@@ -11,6 +11,7 @@ data class ItemCreatePayload(
     val unit: String? = null,
     val shopAreaId: Long? = null,
     val areaExplicit: Boolean = false,
+    val checked: Boolean = false,
 )
 
 @Serializable

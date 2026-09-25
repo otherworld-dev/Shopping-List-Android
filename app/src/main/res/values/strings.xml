@@ -64,6 +64,8 @@
     <string name="menu_clear_checked">Clear checked</string>
     <string name="menu_rows_compact">Compact rows</string>
     <string name="menu_rows_comfortable">Comfortable rows</string>
+    <string name="menu_copy_as_text">Copy list as text</string>
+    <string name="list_copied">List copied to clipboard</string>
     <string name="reorder_areas_title">Reorder areas</string>
     <string name="reorder_areas_hint">Drag to match the order of the store you\'re visiting.</string>
     <string name="cd_drag_reorder">Drag to reorder</string>
@@ -79,10 +81,12 @@
     <string name="field_quantity">Quantity</string>
     <string name="item_no_area">No area</string>
     <string name="item_area_label">Area: %1$s</string>
+    <string name="item_move_to_list">Move to list</string>
 
     <!-- Shop areas -->
     <string name="areas_title">Shop areas</string>
     <string name="menu_copy_from_list">Copy from another list</string>
+    <string name="menu_load_keywords">Load keywords for my language</string>
     <string name="fab_new_area">New area</string>
     <string name="area_no_keywords">No keywords</string>
     <string name="area_keywords_count">%1$d keyword(s)</string>

@@ -63,6 +63,8 @@ data class CreateItemRequest(
     val unit: String? = null,
     val shopAreaId: Long? = null,
     val areaExplicit: Boolean = false,
+    // Since server app 1.7.1; older servers simply ignore it (defaults are not encoded).
+    val checked: Boolean = false,
 )
 
 @Serializable
@@ -98,6 +100,9 @@ data class UpdateAreaRequest(
 
 @Serializable
 data class CopyAreasRequest(val sourceListId: Long)
+
+@Serializable
+data class MoveItemRequest(val targetListId: Long)
 
 @Serializable
 data class ShareDto(

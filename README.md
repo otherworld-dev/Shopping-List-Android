@@ -16,6 +16,8 @@ syncs through your own Nextcloud server: no third-party cloud, no accounts, no t
 - Shared lists that update live from your Nextcloud
 - Items grouped into colour-coded shop areas (aisles)
 - Smart input — parses quantities, picks the area, merges duplicates
+- Paste a whole list (bullets, checkboxes, `2x`, `[ 10 ]`, ticked `[x]` lines all understood); copy it back out as text
+- Move items between lists; load your language's keyword pack for auto-sorting
 - Works offline; syncs when you're back online
 - Drag to reorder; share with Nextcloud users, groups, or a public link
 

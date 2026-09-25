@@ -38,6 +38,9 @@ class ManageAreasViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice
+
     fun createArea(name: String, color: String?, keywords: List<String>) {
         if (name.isBlank()) return
         viewModelScope.launch {
@@ -65,7 +68,22 @@ class ManageAreasViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Merges the account language's grocery keywords into the default areas (server-side;
+     * existing keywords are kept), so items auto-sort correctly on lists made before the
+     * keyword packs existed.
+     */
+    fun loadLanguageKeywords() {
+        viewModelScope.launch {
+            runCatching { areaRepository.applyLanguageKeywords(listId) }
+                .onSuccess { _notice.value = "Keywords for your language added" }
+                .onFailure { reportError(it) }
+        }
+    }
+
     fun consumeError() = _error.update { null }
+
+    fun consumeNotice() = _notice.update { null }
 
     private fun reportError(t: Throwable) {
         _error.value = t.message ?: "Something went wrong"
