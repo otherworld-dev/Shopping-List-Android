@@ -6,7 +6,7 @@ syncs through your own Nextcloud server: no third-party cloud, no accounts, no t
 
 - 🌐 **Website** — <https://shoppinglist.otherworld.dev>
 - ▶️ **Google Play** — <https://play.google.com/store/apps/details?id=dev.otherworld.shoppinglist>
-- 🤖 **F-Droid** — coming soon
+- 🤖 **F-Droid** — <https://f-droid.org/packages/dev.otherworld.shoppinglist/>
 
 > An independent app made by Otherworld, and the **official** client for the Shopping List server app.
 > Not affiliated with or endorsed by Nextcloud GmbH; "Nextcloud" is a trademark of its owner.
@@ -29,7 +29,7 @@ syncs through your own Nextcloud server: no third-party cloud, no accounts, no t
 As the official app, it's available through:
 
 - **[Google Play](https://play.google.com/store/apps/details?id=dev.otherworld.shoppinglist)** — the easiest way to install and stay updated (a small price supports development; the app is equally free to build from source)
-- **F-Droid** — free, coming soon
+- **[F-Droid](https://f-droid.org/packages/dev.otherworld.shoppinglist/)** — free, coming soon
 - **APK** — from the [Releases](https://github.com/otherworld-dev/Shopping-List-Android/releases) page
 
 More at **<https://shoppinglist.otherworld.dev>**.
