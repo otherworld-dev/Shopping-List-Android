@@ -68,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -121,15 +122,16 @@ fun ItemsScreen(
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val copiedMessage = stringResource(R.string.list_copied)
+    val context = LocalContext.current
     LaunchedEffect(state.error) {
         state.error?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.asString(context))
             viewModel.consumeError()
         }
     }
     LaunchedEffect(state.notice) {
         state.notice?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.asString(context))
             viewModel.consumeNotice()
         }
     }

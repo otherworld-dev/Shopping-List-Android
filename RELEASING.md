@@ -21,6 +21,21 @@ stores never drift apart.
   gitignored) for signing. Without them the release build is unsigned — fine for
   F-Droid (they sign with their own key) but not for a Play upload.
 
+## Translations
+
+The app is translated on [Crowdin](https://crowdin.com/project/shopping-list-for-nextcloud),
+in the same project as the web app. Crowdin can only watch one repo, so it works on
+a copy of `strings.xml` in the web app's repo (`android/`), and
+`scripts/sync-translations.sh` moves the text between the two. It expects the web
+repo next to this one, or set `WEB_REPO`.
+
+- After changing any text: `scripts/sync-translations.sh push`, then commit the copied
+  file in the web repo so Crowdin sees the new English.
+- Before a release: merge Crowdin's latest pull request in the web repo, then
+  `scripts/sync-translations.sh pull` and commit the `values-*` folders here.
+
+A partly translated language is fine to ship, anything missing shows in English.
+
 ## Steps
 
 1. **Bump the version** in `app/build.gradle.kts`:

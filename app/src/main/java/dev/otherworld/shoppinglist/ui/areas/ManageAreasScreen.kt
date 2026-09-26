@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
@@ -75,11 +76,12 @@ fun ManageAreasScreen(
     var editTarget by remember { mutableStateOf<ShopAreaModel?>(null) }
     var showCopy by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(error) {
-        error?.let { snackbarHostState.showSnackbar(it); viewModel.consumeError() }
+        error?.let { snackbarHostState.showSnackbar(it.asString(context)); viewModel.consumeError() }
     }
     LaunchedEffect(notice) {
-        notice?.let { snackbarHostState.showSnackbar(it); viewModel.consumeNotice() }
+        notice?.let { snackbarHostState.showSnackbar(it.asString(context)); viewModel.consumeNotice() }
     }
 
     Scaffold(
@@ -134,7 +136,7 @@ fun ManageAreasScreen(
                     supportingContent = {
                         Text(
                             if (area.keywords.isEmpty()) stringResource(R.string.area_no_keywords)
-                            else stringResource(R.string.area_keywords_count, area.keywords.size),
+                            else pluralStringResource(R.plurals.area_keywords_count, area.keywords.size, area.keywords.size),
                         )
                     },
                 )

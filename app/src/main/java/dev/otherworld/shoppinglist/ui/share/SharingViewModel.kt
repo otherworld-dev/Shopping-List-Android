@@ -8,6 +8,8 @@ import dev.otherworld.shoppinglist.data.repo.ShareRepository
 import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.domain.share.ShareeOption
+import dev.otherworld.shoppinglist.ui.common.UiText
+import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +25,7 @@ data class SharingUiState(
     val loading: Boolean = false,
     val people: List<ShareModel> = emptyList(),
     val link: ShareModel? = null,
-    val error: String? = null,
+    val error: UiText? = null,
     val query: String = "",
     val results: List<ShareeOption> = emptyList(),
     val searching: Boolean = false,
@@ -62,7 +64,7 @@ class SharingViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message ?: "Failed to load shares") }
+                _state.update { it.copy(loading = false, error = errorText(e)) }
             }
         }
     }
@@ -137,7 +139,7 @@ class SharingViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Action failed") }
+                _state.update { it.copy(error = errorText(e)) }
             }
         }
     }

@@ -48,6 +48,7 @@ import dev.otherworld.shoppinglist.data.prefs.ThemeMode
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.ui.common.ConfirmDialog
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
+import dev.otherworld.shoppinglist.ui.common.asString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,7 +127,7 @@ fun ListsScreen(
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text(state.error!!, textAlign = TextAlign.Center)
+                        Text(state.error!!.asString(), textAlign = TextAlign.Center)
                     }
                 }
                 state.lists.isEmpty() -> {

@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.ui.common.CertTrustDialog
+import dev.otherworld.shoppinglist.ui.common.asString
 import dev.otherworld.shoppinglist.ui.common.openCustomTab
 
 @Composable
@@ -97,7 +98,7 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                 )
                 state.error?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                    Text(it.asString(), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(

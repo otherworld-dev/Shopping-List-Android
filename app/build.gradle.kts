@@ -14,6 +14,19 @@ android {
     namespace = "dev.otherworld.shoppinglist"
     compileSdk = 36
 
+    androidResources {
+        // Lists every values-xx folder Crowdin adds, so Android 13+ offers the app's language
+        // in its own settings without a hand-kept list.
+        generateLocaleConfig = true
+    }
+
+    lint {
+        // Crowdin translations arrive partial, and a missing string falls back to English, so
+        // these mustn't fail the build. ExtraTranslation covers text removed here before the
+        // next Crowdin sync drops it from the translations.
+        warning += setOf("MissingTranslation", "ExtraTranslation")
+    }
+
     val keystorePropertiesFile = rootProject.file("keystore.properties")
     val keystoreProperties = Properties()
     if (keystorePropertiesFile.exists()) {

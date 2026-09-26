@@ -4,10 +4,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.repo.AreaRepository
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
+import dev.otherworld.shoppinglist.ui.common.UiText
+import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,11 +38,11 @@ class ManageAreasViewModel @Inject constructor(
         .map { lists -> lists.filter { it.id != listId } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error
+    private val _error = MutableStateFlow<UiText?>(null)
+    val error: StateFlow<UiText?> = _error
 
-    private val _notice = MutableStateFlow<String?>(null)
-    val notice: StateFlow<String?> = _notice
+    private val _notice = MutableStateFlow<UiText?>(null)
+    val notice: StateFlow<UiText?> = _notice
 
     fun createArea(name: String, color: String?, keywords: List<String>) {
         if (name.isBlank()) return
@@ -76,7 +79,7 @@ class ManageAreasViewModel @Inject constructor(
     fun loadLanguageKeywords() {
         viewModelScope.launch {
             runCatching { areaRepository.applyLanguageKeywords(listId) }
-                .onSuccess { _notice.value = "Keywords for your language added" }
+                .onSuccess { _notice.value = UiText(R.string.notice_keywords_added) }
                 .onFailure { reportError(it) }
         }
     }
@@ -86,6 +89,6 @@ class ManageAreasViewModel @Inject constructor(
     fun consumeNotice() = _notice.update { null }
 
     private fun reportError(t: Throwable) {
-        _error.value = t.message ?: "Something went wrong"
+        _error.value = errorText(t)
     }
 }

@@ -10,6 +10,18 @@
     <string name="action_share">Share</string>
     <string name="action_rename">Rename</string>
 
+    <!-- Errors and notices -->
+    <string name="error_offline">You\'re offline, check your connection and try again.</string>
+    <string name="error_no_permission">You don\'t have permission to do that.</string>
+    <string name="error_server">The server had a problem, try again in a moment.</string>
+    <string name="error_generic">Something went wrong.</string>
+    <string name="error_sync_failed">Some changes couldn\'t be saved to the server.</string>
+    <string name="error_item_not_synced">This item hasn\'t synced yet, try again in a moment.</string>
+    <string name="error_move_offline">You\'re offline, moving items needs a connection.</string>
+    <string name="error_move_failed">Couldn\'t move the item.</string>
+    <string name="notice_item_moved">Moved “%1$s” to %2$s</string>
+    <string name="notice_keywords_added">Keywords for your language added</string>
+
     <!-- Content descriptions -->
     <string name="cd_back">Back</string>
     <string name="cd_more">More</string>
@@ -25,6 +37,11 @@
     <string name="login_server_label">Server address</string>
     <string name="login_server_placeholder">cloud.example.com</string>
     <string name="login_button">Log in</string>
+    <string name="login_error_timeout">Timed out waiting for you to log in.</string>
+    <string name="login_error_unreachable">Couldn\'t reach the server. Check the address and your connection, then try again.</string>
+    <string name="login_error_cert_mismatch">The server\'s certificate doesn\'t match the address you entered.</string>
+    <string name="login_error_tls">Couldn\'t make a secure connection. Check the server\'s TLS configuration and try again.</string>
+    <string name="login_error_failed">Couldn\'t log in, check the address and try again.</string>
 
     <!-- Certificate approval prompt -->
     <string name="cert_dialog_title">Trust this server?</string>
@@ -105,7 +122,10 @@
     <string name="menu_load_keywords">Load keywords for my language</string>
     <string name="fab_new_area">New area</string>
     <string name="area_no_keywords">No keywords</string>
-    <string name="area_keywords_count">%1$d keyword(s)</string>
+    <plurals name="area_keywords_count">
+        <item quantity="one">%1$d keyword</item>
+        <item quantity="other">%1$d keywords</item>
+    </plurals>
     <string name="dialog_new_area_title">New area</string>
     <string name="dialog_edit_area_title">Edit area</string>
     <string name="dialog_copy_areas_title">Copy areas from</string>

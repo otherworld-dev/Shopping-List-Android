@@ -45,6 +45,20 @@ More at **<https://shoppinglist.otherworld.dev>**.
 Release signing is read from a `keystore.properties` file at the repo root (git-ignored); without it,
 the release build is produced unsigned (as F-Droid builds it).
 
+## Translations
+
+The app is translated on [Crowdin](https://crowdin.com/project/shopping-list-for-nextcloud), in the
+same project as the Nextcloud app, so translators can cover both in one place. See the server app's
+[TRANSLATING.md](https://github.com/otherworld-dev/Shopping-List/blob/dev/TRANSLATING.md) for how it
+works. Anything not yet translated shows in English, and on Android 13 or later you can pick the
+app's language in the system settings, separately from the phone's.
+
+Crowdin only watches the server app's repo, so it translates a copy of this app's
+`app/src/main/res/values/strings.xml` kept there under `android/`.
+`scripts/sync-translations.sh push` copies the English text across after it changes, and
+`scripts/sync-translations.sh pull` brings the translations back before a release (see
+[RELEASING.md](RELEASING.md)).
+
 ## Privacy
 
 The app collects nothing. Your data lives only on your device and the Nextcloud server you choose.

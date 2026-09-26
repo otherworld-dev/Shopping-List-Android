@@ -50,6 +50,7 @@ import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.domain.model.ShareType
 import dev.otherworld.shoppinglist.domain.share.ShareeOption
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
+import dev.otherworld.shoppinglist.ui.common.asString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,7 +89,7 @@ fun SharingScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             state.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
+                Text(it.asString(), color = MaterialTheme.colorScheme.error)
             }
 
             SectionTitle(stringResource(R.string.section_people_groups))

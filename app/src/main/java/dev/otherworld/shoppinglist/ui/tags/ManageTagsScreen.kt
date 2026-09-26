@@ -45,11 +45,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
+import dev.otherworld.shoppinglist.ui.common.UiText
+import dev.otherworld.shoppinglist.ui.common.errorText
 
 data class TagsUiState(
     val loading: Boolean = false,
     val tags: List<TagModel> = emptyList(),
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 @HiltViewModel
@@ -70,7 +72,7 @@ class ManageTagsViewModel @Inject constructor(
             try {
                 _state.update { it.copy(loading = false, tags = repository.getTags()) }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message ?: "Failed to load tags") }
+                _state.update { it.copy(loading = false, error = errorText(e)) }
             }
         }
     }
@@ -84,7 +86,7 @@ class ManageTagsViewModel @Inject constructor(
                 block()
                 _state.update { it.copy(tags = repository.getTags()) }
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Action failed") }
+                _state.update { it.copy(error = errorText(e)) }
             }
         }
     }

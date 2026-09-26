@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.prefs.Density
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.repo.AreaRepository
@@ -18,6 +19,8 @@ import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.BoughtSort
 import dev.otherworld.shoppinglist.domain.sort.OpenSort
 import dev.otherworld.shoppinglist.domain.text.SmartInput
+import dev.otherworld.shoppinglist.ui.common.UiText
+import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,8 +39,8 @@ data class ItemsUiState(
     val areas: List<ShopAreaModel> = emptyList(),
     /** Writable other lists — targets for "Move to list". */
     val otherLists: List<ShoppingListModel> = emptyList(),
-    val error: String? = null,
-    val notice: String? = null,
+    val error: UiText? = null,
+    val notice: UiText? = null,
     val density: Density = Density.COMFY,
     val openSort: OpenSort = OpenSort.AREA,
     val boughtSort: BoughtSort = BoughtSort.AREA,
@@ -63,8 +66,8 @@ class ItemsViewModel @Inject constructor(
     private val canWrite: Boolean = savedStateHandle.get<Boolean>("canWrite") ?: true
 
     private val _loading = MutableStateFlow(true)
-    private val _error = MutableStateFlow<String?>(null)
-    private val _notice = MutableStateFlow<String?>(null)
+    private val _error = MutableStateFlow<UiText?>(null)
+    private val _notice = MutableStateFlow<UiText?>(null)
 
     val state: StateFlow<ItemsUiState> = combine(
         repository.observeItems(listId),
@@ -90,8 +93,8 @@ class ItemsViewModel @Inject constructor(
             otherLists = (values[2] as List<ShoppingListModel>)
                 .filter { it.id != listId && it.id > 0 && (it.isOwner || it.canWrite) }
                 .sortedBy { it.title.lowercase() },
-            error = values[4] as String?,
-            notice = values[5] as String?,
+            error = values[4] as UiText?,
+            notice = values[5] as UiText?,
             density = values[6] as Density,
             openSort = values[7] as OpenSort,
             boughtSort = values[8] as BoughtSort,
@@ -115,7 +118,7 @@ class ItemsViewModel @Inject constructor(
         viewModelScope.launch { realtime.events.collect { poll() } }
         // Surface durable background-sync failures (a queued mutation was given up on).
         viewModelScope.launch {
-            syncEngine.failures.collect { _error.value = "Some changes couldn't be saved to the server." }
+            syncEngine.failures.collect { _error.value = UiText(R.string.error_sync_failed) }
         }
     }
 
@@ -126,7 +129,7 @@ class ItemsViewModel @Inject constructor(
             try {
                 repository.refresh(listId)
             } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load"
+                _error.value = errorText(e)
             } finally {
                 _loading.value = false
             }
@@ -211,17 +214,17 @@ class ItemsViewModel @Inject constructor(
      */
     fun moveItem(item: ItemModel, target: ShoppingListModel) {
         if (item.id < 0) {
-            _error.value = "This item hasn't synced yet — try again in a moment."
+            _error.value = UiText(R.string.error_item_not_synced)
             return
         }
         if (!connectivity.isOnline.value) {
-            _error.value = "You're offline — moving items needs a connection."
+            _error.value = UiText(R.string.error_move_offline)
             return
         }
         viewModelScope.launch {
             runCatching { repository.moveItem(item, target.id) }
-                .onSuccess { _notice.value = "Moved \"${item.name}\" to ${target.title}" }
-                .onFailure { _error.value = "Couldn't move the item." }
+                .onSuccess { _notice.value = UiText(R.string.notice_item_moved, item.name, target.title) }
+                .onFailure { _error.value = UiText(R.string.error_move_failed) }
         }
     }
 
@@ -240,7 +243,7 @@ class ItemsViewModel @Inject constructor(
     fun reorderAreas(orderedIds: List<Long>) {
         viewModelScope.launch {
             runCatching { areaRepository.reorderAreas(listId, orderedIds) }
-                .onFailure { _error.value = it.message ?: "Couldn't save the area order" }
+                .onFailure { _error.value = errorText(it) }
         }
     }
 
