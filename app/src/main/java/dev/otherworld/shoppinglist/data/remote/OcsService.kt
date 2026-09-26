@@ -11,9 +11,11 @@ import dev.otherworld.shoppinglist.data.remote.dto.CreateShareRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateTagRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ListDto
+import dev.otherworld.shoppinglist.data.remote.dto.ListPreferencesRequest
 import dev.otherworld.shoppinglist.data.remote.dto.MoveItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ShareDto
+import dev.otherworld.shoppinglist.data.remote.dto.ShareesResponse
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
 import dev.otherworld.shoppinglist.data.remote.dto.TagDto
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
@@ -24,9 +26,11 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.PUT
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Retrofit interface for the Shopping List OCS API. Paths are relative to a placeholder base
@@ -49,6 +53,10 @@ interface OcsService {
 
     @DELETE("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}")
     suspend fun deleteList(@Path("id") id: Long)
+
+    /** Per-user preference (since server 1.8.0), so pinning never changes the list for others. */
+    @PATCH("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}/preferences")
+    suspend fun updateListPreferences(@Path("id") id: Long, @Body body: ListPreferencesRequest)
 
     // ---- Items ----
 
@@ -152,6 +160,14 @@ interface OcsService {
 
     @DELETE("ocs/v2.php/apps/shopping_list/api/v1/shares/{id}/link")
     suspend fun deleteLink(@Path("id") id: Long)
+
+    /** Nextcloud's own user/group search for sharing, the one the web app's share dialog uses. */
+    @GET("ocs/v2.php/apps/files_sharing/api/v1/sharees")
+    suspend fun searchSharees(
+        @Query("search") search: String,
+        @Query("itemType") itemType: String = "file",
+        @Query("perPage") perPage: Int = 10,
+    ): OcsResponse<ShareesResponse>
 
     // ---- Tags (global per-user; backend has no item-tag assignment endpoint) ----
 

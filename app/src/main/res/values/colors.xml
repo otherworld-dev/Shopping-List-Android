@@ -3,8 +3,9 @@
     <color name="ic_launcher_background">#0082C9</color>
     <!--
       Shown by the window before Compose draws, so it should match the top of AppBackground's
-      gradient: lerp(DefaultBrand #0082C9, #0A0D15, 0.8). A static resource can't follow a
-      server's brand colour, but any brand lands on a dark navy, so this stays close.
+      gradient, here the light one: lerp(DefaultBrand #0082C9, #F1F3F6, 0.88). A static
+      resource can't follow a server's brand colour, but every brand lands near this pale
+      grey. values-night holds the dark counterpart.
     -->
-    <color name="splash_background">#08243A</color>
+    <color name="splash_background">#D4E5F1</color>
 </resources>

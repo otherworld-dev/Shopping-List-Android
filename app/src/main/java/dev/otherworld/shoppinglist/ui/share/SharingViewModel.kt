@@ -7,10 +7,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.repo.ShareRepository
 import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.domain.model.ShareModel
-import dev.otherworld.shoppinglist.domain.model.ShareType
+import dev.otherworld.shoppinglist.domain.share.ShareeOption
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,6 +24,10 @@ data class SharingUiState(
     val people: List<ShareModel> = emptyList(),
     val link: ShareModel? = null,
     val error: String? = null,
+    val query: String = "",
+    val results: List<ShareeOption> = emptyList(),
+    val searching: Boolean = false,
+    val searchFailed: Boolean = false,
 )
 
 @HiltViewModel
@@ -34,8 +42,11 @@ class SharingViewModel @Inject constructor(
     private val _state = MutableStateFlow(SharingUiState(loading = true))
     val state: StateFlow<SharingUiState> = _state.asStateFlow()
 
+    private val query = MutableStateFlow("")
+
     init {
         refresh()
+        observeSearch()
     }
 
     fun refresh() {
@@ -56,10 +67,15 @@ class SharingViewModel @Inject constructor(
         }
     }
 
-    fun addShare(sharedWith: String, type: Int, write: Boolean) {
-        if (sharedWith.isBlank()) return
-        val permission = if (write) Permission.WRITE else Permission.READ
-        mutate { repository.createShare(listId, sharedWith, type, permission) }
+    fun onQueryChange(text: String) {
+        _state.update { it.copy(query = text, searching = text.isNotBlank(), searchFailed = false) }
+        query.value = text
+    }
+
+    /** Shares with edit rights straight away, like the web app; the row's switch changes it. */
+    fun shareWith(option: ShareeOption) {
+        onQueryChange("")
+        mutate { repository.createShare(listId, option.shareWith, option.type, Permission.WRITE) }
     }
 
     fun setSharePermission(share: ShareModel, write: Boolean) {
@@ -88,6 +104,27 @@ class SharingViewModel @Inject constructor(
 
     fun consumeError() = _state.update { it.copy(error = null) }
 
+    /** Searches once typing pauses, like the web app's 300 ms debounce; a newer query cancels an older one. */
+    @OptIn(FlowPreview::class)
+    private fun observeSearch() {
+        viewModelScope.launch {
+            query.debounce(SEARCH_DELAY_MS).map { it.trim() }.collectLatest { q ->
+                if (q.isEmpty()) {
+                    _state.update { it.copy(results = emptyList(), searching = false, searchFailed = false) }
+                    return@collectLatest
+                }
+                val found = runCatching { repository.searchSharees(q) }
+                _state.update {
+                    it.copy(
+                        results = found.getOrDefault(emptyList()),
+                        searching = false,
+                        searchFailed = found.isFailure,
+                    )
+                }
+            }
+        }
+    }
+
     private fun mutate(block: suspend () -> Unit) {
         viewModelScope.launch {
             try {
@@ -105,8 +142,7 @@ class SharingViewModel @Inject constructor(
         }
     }
 
-    companion object {
-        const val TYPE_USER = ShareType.USER
-        const val TYPE_GROUP = ShareType.GROUP
+    private companion object {
+        const val SEARCH_DELAY_MS = 300L
     }
 }

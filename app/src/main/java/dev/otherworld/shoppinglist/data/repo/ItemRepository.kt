@@ -91,6 +91,8 @@ class ItemRepository @Inject constructor(
         shopAreaId: Long? = null,
         areaExplicit: Boolean = false,
         checked: Boolean = false,
+        /** The list's areas weren't on the phone yet, so detect the area when the create syncs. */
+        detectAreaOnSync: Boolean = false,
     ): ItemModel {
         val id = tempIds.next()
         val entity = ItemEntity(
@@ -108,7 +110,13 @@ class ItemRepository @Inject constructor(
         itemDao.upsert(entity)
         enqueue(
             MutationTypes.CREATE, id, listId,
-            json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload(name, quantity, unit, shopAreaId, areaExplicit, checked)),
+            json.encodeToString(
+                ItemCreatePayload.serializer(),
+                ItemCreatePayload(
+                    name, quantity, unit, shopAreaId, areaExplicit, checked,
+                    detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
+                ),
+            ),
         )
         sync.requestSync()
         return entity.toModel()

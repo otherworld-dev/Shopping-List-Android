@@ -5,14 +5,17 @@ import androidx.room.withTransaction
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
+import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.ListPreferencesRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
+import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,6 +51,7 @@ class SyncEngine @Inject constructor(
     private val db: AppDatabase,
     private val connectivity: ConnectivityObserver,
     private val json: Json,
+    private val smartInput: SmartInput,
 ) {
     private val itemDao = db.itemDao()
     private val listDao = db.listDao()
@@ -145,9 +149,10 @@ class SyncEngine @Inject constructor(
         when (m.type) {
             MutationTypes.CREATE -> {
                 val p = json.decodeFromString<ItemCreatePayload>(m.payload)
+                val areaId = if (p.detectArea) detectQueuedArea(m, p) else p.shopAreaId
                 val created = service.createItem(
                     m.listId,
-                    CreateItemRequest(p.name, p.quantity, p.unit, p.shopAreaId, p.areaExplicit, p.checked),
+                    CreateItemRequest(p.name, p.quantity, p.unit, areaId, p.areaExplicit, p.checked),
                 ).ocs.data
                 remapItemId(tempId = m.targetId, realId = created.id, updatedAt = created.updatedAt)
                 // An explicit area assignment makes the server learn this name -> area; pull the
@@ -187,8 +192,27 @@ class SyncEngine @Inject constructor(
                 val p = json.decodeFromString<TitlePayload>(m.payload)
                 service.updateList(m.targetId, UpdateListRequest(p.title))
             }
+            MutationTypes.UPDATE_PREFERENCES -> {
+                val p = json.decodeFromString<PinPayload>(m.payload)
+                service.updateListPreferences(m.targetId, ListPreferencesRequest(p.isPinned))
+            }
             MutationTypes.DELETE -> service.deleteList(m.targetId)
         }
+    }
+
+    /**
+     * Detects the area for an item that was added before its list's areas reached the phone,
+     * fetching them first if they still haven't. The local row takes the area too, unless the
+     * user has already given it one.
+     */
+    private suspend fun detectQueuedArea(m: MutationEntity, p: ItemCreatePayload): Long? {
+        if (areaDao.getByList(m.listId).isEmpty()) refreshAreas(m.listId)
+        val areas = areaDao.getByList(m.listId).map { it.toModel() }
+        val areaId = areaForQueuedCreate(p, areas, smartInput) ?: return null
+        itemDao.getById(m.targetId)?.let { row ->
+            if (row.shopAreaId == null) itemDao.upsert(row.copy(shopAreaId = areaId))
+        }
+        return areaId
     }
 
     /** Re-fetches a list's shop areas (e.g. after the server learned a new keyword). */

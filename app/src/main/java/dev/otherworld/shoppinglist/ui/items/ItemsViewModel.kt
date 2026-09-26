@@ -15,6 +15,8 @@ import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
+import dev.otherworld.shoppinglist.domain.sort.BoughtSort
+import dev.otherworld.shoppinglist.domain.sort.OpenSort
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +39,10 @@ data class ItemsUiState(
     val error: String? = null,
     val notice: String? = null,
     val density: Density = Density.COMFY,
+    val openSort: OpenSort = OpenSort.AREA,
+    val boughtSort: BoughtSort = BoughtSort.AREA,
+    /** Folded area groups on this list, as [dev.otherworld.shoppinglist.domain.sort.CollapsedAreas] keys. */
+    val collapsedAreas: Set<String> = emptySet(),
 )
 
 @HiltViewModel
@@ -68,6 +74,9 @@ class ItemsViewModel @Inject constructor(
         _error,
         _notice,
         displayPrefs.density,
+        displayPrefs.openSort,
+        displayPrefs.boughtSort,
+        displayPrefs.collapsedAreas(listId),
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         ItemsUiState(
@@ -84,6 +93,9 @@ class ItemsViewModel @Inject constructor(
             error = values[4] as String?,
             notice = values[5] as String?,
             density = values[6] as Density,
+            openSort = values[7] as OpenSort,
+            boughtSort = values[8] as BoughtSort,
+            collapsedAreas = values[9] as Set<String>,
         )
     }.stateIn(
         viewModelScope,
@@ -157,6 +169,8 @@ class ItemsViewModel @Inject constructor(
                             shopAreaId = plan.shopAreaId,
                             areaExplicit = plan.areaExplicit,
                             checked = plan.checked,
+                            // With no areas known yet there was nothing to detect against.
+                            detectAreaOnSync = current.areas.isEmpty(),
                         )
                         existing = existing + created
                     }
@@ -240,6 +254,15 @@ class ItemsViewModel @Inject constructor(
 
     /** Flips the item list between comfy and compact row spacing (persists locally). */
     fun toggleDensity() = displayPrefs.toggleDensity()
+
+    /** Orders the open items (persists locally, one choice for all lists — like the web app). */
+    fun setOpenSort(sort: OpenSort) = displayPrefs.setOpenSort(sort)
+
+    /** Orders the checked-off section (persists locally, one choice for all lists). */
+    fun setBoughtSort(sort: BoughtSort) = displayPrefs.setBoughtSort(sort)
+
+    /** Folds or unfolds an area group on this list (persists locally, per list). */
+    fun toggleCollapsed(areaId: Long?) = displayPrefs.toggleCollapsed(listId, areaId)
 
     fun consumeError() = _error.update { null }
 

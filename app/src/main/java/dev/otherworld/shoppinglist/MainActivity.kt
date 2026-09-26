@@ -6,12 +6,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.theme.ServerTheme
 import dev.otherworld.shoppinglist.ui.AppRoot
 import dev.otherworld.shoppinglist.ui.common.parseHexColor
@@ -24,20 +27,27 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var serverTheme: ServerTheme
+    @Inject lateinit var displayPrefs: DisplayPrefs
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // The UI is always dark (navy gradient), so pin the system bars to light icons
-        // rather than letting them follow the system light/dark setting. Targeting SDK 36
-        // otherwise leaves dark icons sitting on the dark background, unreadable.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
         setContent {
             val brandHex by serverTheme.brandHex.collectAsStateWithLifecycle()
             val brand = parseHexColor(brandHex) ?: DefaultBrand
-            ShoppingListTheme(brandColor = brand) {
+            val themeMode by displayPrefs.themeMode.collectAsStateWithLifecycle()
+            val dark = themeMode.isDark(isSystemInDarkTheme())
+            // The bars follow the app's theme, not the phone's: with Dark forced on a light
+            // phone, SystemBarStyle.auto would put dark icons on the dark gradient.
+            DisposableEffect(dark) {
+                val style = if (dark) {
+                    SystemBarStyle.dark(Color.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                onDispose {}
+            }
+            ShoppingListTheme(brandColor = brand, dark = dark) {
                 CompositionLocalProvider(
                     LocalContentColor provides MaterialTheme.colorScheme.onBackground,
                 ) {

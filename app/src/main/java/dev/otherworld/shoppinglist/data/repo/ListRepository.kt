@@ -9,6 +9,7 @@ import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
 import dev.otherworld.shoppinglist.data.sync.MutationTypes
+import dev.otherworld.shoppinglist.data.sync.PinPayload
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
 import dev.otherworld.shoppinglist.data.sync.TitlePayload
@@ -67,6 +68,13 @@ class ListRepository @Inject constructor(
         enqueue(MutationTypes.CREATE, id, json.encodeToString(TitlePayload.serializer(), TitlePayload(title)))
         sync.requestSync()
         return id
+    }
+
+    /** Pins or unpins a list for this user; offline-first, so it waits in the queue like a rename. */
+    suspend fun setPinned(id: Long, isPinned: Boolean) {
+        listDao.getById(id)?.let { listDao.update(it.copy(isPinned = isPinned)) }
+        enqueue(MutationTypes.UPDATE_PREFERENCES, id, json.encodeToString(PinPayload.serializer(), PinPayload(isPinned)))
+        sync.requestSync()
     }
 
     suspend fun renameList(id: Long, title: String) {

@@ -21,6 +21,8 @@ data class ListEntity(
     val isOwner: Boolean,
     val sortOrder: Int,
     val updatedAt: String?,
+    /** This user's pin (per-user on the server, so it never reorders anyone else's sidebar). */
+    val isPinned: Boolean = false,
 )
 
 @Entity(

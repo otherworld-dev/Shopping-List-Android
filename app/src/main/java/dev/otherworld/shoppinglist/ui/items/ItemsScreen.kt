@@ -31,8 +31,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -40,11 +42,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -86,55 +90,20 @@ import dev.otherworld.shoppinglist.data.prefs.Density
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
+import dev.otherworld.shoppinglist.domain.sort.BoughtSort
+import dev.otherworld.shoppinglist.domain.sort.CollapsedAreas
+import dev.otherworld.shoppinglist.domain.sort.OpenSort
+import dev.otherworld.shoppinglist.domain.sort.groupOpenItems
+import dev.otherworld.shoppinglist.domain.sort.sortBought
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import dev.otherworld.shoppinglist.domain.text.formatListAsText
 import dev.otherworld.shoppinglist.ui.common.PollEffect
 import dev.otherworld.shoppinglist.ui.common.parseHexColor
-import dev.otherworld.shoppinglist.ui.theme.NcRowAlt
+import dev.otherworld.shoppinglist.ui.theme.LocalRowShade
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-
-// ---- Flattened display rows (headers + items) so the list can be drag-reordered ----
-
-internal sealed interface Row {
-    val key: String
-
-    data class AreaHeaderRow(val area: ShopAreaModel?, val count: Int) : Row {
-        override val key get() = "h-${area?.id ?: -1L}"
-    }
-
-    data class ItemRowData(val item: ItemModel, val draggable: Boolean, val alt: Boolean) : Row {
-        override val key get() = if (draggable) "i-${item.id}" else "c-${item.id}"
-    }
-
-    data class CheckedHeaderRow(val count: Int) : Row {
-        override val key get() = "checked-header"
-    }
-}
-
-private fun buildRows(items: List<ItemModel>, areas: List<ShopAreaModel>): List<Row> {
-    val unchecked = items.filterNot { it.checked }
-    val byArea = unchecked.groupBy { it.shopAreaId }
-    val known = areas.map { it.id }.toSet()
-    val rows = mutableListOf<Row>()
-    areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
-        val list = byArea[area.id]?.sortedBy { it.sortOrder } ?: return@forEach
-        rows += Row.AreaHeaderRow(area, list.size)
-        list.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = true, alt = i % 2 == 1) }
-    }
-    val uncategorized = unchecked.filter { it.shopAreaId == null || it.shopAreaId !in known }.sortedBy { it.sortOrder }
-    if (uncategorized.isNotEmpty()) {
-        rows += Row.AreaHeaderRow(null, uncategorized.size)
-        uncategorized.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = true, alt = i % 2 == 1) }
-    }
-    val checked = items.filter { it.checked }.sortedBy { it.name.lowercase() }
-    if (checked.isNotEmpty()) {
-        rows += Row.CheckedHeaderRow(checked.size)
-        checked.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = false, alt = i % 2 == 1) }
-    }
-    return rows
-}
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -166,10 +135,13 @@ fun ItemsScreen(
     }
 
     val areaById = remember(state.areas) { state.areas.associateBy { it.id } }
-    var rows by remember { mutableStateOf(buildRows(state.items, state.areas)) }
+    val locale = Locale.getDefault()
+    var rows by remember {
+        mutableStateOf(buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale))
+    }
     var dragging by remember { mutableStateOf(false) }
-    LaunchedEffect(state.items, state.areas) {
-        if (!dragging) rows = buildRows(state.items, state.areas)
+    LaunchedEffect(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas) {
+        if (!dragging) rows = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale)
     }
 
     val lazyListState = rememberLazyListState()
@@ -179,19 +151,9 @@ fun ItemsScreen(
 
     fun commitReorder() {
         dragging = false
-        val orderedIds = mutableListOf<Long>()
-        var currentAreaId: Long? = null
-        rows.forEach { row ->
-            when (row) {
-                is Row.AreaHeaderRow -> currentAreaId = row.area?.id
-                is Row.ItemRowData -> if (row.draggable) {
-                    orderedIds += row.item.id
-                    if (row.item.shopAreaId != currentAreaId) viewModel.moveToArea(row.item, currentAreaId)
-                }
-                is Row.CheckedHeaderRow -> currentAreaId = null
-            }
-        }
-        viewModel.reorder(orderedIds)
+        val plan = planReorder(rows)
+        plan.areaMoves.forEach { (item, areaId) -> viewModel.moveToArea(item, areaId) }
+        viewModel.reorder(plan.orderedIds)
     }
 
     Box(Modifier.fillMaxSize().systemBarsPadding(), contentAlignment = Alignment.TopCenter) {
@@ -249,7 +211,32 @@ fun ItemsScreen(
                             }
                         },
                     )
+                    // Display-only, like density, so offered on read-only lists too. One
+                    // choice for all lists, remembered on this device (mirrors the web app).
+                    HorizontalDivider()
+                    MenuCaption(stringResource(R.string.menu_sort_items))
+                    SortRadioItem(stringResource(R.string.sort_by_area), state.openSort == OpenSort.AREA) {
+                        overflow = false; viewModel.setOpenSort(OpenSort.AREA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_by_area_a_to_z), state.openSort == OpenSort.AREA_ALPHA) {
+                        overflow = false; viewModel.setOpenSort(OpenSort.AREA_ALPHA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_a_to_z), state.openSort == OpenSort.ALPHA) {
+                        overflow = false; viewModel.setOpenSort(OpenSort.ALPHA)
+                    }
+                    HorizontalDivider()
+                    MenuCaption(stringResource(R.string.menu_sort_checked))
+                    SortRadioItem(stringResource(R.string.sort_by_area), state.boughtSort == BoughtSort.AREA) {
+                        overflow = false; viewModel.setBoughtSort(BoughtSort.AREA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_a_to_z), state.boughtSort == BoughtSort.ALPHA) {
+                        overflow = false; viewModel.setBoughtSort(BoughtSort.ALPHA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_most_recent), state.boughtSort == BoughtSort.RECENT) {
+                        overflow = false; viewModel.setBoughtSort(BoughtSort.RECENT)
+                    }
                     if (state.canWrite) {
+                        HorizontalDivider()
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.menu_reorder_areas)) },
@@ -292,7 +279,13 @@ fun ItemsScreen(
                             items(rows, key = { it.key }) { row ->
                                 ReorderableItem(reorderState, key = row.key) { _ ->
                                     when (row) {
-                                        is Row.AreaHeaderRow -> SectionHeader(row.area?.name ?: stringResource(R.string.section_other), parseHexColor(row.area?.color), row.count)
+                                        is Row.AreaHeaderRow -> SectionHeader(
+                                            name = row.area?.name ?: stringResource(R.string.section_other),
+                                            color = parseHexColor(row.area?.color),
+                                            count = row.count,
+                                            collapsed = row.collapsed,
+                                            onToggle = { viewModel.toggleCollapsed(row.area?.id) },
+                                        )
                                         is Row.CheckedHeaderRow -> SectionHeader(stringResource(R.string.section_checked), null, row.count)
                                         is Row.ItemRowData -> {
                                             val dragModifier = if (row.draggable && state.canWrite) {
@@ -306,10 +299,7 @@ fun ItemsScreen(
                                             ItemRow(
                                                 item = row.item,
                                                 area = row.item.shopAreaId?.let { areaById[it] },
-                                                // Grouped rows sit under their area's header, so repeating
-                                                // the name on each one is noise. Checked items are listed
-                                                // together across areas, so there it still carries meaning.
-                                                showAreaName = row.item.checked,
+                                                showAreaName = row.showAreaName,
                                                 enabled = state.canWrite,
                                                 alt = row.alt,
                                                 onToggle = { viewModel.toggleCheck(row.item) },
@@ -323,7 +313,7 @@ fun ItemsScreen(
                                 }
                             }
                         }
-                        PinnedSectionHeader(rows, lazyListState)
+                        PinnedSectionHeader(rows, lazyListState, onToggleArea = { viewModel.toggleCollapsed(it) })
                     }
                 }
             }
@@ -459,6 +449,25 @@ private fun RowDivider() {
     Box(Modifier.fillMaxWidth().size(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)))
 }
 
+@Composable
+private fun MenuCaption(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun SortRadioItem(label: String, selected: Boolean, onSelect: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        leadingIcon = { RadioButton(selected = selected, onClick = null) },
+        onClick = onSelect,
+    )
+}
+
 /**
  * A copy of the section the list is currently scrolled into, drawn over the top of the list.
  * Item rows no longer repeat the area name, so this keeps it on screen for groups that run
@@ -467,7 +476,7 @@ private fun RowDivider() {
  * header it was dropped under, so pulling them out of the list would break drag-to-recategorise.
  */
 @Composable
-internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState) {
+internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState, onToggleArea: (Long?) -> Unit) {
     val pinned by remember(rows) {
         derivedStateOf {
             rows.take(lazyListState.firstVisibleItemIndex + 1)
@@ -476,7 +485,13 @@ internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState) 
     }
     when (val header = pinned) {
         is Row.AreaHeaderRow ->
-            SectionHeader(header.area?.name ?: stringResource(R.string.section_other), parseHexColor(header.area?.color), header.count)
+            SectionHeader(
+                name = header.area?.name ?: stringResource(R.string.section_other),
+                color = parseHexColor(header.area?.color),
+                count = header.count,
+                collapsed = header.collapsed,
+                onToggle = { onToggleArea(header.area?.id) },
+            )
         is Row.CheckedHeaderRow ->
             SectionHeader(stringResource(R.string.section_checked), null, header.count)
         else -> Unit
@@ -484,7 +499,13 @@ internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState) 
 }
 
 @Composable
-internal fun SectionHeader(name: String, color: Color?, count: Int) {
+internal fun SectionHeader(
+    name: String,
+    color: Color?,
+    count: Int,
+    collapsed: Boolean = false,
+    onToggle: (() -> Unit)? = null,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -493,13 +514,31 @@ internal fun SectionHeader(name: String, color: Color?, count: Int) {
             // sit over scrolling rows.
             .background(MaterialTheme.colorScheme.surface)
             .heightIn(min = 44.dp)
+            .let { modifier ->
+                if (onToggle == null) modifier
+                else modifier.clickable(
+                    onClickLabel = stringResource(if (collapsed) R.string.a11y_expand_area else R.string.a11y_collapse_area),
+                    onClick = onToggle,
+                )
+            }
             .padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Fixed height, not fillMaxHeight: this is also drawn as the pinned copy inside a
         // fillMaxSize Box, where filling the height would blow the header up to cover the list.
         Box(Modifier.width(4.dp).height(28.dp).background(color ?: MaterialTheme.colorScheme.onSurfaceVariant))
-        Spacer(Modifier.width(12.dp))
+        if (onToggle != null) {
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                if (collapsed) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        } else {
+            Spacer(Modifier.width(12.dp))
+        }
         Text(
             name.uppercase(),
             style = MaterialTheme.typography.labelMedium,
@@ -532,7 +571,7 @@ internal fun ItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (alt) NcRowAlt else Color.Transparent)
+            .background(if (alt) LocalRowShade.current else Color.Transparent)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = if (compact) 4.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
+import dev.otherworld.shoppinglist.data.prefs.ThemeMode
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
@@ -30,8 +32,13 @@ class ListsViewModel @Inject constructor(
     private val repository: ListRepository,
     private val credentialStore: CredentialStore,
     private val connectivity: ConnectivityObserver,
+    private val displayPrefs: DisplayPrefs,
     realtime: RealtimeController,
 ) : ViewModel() {
+
+    val themeMode: StateFlow<ThemeMode> = displayPrefs.themeMode
+
+    fun setThemeMode(mode: ThemeMode) = displayPrefs.setThemeMode(mode)
 
     private val _loading = MutableStateFlow(true)
     private val _error = MutableStateFlow<String?>(null)
@@ -83,6 +90,10 @@ class ListsViewModel @Inject constructor(
 
     fun deleteList(id: Long) {
         viewModelScope.launch { repository.deleteList(id) }
+    }
+
+    fun setPinned(list: ShoppingListModel, pinned: Boolean) {
+        viewModelScope.launch { repository.setPinned(list.id, pinned) }
     }
 
     fun logout() = credentialStore.clear()

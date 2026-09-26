@@ -1,0 +1,5 @@
+A light theme that follows your phone's setting, choose Theme in the menu to keep it dark. When sharing a list, search for people and groups by name.
+
+Pin a list to keep it at the top, fold a shop area away by tapping its header, and sort items and checked-off items from the list menu.
+
+Items added before a list's areas have loaded now go into the right area once they sync.
