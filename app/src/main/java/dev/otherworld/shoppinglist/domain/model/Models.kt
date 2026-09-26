@@ -16,6 +16,8 @@ data class ShoppingListModel(
     val title: String,
     val permission: Int,
     val isOwner: Boolean,
+    /** This user's own pin (yours and shared lists alike); others keep their own order. */
+    val isPinned: Boolean = false,
 ) {
     val canWrite: Boolean get() = permission >= Permission.WRITE
 }
@@ -36,6 +38,8 @@ data class ItemModel(
     val checkedBy: String?,
     val sortOrder: Int,
     val tags: List<TagModel> = emptyList(),
+    /** Server timestamp of the last change; for a checked item, when it was ticked. */
+    val updatedAt: String? = null,
 ) {
     /** Quantity worth displaying — hidden when absent or the implicit default of "1". */
     val displayQuantity: String?
@@ -83,6 +87,7 @@ fun ListDto.toModel() = ShoppingListModel(
     title = title,
     permission = permission,
     isOwner = isOwner,
+    isPinned = isPinned == true,
 )
 
 fun TagDto.toModel() = TagModel(id = id, name = name)
@@ -98,6 +103,7 @@ fun ItemDto.toModel() = ItemModel(
     checkedBy = checkedBy,
     sortOrder = sortOrder,
     tags = tags.map { it.toModel() },
+    updatedAt = updatedAt,
 )
 
 fun ShopAreaDto.toModel() = ShopAreaModel(

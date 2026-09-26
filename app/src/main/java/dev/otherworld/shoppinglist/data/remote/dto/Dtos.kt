@@ -9,6 +9,8 @@ data class ListDto(
     val userId: String? = null,
     val permission: Int = 1,
     val isOwner: Boolean = true,
+    // Since server app 1.8.0; older servers don't send it.
+    val isPinned: Boolean? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
@@ -56,6 +58,10 @@ data class CreateListRequest(val title: String)
 @Serializable
 data class UpdateListRequest(val title: String)
 
+/** Per-user list preferences (PATCH …/lists/{id}/preferences); pinning is the only one so far. */
+@Serializable
+data class ListPreferencesRequest(val isPinned: Boolean)
+
 @Serializable
 data class CreateItemRequest(
     val name: String,
@@ -63,6 +69,8 @@ data class CreateItemRequest(
     val unit: String? = null,
     val shopAreaId: Long? = null,
     val areaExplicit: Boolean = false,
+    // Since server app 1.7.1; older servers simply ignore it (defaults are not encoded).
+    val checked: Boolean = false,
 )
 
 @Serializable
@@ -100,6 +108,9 @@ data class UpdateAreaRequest(
 data class CopyAreasRequest(val sourceListId: Long)
 
 @Serializable
+data class MoveItemRequest(val targetListId: Long)
+
+@Serializable
 data class ShareDto(
     val id: Long,
     val listId: Long = 0,
@@ -122,6 +133,32 @@ data class CreateShareRequest(
 
 @Serializable
 data class UpdateShareRequest(val permission: Int)
+
+/** files_sharing's sharee search; exact matches come back apart from the partial ones. */
+@Serializable
+data class ShareesResponse(
+    val exact: ShareeMatches = ShareeMatches(),
+    val users: List<ShareeDto> = emptyList(),
+    val groups: List<ShareeDto> = emptyList(),
+)
+
+@Serializable
+data class ShareeMatches(
+    val users: List<ShareeDto> = emptyList(),
+    val groups: List<ShareeDto> = emptyList(),
+)
+
+@Serializable
+data class ShareeDto(
+    val label: String = "",
+    val value: ShareeValue = ShareeValue(),
+)
+
+@Serializable
+data class ShareeValue(
+    val shareType: Int = 0,
+    val shareWith: String = "",
+)
 
 @Serializable
 data class CreateLinkRequest(

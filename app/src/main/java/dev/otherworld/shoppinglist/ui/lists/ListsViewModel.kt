@@ -4,10 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
+import dev.otherworld.shoppinglist.data.prefs.ThemeMode
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
+import dev.otherworld.shoppinglist.ui.common.UiText
+import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +26,7 @@ import javax.inject.Inject
 data class ListsUiState(
     val loading: Boolean = false,
     val lists: List<ShoppingListModel> = emptyList(),
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 @HiltViewModel
@@ -30,11 +34,16 @@ class ListsViewModel @Inject constructor(
     private val repository: ListRepository,
     private val credentialStore: CredentialStore,
     private val connectivity: ConnectivityObserver,
+    private val displayPrefs: DisplayPrefs,
     realtime: RealtimeController,
 ) : ViewModel() {
 
+    val themeMode: StateFlow<ThemeMode> = displayPrefs.themeMode
+
+    fun setThemeMode(mode: ThemeMode) = displayPrefs.setThemeMode(mode)
+
     private val _loading = MutableStateFlow(true)
-    private val _error = MutableStateFlow<String?>(null)
+    private val _error = MutableStateFlow<UiText?>(null)
 
     val accountLabel: String = credentialStore.current()?.let {
         "${it.loginName} · ${it.server.removePrefix("https://").removePrefix("http://")}"
@@ -58,7 +67,7 @@ class ListsViewModel @Inject constructor(
             try {
                 repository.refresh()
             } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load lists"
+                _error.value = errorText(e)
             } finally {
                 _loading.value = false
             }
@@ -83,6 +92,10 @@ class ListsViewModel @Inject constructor(
 
     fun deleteList(id: Long) {
         viewModelScope.launch { repository.deleteList(id) }
+    }
+
+    fun setPinned(list: ShoppingListModel, pinned: Boolean) {
+        viewModelScope.launch { repository.setPinned(list.id, pinned) }
     }
 
     fun logout() = credentialStore.clear()

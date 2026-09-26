@@ -8,6 +8,8 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
 import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.domain.model.toModel
+import dev.otherworld.shoppinglist.domain.share.ShareeOption
+import dev.otherworld.shoppinglist.domain.share.shareeOptions
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,6 +31,13 @@ class ShareRepository @Inject constructor(
     }
 
     suspend fun removeShare(id: Long) = service.deleteShare(id)
+
+    /** Users and groups matching [query], for the share screen's search box. */
+    suspend fun searchSharees(query: String): List<ShareeOption> =
+        shareeOptions(
+            service.searchSharees(query.trim()).ocs.data,
+            selfId = credentialStore.current()?.loginName.orEmpty(),
+        )
 
     suspend fun createLink(listId: Long, permission: Int, password: String?) {
         service.createLink(listId, CreateLinkRequest(permission, password?.ifBlank { null }))

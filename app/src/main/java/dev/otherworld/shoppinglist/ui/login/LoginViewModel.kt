@@ -3,12 +3,14 @@ package dev.otherworld.shoppinglist.ui.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.auth.LoginFlowV2Client
 import dev.otherworld.shoppinglist.data.tls.AcceptedCertStore
 import dev.otherworld.shoppinglist.data.tls.CertInfo
 import dev.otherworld.shoppinglist.data.tls.UntrustedCertHolder
 import dev.otherworld.shoppinglist.data.tls.describeCert
+import dev.otherworld.shoppinglist.ui.common.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -25,7 +27,7 @@ data class LoginUiState(
     val connecting: Boolean = false,
     val awaiting: Boolean = false,
     val launchUrl: String? = null,
-    val error: String? = null,
+    val error: UiText? = null,
     val pendingCert: CertInfo? = null,
 )
 
@@ -80,7 +82,7 @@ class LoginViewModel @Inject constructor(
                     }
                 }
                 _state.update {
-                    it.copy(awaiting = false, error = "Timed out waiting for authorization.")
+                    it.copy(awaiting = false, error = UiText(R.string.login_error_timeout))
                 }
             } catch (e: CancellationException) {
                 // A newer login() cancelled this job — leave shared state and the cert holder
@@ -147,18 +149,14 @@ class LoginViewModel @Inject constructor(
         return dev.otherworld.shoppinglist.data.tls.isCertFailure(e)
     }
 
-    private fun friendlyError(e: Exception): String = when (e) {
-        is java.net.UnknownHostException ->
-            "Couldn't reach the server. Check the address and your connection, then try again."
+    private fun friendlyError(e: Exception): UiText = when (e) {
+        is java.net.UnknownHostException -> UiText(R.string.login_error_unreachable)
         // These SSL branches are now fallbacks: a certificate failure normally surfaces the
         // accept prompt (above), so they fire only when no leaf was captured — a non-cert TLS
         // failure (protocol/cipher error, reset mid-handshake) or an empty chain.
-        is javax.net.ssl.SSLPeerUnverifiedException ->
-            "The server's certificate doesn't match the address you entered."
-        is javax.net.ssl.SSLException ->
-            "Couldn't establish a secure connection. Check the server's TLS configuration and " +
-                "try again."
-        else -> e.message ?: "Login failed"
+        is javax.net.ssl.SSLPeerUnverifiedException -> UiText(R.string.login_error_cert_mismatch)
+        is javax.net.ssl.SSLException -> UiText(R.string.login_error_tls)
+        else -> UiText(R.string.login_error_failed)
     }
 
     private fun hostOf(server: String): String {
