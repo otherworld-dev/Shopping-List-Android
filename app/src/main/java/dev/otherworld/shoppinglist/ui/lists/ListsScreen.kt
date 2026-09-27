@@ -152,7 +152,7 @@ fun ListsScreen(
                     ) {
                         var rows by remember { mutableStateOf(buildListRows(state.sections)) }
                         var dragging by remember { mutableStateOf(false) }
-                        LaunchedEffect(state.sections) {
+                        LaunchedEffect(state.sections, dragging) {
                             if (!dragging) rows = buildListRows(state.sections)
                         }
                         val lazyListState = rememberLazyListState()
@@ -185,8 +185,12 @@ fun ListsScreen(
                                                     Modifier.longPressDraggableHandle(
                                                         onDragStarted = { dragging = true },
                                                         onDragStopped = {
-                                                            dragging = false
-                                                            viewModel.reorderSection(row.section, sectionOrder(rows, row.section))
+                                                            // Held until the save completes so the row can't flash
+                                                            // back to the pre-drop order while a sort switch to
+                                                            // Custom is still in flight.
+                                                            viewModel.reorderSection(row.section, sectionOrder(rows, row.section)) {
+                                                                dragging = false
+                                                            }
                                                         },
                                                     )
                                                 } else {

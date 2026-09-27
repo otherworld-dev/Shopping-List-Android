@@ -58,6 +58,9 @@ data class ReorderPlan(val saves: List<List<Long>>, val switchToCustom: Boolean)
  * as positions before the setting changes; otherwise lists never placed would jump.
  */
 fun planListReorder(sections: ListSections, key: SectionKey, order: List<Long>, current: ListSortMode): ReorderPlan {
+    // A drag that dropped back where it started (or an accidental long-press with no movement)
+    // must not switch the sort to Custom or queue anything — the web only saves a real change.
+    if (order == sections[key].map { it.id }) return ReorderPlan(emptyList(), switchToCustom = false)
     if (current == ListSortMode.CUSTOM) return ReorderPlan(listOf(order), switchToCustom = false)
     val saves = SectionKey.entries
         .map { if (it == key) order else sections[it].map { list -> list.id } }

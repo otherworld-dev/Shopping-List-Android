@@ -114,8 +114,19 @@ class ListsViewModel @Inject constructor(
         viewModelScope.launch { repository.setPinned(list.id, pinned) }
     }
 
-    fun reorderSection(key: SectionKey, order: List<Long>) {
-        viewModelScope.launch { ordering.reorderSection(key, order) }
+    /**
+     * [onDone] runs after the save finishes (success or failure) so the screen can hold the
+     * dragged row in place until then, rather than flashing back to the pre-drop order while a
+     * sort switch to Custom is still in flight.
+     */
+    fun reorderSection(key: SectionKey, order: List<Long>, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                ordering.reorderSection(key, order)
+            } finally {
+                onDone()
+            }
+        }
     }
 
     fun logout() = credentialStore.clear()

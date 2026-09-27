@@ -105,6 +105,22 @@ class ListSortTest {
     }
 
     @Test
+    fun `a drop that leaves the order unchanged saves nothing and doesn't switch to Custom`() {
+        assertEquals(
+            ReorderPlan(emptyList(), switchToCustom = false),
+            planListReorder(sections, SectionKey.OWNED, listOf(2L, 3L), ListSortMode.UPDATED),
+        )
+    }
+
+    @Test
+    fun `a drop that leaves the order unchanged on Custom saves nothing`() {
+        assertEquals(
+            ReorderPlan(emptyList(), switchToCustom = false),
+            planListReorder(sections, SectionKey.OWNED, listOf(2L, 3L), ListSortMode.CUSTOM),
+        )
+    }
+
+    @Test
     fun `freezing saves each non-empty section as it shows`() {
         assertEquals(listOf(listOf(1L), listOf(2L, 3L)), freezeOrder(sections))
     }
