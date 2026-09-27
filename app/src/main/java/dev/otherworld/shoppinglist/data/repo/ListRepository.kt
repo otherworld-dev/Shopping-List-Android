@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.local.toEntity
 import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.sync.ListOrderPayload
+import dev.otherworld.shoppinglist.data.sync.localChangeWins
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
 import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.PinPayload
@@ -20,6 +21,7 @@ import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,19 +38,22 @@ class ListRepository @Inject constructor(
     private val areaDao = db.areaDao()
     private val mutationDao = db.mutationDao()
 
+    /** Bumped by every local change to list positions, so a refresh can tell one happened mid-fetch. */
+    private val orderEdits = AtomicLong()
+
     fun observeLists(): Flow<List<ShoppingListModel>> =
         listDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
     /** Fetches lists from the server and reconciles them into Room without clobbering pending edits. */
     suspend fun refresh() {
-        // Checked on both sides of the fetch: a reorder sent or queued while it's in flight
-        // would otherwise let the response's stale positions overwrite the local order.
-        val reorderQueuedBefore = mutationDao.countByType(MutationTypes.REORDER_LISTS) > 0
+        // A reorder queued before the fetch, or made while it's in flight (even one sent and
+        // dequeued before the response), must not be overwritten by the response's stale
+        // positions. Both reads are transactions so neither lands midway through a local edit.
+        val (editsBefore, queuedBefore) = db.withTransaction { orderEdits.get() to reorderQueued() }
         val dtos = service.getLists().ocs.data
-        val pending = mutationDao.pendingListIds().toSet()
-        val reorderPending = reorderQueuedBefore ||
-            mutationDao.countByType(MutationTypes.REORDER_LISTS) > 0
         db.withTransaction {
+            val localOrderWins = localChangeWins(queuedBefore, editsBefore, orderEdits.get(), reorderQueued())
+            val pending = mutationDao.pendingListIds().toSet()
             val serverIds = dtos.map { it.id }.toSet()
             val toDelete = listDao.allIds().filter { it > 0 && it !in serverIds && it !in pending }
             listDao.deleteByIds(toDelete)
@@ -56,7 +61,7 @@ class ListRepository @Inject constructor(
                 if (dto.id !in pending) {
                     val entity = dto.toEntity(index)
                     val local = listDao.getById(dto.id)?.position
-                    listDao.upsert(entity.copy(position = positionAfterRefresh(entity.position, local, reorderPending)))
+                    listDao.upsert(entity.copy(position = positionAfterRefresh(entity.position, local, localOrderWins)))
                 }
             }
         }
@@ -83,8 +88,11 @@ class ListRepository @Inject constructor(
 
     /** Pins or unpins a list for this user; offline-first, so it waits in the queue like a rename. */
     suspend fun setPinned(id: Long, isPinned: Boolean) {
-        listDao.getById(id)?.let { listDao.update(it.copy(isPinned = isPinned, position = null)) }
-        enqueue(MutationTypes.UPDATE_PREFERENCES, id, json.encodeToString(PinPayload.serializer(), PinPayload(isPinned)))
+        db.withTransaction {
+            listDao.getById(id)?.let { listDao.update(it.copy(isPinned = isPinned, position = null)) }
+            enqueue(MutationTypes.UPDATE_PREFERENCES, id, json.encodeToString(PinPayload.serializer(), PinPayload(isPinned)))
+            orderEdits.incrementAndGet()
+        }
         sync.requestSync()
     }
 
@@ -106,6 +114,7 @@ class ListRepository @Inject constructor(
                     payload = json.encodeToString(ListOrderPayload.serializer(), ListOrderPayload(listIds)),
                 ),
             )
+            orderEdits.incrementAndGet()
         }
         sync.requestSync()
     }
@@ -130,6 +139,8 @@ class ListRepository @Inject constructor(
         }
         sync.requestSync()
     }
+
+    private suspend fun reorderQueued() = mutationDao.countByType(MutationTypes.REORDER_LISTS) > 0
 
     private suspend fun enqueue(type: String, targetId: Long, payload: String) =
         insertMutation(type, targetId, payload)

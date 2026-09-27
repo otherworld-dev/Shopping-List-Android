@@ -16,6 +16,7 @@ import dev.otherworld.shoppinglist.domain.sort.SectionKey
 import dev.otherworld.shoppinglist.domain.sort.sortLists
 import dev.otherworld.shoppinglist.ui.common.UiText
 import dev.otherworld.shoppinglist.ui.common.errorText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,7 +94,15 @@ class ListsViewModel @Inject constructor(
     /** Silent background refresh used by the polling loop; no-ops while offline. */
     fun poll() {
         if (!connectivity.isOnline.value) return
-        viewModelScope.launch { runCatching { repository.refresh() } }
+        viewModelScope.launch {
+            quietly { repository.refresh() }
+            quietly { listSettings.refreshSort() }
+        }
+    }
+
+    /** runCatching for a background refresh, without swallowing the coroutine's cancellation. */
+    private inline fun quietly(block: () -> Unit) {
+        runCatching(block).onFailure { if (it is CancellationException) throw it }
     }
 
     fun createList(title: String) {

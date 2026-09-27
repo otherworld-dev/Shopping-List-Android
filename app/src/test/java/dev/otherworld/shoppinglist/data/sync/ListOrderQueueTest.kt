@@ -1,7 +1,9 @@
 package dev.otherworld.shoppinglist.data.sync
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ListOrderQueueTest {
@@ -22,13 +24,29 @@ class ListOrderQueueTest {
     }
 
     @Test
-    fun `a refresh keeps the phone's position while its reorder waits`() {
-        assertEquals(1, positionAfterRefresh(serverPosition = 5, localPosition = 1, reorderPending = true))
-        assertNull(positionAfterRefresh(serverPosition = 5, localPosition = null, reorderPending = true))
+    fun `a refresh keeps the phone's position while its reorder is newer`() {
+        assertEquals(1, positionAfterRefresh(serverPosition = 5, localPosition = 1, localWins = true))
+        assertNull(positionAfterRefresh(serverPosition = 5, localPosition = null, localWins = true))
     }
 
     @Test
     fun `otherwise the server's position wins`() {
-        assertEquals(5, positionAfterRefresh(serverPosition = 5, localPosition = 1, reorderPending = false))
+        assertEquals(5, positionAfterRefresh(serverPosition = 5, localPosition = 1, localWins = false))
+    }
+
+    @Test
+    fun `the server wins when nothing changed during the fetch`() {
+        assertFalse(localChangeWins(queuedBefore = false, editsBefore = 3, editsAfter = 3, queuedAfter = false))
+    }
+
+    @Test
+    fun `a change made during the fetch wins, even once it has been sent and dequeued`() {
+        assertTrue(localChangeWins(queuedBefore = false, editsBefore = 3, editsAfter = 4, queuedAfter = false))
+    }
+
+    @Test
+    fun `a change queued before or after the fetch wins`() {
+        assertTrue(localChangeWins(queuedBefore = true, editsBefore = 3, editsAfter = 3, queuedAfter = false))
+        assertTrue(localChangeWins(queuedBefore = false, editsBefore = 3, editsAfter = 3, queuedAfter = true))
     }
 }

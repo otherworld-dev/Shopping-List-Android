@@ -8,8 +8,17 @@ internal fun ListOrderPayload.remapped(oldId: Long, newId: Long): ListOrderPaylo
 internal fun ListOrderPayload.idsToSend(): List<Long> = listIds.filter { it > 0 }
 
 /**
- * A refresh from the server keeps this phone's position while its own reorder is still waiting
- * to be sent; otherwise the list would snap back until the reorder synced.
+ * Whether a refresh keeps this phone's copy rather than the server's response. A change still
+ * queued on either side of the fetch is newer than the response, and so is one made while the
+ * fetch was in flight ([editsBefore] to [editsAfter]), even if it was sent and dequeued before
+ * the response arrived.
  */
-internal fun positionAfterRefresh(serverPosition: Int?, localPosition: Int?, reorderPending: Boolean): Int? =
-    if (reorderPending) localPosition else serverPosition
+internal fun localChangeWins(queuedBefore: Boolean, editsBefore: Long, editsAfter: Long, queuedAfter: Boolean): Boolean =
+    queuedBefore || editsAfter != editsBefore || queuedAfter
+
+/**
+ * A refresh from the server keeps this phone's position while its own reorder is newer than the
+ * response (see [localChangeWins]); otherwise the list would snap back until the next refresh.
+ */
+internal fun positionAfterRefresh(serverPosition: Int?, localPosition: Int?, localWins: Boolean): Int? =
+    if (localWins) localPosition else serverPosition
