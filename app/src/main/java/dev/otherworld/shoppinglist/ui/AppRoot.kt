@@ -168,6 +168,7 @@ fun AppRoot(
                 },
                 onManageTags = { navController.navigate("tags") },
                 onOpenSettings = { navController.navigate("settings") },
+                onLogIn = { navController.navigate(Routes.LOGIN) },
             )
         }
 

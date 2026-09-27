@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
@@ -17,7 +18,9 @@ import dev.otherworld.shoppinglist.domain.sort.splitLists
 import dev.otherworld.shoppinglist.ui.common.UiText
 import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.Locale
 import javax.inject.Inject
 
@@ -35,6 +39,9 @@ data class ListsUiState(
     val sections: ListSections = ListSections(emptyList(), emptyList(), emptyList()),
     /** Dragging needs a server that keeps list orders. */
     val canReorder: Boolean = false,
+    /** Lists opened from share links, A to Z. */
+    val guestLists: List<GuestListEntry> = emptyList(),
+    val loggedIn: Boolean = false,
     val error: UiText? = null,
 )
 
@@ -45,26 +52,44 @@ class ListsViewModel @Inject constructor(
     private val connectivity: ConnectivityObserver,
     private val listSettings: ListSettingsRepository,
     private val ordering: ListOrdering,
+    private val guests: GuestRepository,
     realtime: RealtimeController,
 ) : ViewModel() {
 
     private val _loading = MutableStateFlow(true)
     private val _error = MutableStateFlow<UiText?>(null)
 
-    val accountLabel: String = credentialStore.current()?.let {
-        "${it.loginName} · ${it.server.removePrefix("https://").removePrefix("http://")}"
-    } ?: ""
+    val accountLabel: StateFlow<String> = credentialStore.accountFlow
+        .map { a -> a?.let { "${it.loginName} · ${it.server.removePrefix("https://").removePrefix("http://")}" } ?: "" }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    private val listsAndGuests = combine(
+        repository.observeLists(), guests.observeShares(), credentialStore.accountFlow,
+    ) { lists, shares, account -> Triple(lists, shares, account != null) }
 
     val state: StateFlow<ListsUiState> =
         combine(
-            repository.observeLists(), listSettings.listSort, listSettings.listOrderSupported, _loading, _error,
-        ) { lists, sort, supported, loading, error ->
+            listsAndGuests, listSettings.listSort, listSettings.listOrderSupported, _loading, _error,
+        ) { (lists, shares, loggedIn), sort, supported, loading, error ->
+            // Logged out, the user's own lists stay in Room (their queued changes wait for a login)
+            // but aren't shown.
+            val own = if (loggedIn) lists.filter { !it.isGuest } else emptyList()
+            val shareById = shares.associateBy { it.id }
+            val collator = java.text.Collator.getInstance(Locale.getDefault())
+            val guestLists = lists.filter { it.isGuest }
+                .mapNotNull { list ->
+                    shareById[list.guestShareId]?.let { share ->
+                        GuestListEntry(list, share.server.toHttpUrlOrNull()?.host ?: share.server, share.state)
+                    }
+                }
+                .sortedWith { a, b -> collator.compare(a.list.title, b.list.title) }
             ListsUiState(
                 loading = loading,
-                lists = lists,
-                // Without server support (or before it's known) lists keep the server's order.
-                sections = if (supported) sortLists(lists, sort, Locale.getDefault()) else splitLists(lists),
-                canReorder = supported,
+                lists = own + guestLists.map { it.list },
+                sections = if (supported) sortLists(own, sort, Locale.getDefault()) else splitLists(own),
+                guestLists = guestLists,
+                loggedIn = loggedIn,
+                canReorder = supported && loggedIn,
                 error = error,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ListsUiState(loading = true))
@@ -73,6 +98,8 @@ class ListsViewModel @Inject constructor(
         refresh()
         // Refresh instantly when the server pushes a change.
         realtime.events.onEach { poll() }.launchIn(viewModelScope)
+        // Logging in from guest mode returns to this same screen: fetch the new account's lists.
+        credentialStore.accountFlow.drop(1).onEach { if (it != null) refresh() }.launchIn(viewModelScope)
     }
 
     fun refresh() {
@@ -80,11 +107,14 @@ class ListsViewModel @Inject constructor(
             _loading.value = true
             _error.value = null
             try {
-                repository.refresh()
-                runCatching { listSettings.refresh() }
+                if (credentialStore.current() != null) {
+                    repository.refresh()
+                    runCatching { listSettings.refresh() }
+                }
             } catch (e: Exception) {
                 _error.value = errorText(e)
             } finally {
+                quietly { guests.refreshShares(force = true) }
                 _loading.value = false
             }
         }
@@ -94,9 +124,16 @@ class ListsViewModel @Inject constructor(
     fun poll() {
         if (!connectivity.isOnline.value) return
         viewModelScope.launch {
-            quietly { repository.refresh() }
-            quietly { listSettings.refreshSort() }
+            if (credentialStore.current() != null) {
+                quietly { repository.refresh() }
+                quietly { listSettings.refreshSort() }
+            }
+            quietly { guests.refreshShares(force = false) }
         }
+    }
+
+    fun leave(shareId: Long) {
+        viewModelScope.launch { guests.leave(shareId) }
     }
 
     /** runCatching for a background refresh, without swallowing the coroutine's cancellation. */

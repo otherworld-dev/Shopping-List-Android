@@ -1,6 +1,7 @@
 package dev.otherworld.shoppinglist.ui.lists
 
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.ListSections
 import dev.otherworld.shoppinglist.domain.sort.SectionKey
@@ -17,8 +18,15 @@ class ListRowsTest {
         when (it) {
             is ListsRow.Caption -> "#${it.textRes}"
             is ListsRow.Entry -> "${it.list.id}"
+            is ListsRow.Guest -> "g${it.entry.list.id}"
         }
     }
+
+    private fun guest(id: Long) = GuestListEntry(
+        list = ShoppingListModel(id = id, title = "G$id", permission = 1, isOwner = false, guestShareId = 1),
+        host = "example.com",
+        state = GuestShareState.OK,
+    )
 
     @Test
     fun `captions follow the web sidebar`() {
@@ -48,5 +56,24 @@ class ListRowsTest {
         // rows: caption, 1, caption, 2
         assertNull(moveWithinSection(rows, 3, 2))
         assertNull(moveWithinSection(rows, 3, 1))
+    }
+
+    @Test
+    fun `lists from share links come last under their own caption`() {
+        val rows = buildListRows(ListSections(emptyList(), listOf(list(2)), emptyList()), listOf(guest(8), guest(9)))
+        assertEquals(listOf("2", "#${R.string.lists_section_links}", "g8", "g9"), labels(rows))
+    }
+
+    @Test
+    fun `guest-only has just the share link section`() {
+        val rows = buildListRows(ListSections(emptyList(), emptyList(), emptyList()), listOf(guest(8)))
+        assertEquals(listOf("#${R.string.lists_section_links}", "g8"), labels(rows))
+    }
+
+    @Test
+    fun `a guest list can't be dragged or dragged onto`() {
+        val rows = buildListRows(ListSections(emptyList(), listOf(list(2)), emptyList()), listOf(guest(8)))
+        assertNull(moveWithinSection(rows, 0, 2))
+        assertNull(moveWithinSection(rows, 2, 0))
     }
 }

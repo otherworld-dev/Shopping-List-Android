@@ -80,6 +80,10 @@
     <string name="dialog_rename_list_title">Rename list</string>
     <string name="dialog_delete_list_title">Delete list?</string>
     <string name="dialog_delete_list_message">“%1$s” and all its items will be permanently deleted.</string>
+    <string name="lists_section_links">From share links</string>
+    <string name="menu_log_in">Log in to Nextcloud</string>
+    <string name="guest_link_dead_short">Link no longer works</string>
+    <string name="guest_password_needed_short">Needs the new password</string>
 
     <!-- Share links -->
     <string name="guest_view_only">View only: you can see this list but not change it.</string>
