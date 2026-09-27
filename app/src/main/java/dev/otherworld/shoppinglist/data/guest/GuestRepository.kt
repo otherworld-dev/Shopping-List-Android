@@ -7,7 +7,6 @@ import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.ListEntity
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
-import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.guest.ShareLink
 import dev.otherworld.shoppinglist.domain.model.Permission
 import kotlinx.coroutines.CancellationException
@@ -17,6 +16,14 @@ import retrofit2.HttpException
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * A guest list's rows the server no longer has. Every row on a guest list is a guest id or the
+ * temp id of an item added offline; either goes once nothing for it is queued, so an offline add
+ * whose create was dropped (the link went view only) doesn't linger as an item nobody else sees.
+ */
+internal fun guestItemsGone(localIds: List<Long>, serverIds: Set<Long>, pending: Set<Long>): List<Long> =
+    localIds.filter { it !in serverIds && it !in pending }
 
 /** What a share link holds, before it's opened. */
 data class LinkPreview(val title: String, val permission: Int, val passwordRequired: Boolean, val joined: Boolean)
@@ -180,9 +187,7 @@ class GuestRepository @Inject constructor(
                 areaDao.upsertAll(areaRows)
                 val pending = mutationDao.pendingItemIds(listId).toSet()
                 val serverIds = itemRows.map { it.id }.toSet()
-                itemDao.deleteByIds(
-                    itemDao.getByList(listId).map { it.id }.filter { GuestIds.isGuest(it) && it !in serverIds && it !in pending },
-                )
+                itemDao.deleteByIds(guestItemsGone(itemDao.getByList(listId).map { it.id }, serverIds, pending))
                 itemRows.forEach { if (it.id !in pending) itemDao.upsert(it) }
             }
         } catch (e: GuestPasswordNeededException) {

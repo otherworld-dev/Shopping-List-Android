@@ -114,17 +114,20 @@ class ItemRepository @Inject constructor(
             sortOrder = itemDao.maxSortOrder(listId) + 1,
             updatedAt = null,
         )
-        itemDao.upsert(entity)
-        enqueue(
-            MutationTypes.CREATE, id, listId,
-            json.encodeToString(
-                ItemCreatePayload.serializer(),
-                ItemCreatePayload(
-                    name, quantity, unit, shopAreaId, areaExplicit, checked,
-                    detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
+        // One transaction, so a refresh never sees the row without its queued create and drops it.
+        db.withTransaction {
+            itemDao.upsert(entity)
+            enqueue(
+                MutationTypes.CREATE, id, listId,
+                json.encodeToString(
+                    ItemCreatePayload.serializer(),
+                    ItemCreatePayload(
+                        name, quantity, unit, shopAreaId, areaExplicit, checked,
+                        detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
+                    ),
                 ),
-            ),
-        )
+            )
+        }
         sync.requestSync()
         return entity.toModel()
     }
