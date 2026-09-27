@@ -22,8 +22,11 @@ data class ShoppingListModel(
     val position: Int? = null,
     /** Server timestamp of the last change; null for a list created on this phone and not yet synced. */
     val updatedAt: String? = null,
+    /** Set for a list opened from someone's share link (see GuestIds). */
+    val guestShareId: Long? = null,
 ) {
     val canWrite: Boolean get() = permission >= Permission.WRITE
+    val isGuest: Boolean get() = guestShareId != null
 }
 
 data class TagModel(

@@ -1,5 +1,6 @@
 package dev.otherworld.shoppinglist.data.sync
 
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -21,6 +22,12 @@ class ListOrderQueueTest {
     @Test
     fun `lists that never reached the server are left out`() {
         assertEquals(listOf(4L, 7L), ListOrderPayload(listOf(4L, -3L, 7L)).idsToSend())
+    }
+
+    @Test
+    fun `guest lists never go to the server's list order`() {
+        val guest = GuestIds.fromSeq(3)
+        assertEquals(listOf(4L), ListOrderPayload(listOf(-1L, 4L, guest)).idsToSend())
     }
 
     @Test

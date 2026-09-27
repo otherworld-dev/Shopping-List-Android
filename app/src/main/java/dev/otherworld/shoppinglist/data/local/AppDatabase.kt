@@ -12,8 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ItemEntity::class,
         AreaEntity::class,
         MutationEntity::class,
+        GuestShareEntity::class,
+        GuestIdEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -22,6 +24,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun itemDao(): ItemDao
     abstract fun areaDao(): AreaDao
     abstract fun mutationDao(): MutationDao
+    abstract fun guestShareDao(): GuestShareDao
+    abstract fun guestIdDao(): GuestIdDao
 
     companion object {
         /**
@@ -37,6 +41,31 @@ abstract class AppDatabase : RoomDatabase() {
             object : Migration(2, 3) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE lists ADD COLUMN position INTEGER")
+                }
+            },
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `guest_shares` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `server` TEXT NOT NULL, " +
+                            "`token` TEXT NOT NULL, `permission` INTEGER NOT NULL, " +
+                            "`passwordProtected` INTEGER NOT NULL, `title` TEXT NOT NULL, `state` TEXT NOT NULL, " +
+                            "`lastRefreshedAt` INTEGER NOT NULL, `droppedChanges` INTEGER NOT NULL)",
+                    )
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_guest_shares_server_token` " +
+                            "ON `guest_shares` (`server`, `token`)",
+                    )
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `guest_ids` (" +
+                            "`seq` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `shareId` INTEGER NOT NULL, " +
+                            "`kind` TEXT NOT NULL, `remoteId` INTEGER NOT NULL)",
+                    )
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_guest_ids_shareId_kind_remoteId` " +
+                            "ON `guest_ids` (`shareId`, `kind`, `remoteId`)",
+                    )
+                    db.execSQL("ALTER TABLE lists ADD COLUMN guestShareId INTEGER")
                 }
             },
         )

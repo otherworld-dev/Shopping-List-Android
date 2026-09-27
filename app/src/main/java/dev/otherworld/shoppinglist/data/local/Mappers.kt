@@ -17,6 +17,7 @@ fun ListEntity.toModel() = ShoppingListModel(
     isPinned = isPinned,
     position = position,
     updatedAt = updatedAt,
+    guestShareId = guestShareId,
 )
 
 fun ItemEntity.toModel() = ItemModel(
