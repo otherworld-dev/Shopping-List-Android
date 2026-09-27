@@ -6,9 +6,6 @@ import javax.inject.Singleton
 
 /** Read side of the user-accepted certificate pins; faked in unit tests. */
 interface TrustedCerts {
-    /** Exact (byte-equal) match against any user-accepted certificate. */
-    fun isTrusted(cert: X509Certificate): Boolean
-
     /** Exact match against the certificate the user accepted for [host] specifically. */
     fun isTrustedForHost(host: String, cert: X509Certificate): Boolean
 }

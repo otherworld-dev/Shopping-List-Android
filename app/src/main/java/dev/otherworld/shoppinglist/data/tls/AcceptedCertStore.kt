@@ -29,11 +29,6 @@ class AcceptedCertStore @Inject constructor(
     @Volatile private var byHost: Map<String, String> =
         prefs.all.entries.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap()
 
-    override fun isTrusted(cert: X509Certificate): Boolean {
-        val encoded = encode(cert)
-        return byHost.values.any { it == encoded }
-    }
-
     override fun isTrustedForHost(host: String, cert: X509Certificate): Boolean =
         byHost[host.lowercase()] == encode(cert)
 

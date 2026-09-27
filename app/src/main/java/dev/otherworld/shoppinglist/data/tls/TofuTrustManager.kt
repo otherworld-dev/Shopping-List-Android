@@ -12,9 +12,11 @@ import javax.net.ssl.X509ExtendedTrustManager
  * Adds an explicit user-approval step on top of the platform trust manager (which honours
  * the network security config: the system + user CA stores). Platform validation runs first;
  * only if it fails is the presented leaf certificate compared, byte for byte, against the
- * certificates the user has approved in the login screen. A certificate that the platform
- * does not validate and the user has not approved is rejected, and its leaf is recorded so
- * the UI can show the approval prompt.
+ * certificate the user approved for the host being connected to. An approval never carries
+ * over to another host, since a share link lets anyone put the approval prompt in front of the
+ * user; with no host known, nothing is trusted. A certificate that the platform does not
+ * validate and the user has not approved is rejected, and its leaf is recorded so the UI can
+ * show the approval prompt.
  *
  * The CustomX509TrustManager lint check is informational and fires on any custom trust
  * manager; suppressed because non-approved certificates are still rejected here.
@@ -46,7 +48,7 @@ class TofuTrustManager(
             check()
         } catch (e: CertificateException) {
             val leaf = chain.firstOrNull() ?: throw e
-            if (trusted.isTrusted(leaf)) return // this exact certificate was approved by the user
+            if (host != null && trusted.isTrustedForHost(host, leaf)) return // approved for this host
             holder.record(host, leaf, hostnameMismatch = false)
             throw e
         }
