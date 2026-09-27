@@ -232,7 +232,7 @@ class GuestRepository @Inject constructor(
     }
 
     suspend fun clearDropped(shareId: Long) {
-        shareDao.getById(shareId)?.let { shareDao.update(it.copy(droppedChanges = 0)) }
+        shareDao.clearDropped(shareId)
     }
 
     /** The share link a guest list was opened from, to open it again (for a new password). */

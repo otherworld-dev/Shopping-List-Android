@@ -133,8 +133,11 @@ class ItemsViewModel @Inject constructor(
 
     init {
         refresh()
-        if (!isGuest) realtime.ensureConnected()
-        viewModelScope.launch { realtime.events.collect { poll() } }
+        // Push events come from the user's own server, which knows nothing of a guest list.
+        if (!isGuest) {
+            realtime.ensureConnected()
+            viewModelScope.launch { realtime.events.collect { poll() } }
+        }
         // Surface durable background-sync failures (a queued mutation was given up on).
         viewModelScope.launch {
             syncEngine.failures.collect { _error.value = UiText(R.string.error_sync_failed) }

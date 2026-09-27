@@ -37,6 +37,6 @@ class GuestShareMarks @Inject constructor(private val db: AppDatabase) {
     }
 
     suspend fun passwordNeeded(shareId: Long) {
-        shareDao.getById(shareId)?.let { shareDao.update(it.copy(state = GuestShareState.PASSWORD_NEEDED)) }
+        shareDao.setState(shareId, GuestShareState.PASSWORD_NEEDED)
     }
 }

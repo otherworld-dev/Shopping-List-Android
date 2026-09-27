@@ -203,6 +203,13 @@ interface GuestShareDao {
     @Query("UPDATE guest_shares SET lastRefreshedAt = :at WHERE id = :id")
     suspend fun markRefreshed(id: Long, at: Long)
 
+    // Single-column updates, so they can't undo a concurrent change to the rest of the row.
+    @Query("UPDATE guest_shares SET state = :state WHERE id = :id")
+    suspend fun setState(id: Long, state: String)
+
+    @Query("UPDATE guest_shares SET droppedChanges = 0 WHERE id = :id")
+    suspend fun clearDropped(id: Long)
+
     @Query("DELETE FROM guest_shares WHERE id = :id")
     suspend fun deleteById(id: Long)
 }
