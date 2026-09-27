@@ -1,6 +1,5 @@
 package dev.otherworld.shoppinglist.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -121,7 +121,7 @@ private fun Choice(label: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.RadioButton, onClick = onSelect)
+            .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
