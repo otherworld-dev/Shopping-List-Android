@@ -34,8 +34,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Only on a fresh start: a recreated activity (rotation) would offer the same link again.
-        if (savedInstanceState == null) pendingLinks.offer(intent?.dataString)
+        // Only on a fresh start: a recreated activity (rotation) would offer the same link again,
+        // and so would Recents, which relaunches with the intent the task was first opened with.
+        val fromHistory = ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (savedInstanceState == null && !fromHistory) pendingLinks.offer(intent?.dataString)
         setContent {
             val brandHex by serverTheme.brandHex.collectAsStateWithLifecycle()
             val brand = parseHexColor(brandHex) ?: DefaultBrand
