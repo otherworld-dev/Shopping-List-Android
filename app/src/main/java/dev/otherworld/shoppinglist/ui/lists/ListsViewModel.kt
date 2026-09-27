@@ -11,9 +11,9 @@ import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.ListSections
-import dev.otherworld.shoppinglist.domain.sort.ListSortMode
 import dev.otherworld.shoppinglist.domain.sort.SectionKey
 import dev.otherworld.shoppinglist.domain.sort.sortLists
+import dev.otherworld.shoppinglist.domain.sort.splitLists
 import dev.otherworld.shoppinglist.ui.common.UiText
 import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.CancellationException
@@ -59,12 +59,11 @@ class ListsViewModel @Inject constructor(
         combine(
             repository.observeLists(), listSettings.listSort, listSettings.listOrderSupported, _loading, _error,
         ) { lists, sort, supported, loading, error ->
-            // Without server support the sort is always Recently updated, the server's own order.
-            val mode = if (supported) sort else ListSortMode.UPDATED
             ListsUiState(
                 loading = loading,
                 lists = lists,
-                sections = sortLists(lists, mode, Locale.getDefault()),
+                // Without server support (or before it's known) lists keep the server's order.
+                sections = if (supported) sortLists(lists, sort, Locale.getDefault()) else splitLists(lists),
                 canReorder = supported,
                 error = error,
             )

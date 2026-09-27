@@ -43,12 +43,20 @@ fun sortLists(lists: List<ShoppingListModel>, mode: ListSortMode, locale: Locale
         }
         if (byMode != 0) byMode else a.id.compareTo(b.id)
     }
+    val sections = splitLists(lists)
     return ListSections(
-        pinned = lists.filter { it.isPinned }.sortedWith(comparator),
-        owned = lists.filter { !it.isPinned && it.isOwner }.sortedWith(comparator),
-        shared = lists.filter { !it.isPinned && !it.isOwner }.sortedWith(comparator),
+        pinned = sections.pinned.sortedWith(comparator),
+        owned = sections.owned.sortedWith(comparator),
+        shared = sections.shared.sortedWith(comparator),
     )
 }
+
+/** The same sections, each in the order given: the server's, for a server that keeps no list orders. */
+fun splitLists(lists: List<ShoppingListModel>): ListSections = ListSections(
+    pinned = lists.filter { it.isPinned },
+    owned = lists.filter { !it.isPinned && it.isOwner },
+    shared = lists.filter { !it.isPinned && !it.isOwner },
+)
 
 /** What saving a drop needs: the section orders to send, in turn, and whether it switches to Custom. */
 data class ReorderPlan(val saves: List<List<Long>>, val switchToCustom: Boolean)

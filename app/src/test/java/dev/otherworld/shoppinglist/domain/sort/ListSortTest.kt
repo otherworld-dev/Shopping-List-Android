@@ -75,6 +75,18 @@ class ListSortTest {
     }
 
     @Test
+    fun `without list orders each section keeps the server's order, not the newest first`() {
+        val lists = listOf(
+            list(-5, "Made offline", null),
+            list(1, "Old", "2026-09-01T12:00:00Z", position = 3),
+            list(2, "Shared", "2026-09-26T12:00:00Z", isOwner = false),
+            list(3, "New", "2026-09-26T12:00:00Z", position = 0),
+            list(4, "Pinned", "2026-09-02T12:00:00Z", isPinned = true),
+        )
+        assertEquals(listOf(listOf(4L), listOf(-5L, 1L, 3L), listOf(2L)), ids(splitLists(lists)))
+    }
+
+    @Test
     fun `reads the three sorts and anything else as recently updated`() {
         assertEquals(ListSortMode.CUSTOM, ListSortMode.fromStorage("custom"))
         assertEquals(ListSortMode.ALPHA, ListSortMode.fromStorage("alpha"))
