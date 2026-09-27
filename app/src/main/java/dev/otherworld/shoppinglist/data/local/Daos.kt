@@ -112,6 +112,9 @@ interface MutationDao {
     @Query("SELECT * FROM mutations ORDER BY seq ASC LIMIT 1")
     suspend fun oldest(): MutationEntity?
 
+    @Query("SELECT * FROM mutations WHERE seq = :seq")
+    suspend fun getBySeq(seq: Long): MutationEntity?
+
     @Query("SELECT COUNT(*) FROM mutations")
     fun count(): Flow<Int>
 

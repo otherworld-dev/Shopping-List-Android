@@ -127,11 +127,13 @@ class SyncEngine @Inject constructor(
 
     /** Sends one change; false when its destination must wait for the rest of this drain. */
     private suspend fun sendOne(m: MutationEntity, d: Destination): Boolean {
-        val outcome = runCatching { if (d is Destination.Guest) executeGuest(m, d.shareId) else execute(m) }
+        val outcome = runCatching {
+            if (d is Destination.Guest) executeGuest(m, d.shareId) else { execute(m); false }
+        }
         val now = SystemClock.elapsedRealtime()
         if (outcome.isSuccess) {
             backoff(d).recordSuccess()
-            mutationDao.deleteBySeq(m.seq)
+            if (!outcome.getOrThrow()) mutationDao.deleteBySeq(m.seq)
             return true
         }
         when (val e = outcome.exceptionOrNull()) {
@@ -142,7 +144,12 @@ class SyncEngine @Inject constructor(
             is GuestServerTroubleException -> { backoff(d).recordFailure(now); return false }
         }
         return when (SyncErrorPolicy.classify(outcome.exceptionOrNull())) {
-            SyncErrorAction.HALT -> false // network down — retry on reconnect
+            SyncErrorAction.HALT -> {
+                // Network down: retry on reconnect. An unreachable friend's server can take up to
+                // a minute to time out, so it cools down rather than stalling every drain.
+                if (d is Destination.Guest) backoff(d).recordFailure(now)
+                false
+            }
             SyncErrorAction.DISCARD -> { mutationDao.deleteBySeq(m.seq); true } // gone on server — benign
             // Server trouble, not this mutation's fault: cool down with the attempt count untouched.
             SyncErrorAction.TRANSIENT -> { backoff(d).recordFailure(now); false }
@@ -161,15 +168,31 @@ class SyncEngine @Inject constructor(
         }
     }
 
-    private suspend fun executeGuest(m: MutationEntity, shareId: Long) {
-        val share = shareDao.getById(shareId) ?: return
+    /**
+     * Sends one guest change. True when its queue row was kept: a ticked create's row becomes the
+     * tick (same seq, so it goes next), which then retries alone and never re-creates the item.
+     */
+    private suspend fun executeGuest(m: MutationEntity, shareId: Long): Boolean {
+        val share = shareDao.getById(shareId) ?: return false
         val localAreas = areaDao.getByList(m.listId).map { it.toModel() }
-        val result = guestSender.send(m, share, localAreas)
-        if (result is GuestSendResult.Created) {
-            result.detectedAreaId?.let { area ->
-                itemDao.getById(m.targetId)?.let { row -> if (row.shopAreaId == null) itemDao.upsert(row.copy(shopAreaId = area)) }
-            }
+        val result = guestSender.send(m, share, localAreas) as? GuestSendResult.Created ?: return false
+        result.detectedAreaId?.let { area ->
+            itemDao.getById(m.targetId)?.let { row -> if (row.shopAreaId == null) itemDao.upsert(row.copy(shopAreaId = area)) }
+        }
+        return db.withTransaction {
             remapItemId(tempId = m.targetId, realId = result.localId, updatedAt = result.updatedAt)
+            if (!result.tickPending) return@withTransaction false
+            // Re-read: the remap has already rewritten this row's targetId.
+            val row = mutationDao.getBySeq(m.seq) ?: return@withTransaction false
+            mutationDao.update(
+                row.copy(
+                    type = MutationTypes.CHECK,
+                    targetId = result.localId,
+                    payload = json.encodeToString(CheckPayload.serializer(), CheckPayload(true)),
+                    attempts = 0,
+                ),
+            )
+            true
         }
     }
 

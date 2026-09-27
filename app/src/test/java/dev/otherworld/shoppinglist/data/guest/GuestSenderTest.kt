@@ -4,7 +4,6 @@ import dev.otherworld.shoppinglist.data.local.GuestIdKind
 import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.MutationEntity
-import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
@@ -19,6 +18,7 @@ import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.HttpException
@@ -46,20 +46,24 @@ class GuestSenderTest {
         assertEquals(ids.localId(4, GuestIdKind.ITEM, 500), result.localId)
         assertEquals(listOf("createItem ${PublicUrls.items("https://example.com", "tok")}"), api.calls)
         assertEquals(CreateItemRequest("Milk", "2"), api.bodies.single())
+        assertFalse(result.tickPending)
     }
 
     @Test
-    fun `a ticked paste arrives ticked`() = runTest {
+    fun `a ticked paste is created, and its tick is left to send next`() = runTest {
+        val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Milk", checked = true)))
+        val result = sender.send(m, share, emptyList()) as GuestSendResult.Created
+        assertEquals(listOf("createItem ${PublicUrls.items("https://example.com", "tok")}"), api.calls)
+        assertTrue(result.tickPending)
+        assertEquals(ids.localId(4, GuestIdKind.ITEM, 500), result.localId)
+    }
+
+    @Test
+    fun `a ticked create is one create and no tick, so a failed tick can't make a second item`() = runTest {
         val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Milk", checked = true)))
         sender.send(m, share, emptyList())
-        assertEquals(
-            listOf(
-                "createItem ${PublicUrls.items("https://example.com", "tok")}",
-                "checkItem ${PublicUrls.check("https://example.com", "tok", 500)}",
-            ),
-            api.calls,
-        )
-        assertEquals(CheckRequest(true), api.bodies.last())
+        assertEquals(1, api.calls.count { it.startsWith("createItem ") })
+        assertEquals(0, api.calls.count { it.startsWith("checkItem ") })
     }
 
     @Test

@@ -25,8 +25,17 @@ import javax.inject.Singleton
 sealed interface GuestSendResult {
     data object Done : GuestSendResult
 
-    /** An item made offline now exists on the friend's server, locally as [localId]. */
-    data class Created(val localId: Long, val updatedAt: String?, val detectedAreaId: Long?) : GuestSendResult
+    /**
+     * An item made offline now exists on the friend's server, locally as [localId]. The public
+     * create ignores "checked", so a ticked paste has [tickPending] and the queue ticks it next,
+     * as its own step: a failed tick then retries alone instead of creating the item again.
+     */
+    data class Created(
+        val localId: Long,
+        val updatedAt: String?,
+        val detectedAreaId: Long?,
+        val tickPending: Boolean = false,
+    ) : GuestSendResult
 }
 
 /**
@@ -61,12 +70,11 @@ class GuestSender @Inject constructor(
                     PublicUrls.items(s, t),
                     CreateItemRequest(p.name, p.quantity, p.unit, areaId?.let { ids.remoteId(it) }),
                 ).ocs.data
-                // The public create ignores "checked", so a ticked paste is ticked straight after.
-                if (p.checked) api.checkItem(PublicUrls.check(s, t, created.id), CheckRequest(true))
                 return GuestSendResult.Created(
                     localId = ids.localId(share.id, GuestIdKind.ITEM, created.id),
                     updatedAt = created.updatedAt,
                     detectedAreaId = areaId.takeIf { p.detectArea },
+                    tickPending = p.checked,
                 )
             }
             MutationTypes.UPDATE -> {
