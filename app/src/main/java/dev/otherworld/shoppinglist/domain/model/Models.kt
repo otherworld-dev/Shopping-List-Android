@@ -18,6 +18,10 @@ data class ShoppingListModel(
     val isOwner: Boolean,
     /** This user's own pin (yours and shared lists alike); others keep their own order. */
     val isPinned: Boolean = false,
+    /** This user's own place for the list in the Custom order; null until they place it. */
+    val position: Int? = null,
+    /** Server timestamp of the last change; null for a list created on this phone and not yet synced. */
+    val updatedAt: String? = null,
 ) {
     val canWrite: Boolean get() = permission >= Permission.WRITE
 }
@@ -88,6 +92,8 @@ fun ListDto.toModel() = ShoppingListModel(
     permission = permission,
     isOwner = isOwner,
     isPinned = isPinned == true,
+    position = position,
+    updatedAt = updatedAt,
 )
 
 fun TagDto.toModel() = TagModel(id = id, name = name)

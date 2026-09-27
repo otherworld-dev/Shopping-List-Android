@@ -127,6 +127,12 @@ interface MutationDao {
     @Query("SELECT * FROM mutations WHERE type = 'reorder'")
     suspend fun reorderMutations(): List<MutationEntity>
 
+    @Query("SELECT * FROM mutations WHERE type = :type")
+    suspend fun byType(type: String): List<MutationEntity>
+
+    @Query("SELECT COUNT(*) FROM mutations WHERE type = :type")
+    suspend fun countByType(type: String): Int
+
     /** Count of pending shop-area mutations for a list (currently only reorders). */
     @Query("SELECT COUNT(*) FROM mutations WHERE entity = 'area' AND listId = :listId")
     suspend fun pendingAreaCount(listId: Long): Int

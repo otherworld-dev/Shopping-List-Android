@@ -33,6 +33,7 @@ import androidx.navigation.navArgument
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.Account
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.theme.ServerTheme
@@ -46,6 +47,7 @@ import dev.otherworld.shoppinglist.ui.areas.ManageAreasScreen
 import dev.otherworld.shoppinglist.ui.items.ItemsScreen
 import dev.otherworld.shoppinglist.ui.lists.ListsScreen
 import dev.otherworld.shoppinglist.ui.login.LoginScreen
+import dev.otherworld.shoppinglist.ui.settings.SettingsScreen
 import dev.otherworld.shoppinglist.ui.share.SharingScreen
 import dev.otherworld.shoppinglist.ui.tags.ManageTagsScreen
 import kotlinx.coroutines.flow.StateFlow
@@ -63,6 +65,7 @@ class AppViewModel @Inject constructor(
     private val realtime: RealtimeController,
     private val syncEngine: SyncEngine,
     private val certAlerts: CertAlertController,
+    private val listSettings: ListSettingsRepository,
 ) : ViewModel() {
     val account: StateFlow<Account?> = credentialStore.accountFlow
     val certAlert: StateFlow<CertInfo?> = certAlerts.alert
@@ -95,6 +98,7 @@ class AppViewModel @Inject constructor(
                     realtime.ensureConnected()
                 } else {
                     serverTheme.clear()
+                    listSettings.clear()
                     certAlerts.onLoggedOut()
                 }
             }
@@ -152,6 +156,7 @@ fun AppRoot(
                     navController.navigate("share/${list.id}?title=${Uri.encode(list.title)}")
                 },
                 onManageTags = { navController.navigate("tags") },
+                onOpenSettings = { navController.navigate("settings") },
             )
         }
 
@@ -193,6 +198,10 @@ fun AppRoot(
 
         composable("tags") {
             ManageTagsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable("settings") {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
     } // Column

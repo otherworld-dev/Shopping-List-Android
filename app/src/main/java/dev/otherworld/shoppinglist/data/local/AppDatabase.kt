@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AreaEntity::class,
         MutationEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -32,6 +32,11 @@ abstract class AppDatabase : RoomDatabase() {
             object : Migration(1, 2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE lists ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0")
+                }
+            },
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE lists ADD COLUMN position INTEGER")
                 }
             },
         )

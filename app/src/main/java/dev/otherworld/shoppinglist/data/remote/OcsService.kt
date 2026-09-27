@@ -13,7 +13,9 @@ import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ListDto
 import dev.otherworld.shoppinglist.data.remote.dto.ListPreferencesRequest
 import dev.otherworld.shoppinglist.data.remote.dto.MoveItemRequest
+import dev.otherworld.shoppinglist.data.remote.dto.ReorderListsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
+import dev.otherworld.shoppinglist.data.remote.dto.SettingsDto
 import dev.otherworld.shoppinglist.data.remote.dto.ShareDto
 import dev.otherworld.shoppinglist.data.remote.dto.ShareesResponse
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
@@ -22,6 +24,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -57,6 +60,16 @@ interface OcsService {
     /** Per-user preference (since server 1.8.0), so pinning never changes the list for others. */
     @PATCH("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}/preferences")
     suspend fun updateListPreferences(@Path("id") id: Long, @Body body: ListPreferencesRequest)
+
+    /** This user's own order for one section of their lists (since server 1.10.0). */
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/reorder")
+    suspend fun reorderLists(@Body body: ReorderListsRequest)
+
+    @GET("ocs/v2.php/apps/shopping_list/api/v1/settings")
+    suspend fun getSettings(): OcsResponse<SettingsDto>
+
+    @PATCH("ocs/v2.php/apps/shopping_list/api/v1/settings")
+    suspend fun updateSettings(@Body body: UpdateSettingsRequest): OcsResponse<SettingsDto>
 
     // ---- Items ----
 
