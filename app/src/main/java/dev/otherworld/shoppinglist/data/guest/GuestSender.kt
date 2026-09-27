@@ -17,6 +17,7 @@ import dev.otherworld.shoppinglist.data.sync.ReorderPayload
 import dev.otherworld.shoppinglist.data.sync.areaForQueuedCreate
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.text.SmartInput
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import retrofit2.HttpException
 import javax.inject.Inject
@@ -55,8 +56,26 @@ class GuestSender @Inject constructor(
         return try {
             guestApi.withUnlock(share) { dispatch(m, share, localAreas) }
         } catch (e: HttpException) {
+            if (e.code() >= 500 && m.type in ITEM_CHANGES && itemGone(m, share)) return GuestSendResult.Done
             throw translate(e, share)
         }
+    }
+
+    /**
+     * Servers before 1.10 answer a change to an item the owner deleted with a 500, not a 404, so
+     * a server error is only taken as "gone" when the list's items confirm it. If that check
+     * fails too, the original error stands and the change is retried later.
+     */
+    private suspend fun itemGone(m: MutationEntity, share: GuestShareEntity): Boolean {
+        val remote = ids.remoteId(m.targetId) ?: return false
+        val items = try {
+            guestApi.withUnlock(share) { api.items(PublicUrls.items(share.server, share.token)) }.ocs.data
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return false
+        }
+        return items.none { it.id == remote }
     }
 
     private suspend fun dispatch(m: MutationEntity, share: GuestShareEntity, localAreas: List<ShopAreaModel>): GuestSendResult {
@@ -126,5 +145,9 @@ class GuestSender @Inject constructor(
         false
     } catch (e: HttpException) {
         guestApi.errorOf(e) == PublicError.NotFound
+    }
+
+    private companion object {
+        val ITEM_CHANGES = setOf(MutationTypes.UPDATE, MutationTypes.CHECK, MutationTypes.DELETE)
     }
 }

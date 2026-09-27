@@ -5,6 +5,7 @@ import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
+import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.sync.CheckPayload
@@ -13,12 +14,15 @@ import dev.otherworld.shoppinglist.data.sync.ItemUpdatePayload
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
 import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.ReorderPayload
+import dev.otherworld.shoppinglist.data.sync.SyncErrorAction
+import dev.otherworld.shoppinglist.data.sync.SyncErrorPolicy
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.HttpException
@@ -110,6 +114,45 @@ class GuestSenderTest {
         api.failNext += "checkItem" to httpError(404, """{"message":"Not found"}""")
         val e = runCatching { sender.send(mutation(MutationTypes.CHECK, item, """{"checked":true}"""), share, emptyList()) }.exceptionOrNull()
         assertTrue(e is HttpException && e.code() == 404)
+    }
+
+    // The server answers a change to an item the owner deleted with a 500, not a 404.
+    @Test
+    fun `a server error for an item the owner deleted drops just that change`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        api.items = listOf(ItemDto(id = 13, listId = 9))
+        val changes = listOf(
+            "updateItem" to mutation(MutationTypes.UPDATE, item, """{"name":"Oat milk"}"""),
+            "checkItem" to mutation(MutationTypes.CHECK, item, """{"checked":true}"""),
+            "deleteItem" to mutation(MutationTypes.DELETE, item, "{}"),
+        )
+        for ((op, m) in changes) {
+            api.failNext += op to httpError(500, "[]")
+            assertEquals(GuestSendResult.Done, sender.send(m, share, emptyList()))
+        }
+        assertEquals(3, api.calls.count { it == "items ${PublicUrls.items("https://example.com", "tok")}" })
+    }
+
+    @Test
+    fun `a server error for an item that's still there stays transient`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        api.items = listOf(ItemDto(id = 12, listId = 9))
+        val original = httpError(500, "[]")
+        api.failNext += "checkItem" to original
+        val e = runCatching { sender.send(mutation(MutationTypes.CHECK, item, """{"checked":true}"""), share, emptyList()) }.exceptionOrNull()
+        assertSame(original, e)
+        assertEquals(SyncErrorAction.TRANSIENT, SyncErrorPolicy.classify(e))
+    }
+
+    @Test
+    fun `a server error stays transient when the check for the item fails too`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        val original = httpError(503, "[]")
+        api.failNext += "deleteItem" to original
+        api.failNext += "items" to httpError(500, "[]")
+        val e = runCatching { sender.send(mutation(MutationTypes.DELETE, item, "{}"), share, emptyList()) }.exceptionOrNull()
+        assertSame(original, e)
+        assertEquals(SyncErrorAction.TRANSIENT, SyncErrorPolicy.classify(e))
     }
 
     @Test
