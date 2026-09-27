@@ -199,6 +199,10 @@ interface GuestShareDao {
     @Update
     suspend fun update(share: GuestShareEntity)
 
+    /** Stamps the refresh gate on its own, so a failed attempt still holds it (no retry storm). */
+    @Query("UPDATE guest_shares SET lastRefreshedAt = :at WHERE id = :id")
+    suspend fun markRefreshed(id: Long, at: Long)
+
     @Query("DELETE FROM guest_shares WHERE id = :id")
     suspend fun deleteById(id: Long)
 }

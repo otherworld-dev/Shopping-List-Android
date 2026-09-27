@@ -63,17 +63,25 @@ class GuestRepository @Inject constructor(
         }
     }
 
-    /** Unlocks the link if [password] is given, saves it and its list, and fetches it. Returns the list's id. */
+    /**
+     * Unlocks the link if [password] is given, saves it and its list, and fetches it. Returns the
+     * list's id. With no [password] on a link already held, re-fetches through the stored
+     * unlock (Task 6's auto-open path) rather than a bare `show` — the server's unlock session
+     * may have expired, and a fresh [GuestPasswordNeededException] out of that only means the
+     * stored password no longer works, not that the link is gone.
+     */
     suspend fun join(link: ShareLink, password: String?): Long {
+        val existingForUnlock = if (password == null) shareDao.find(link.server, link.token) else null
         val dto = try {
-            if (password != null) {
-                api.auth(PublicUrls.auth(link.server, link.token), PublicAuthRequest(password)).ocs.data
-            } else {
-                api.show(PublicUrls.show(link.server, link.token)).ocs.data
+            when {
+                password != null -> api.auth(PublicUrls.auth(link.server, link.token), PublicAuthRequest(password)).ocs.data
+                existingForUnlock != null -> guestApi.withUnlock(existingForUnlock) { api.show(PublicUrls.show(link.server, link.token)) }.ocs.data
+                else -> api.show(PublicUrls.show(link.server, link.token)).ocs.data
             }
         } catch (e: HttpException) {
             throw when (val error = guestApi.errorOf(e)) {
                 PublicError.WrongPassword -> WrongPasswordException()
+                PublicError.PasswordRequired -> GuestPasswordNeededException(existingForUnlock?.id ?: 0)
                 PublicError.NotFound -> LinkNotFoundException()
                 is PublicError.Other -> if (error.code == 404) LinkNotFoundException() else e
                 else -> e
@@ -124,6 +132,11 @@ class GuestRepository @Inject constructor(
         for (share in shareDao.all()) {
             if (share.state == GuestShareState.DEAD) continue
             if (!force && now - share.lastRefreshedAt < SHARE_REFRESH_MS) continue
+            // Stamped before the call, not just on success: a share that keeps failing (a stale
+            // password, a dead server) must still only be tried once a minute, or a frequent
+            // poller re-attempts it every time — hammering a 5-a-minute unlock limit or sitting
+            // through a timeout on every poll.
+            shareDao.markRefreshed(share.id, now)
             try {
                 val dto = guestApi.withUnlock(share) { api.show(PublicUrls.show(share.server, share.token)) }.ocs.data
                 db.withTransaction {
@@ -156,9 +169,13 @@ class GuestRepository @Inject constructor(
         try {
             val areas = guestApi.withUnlock(share) { api.areas(PublicUrls.areas(share.server, share.token)) }.ocs.data
             val items = guestApi.withUnlock(share) { api.items(PublicUrls.items(share.server, share.token)) }.ocs.data
-            val areaRows = mapGuestAreas(areas, share.id, listId, ids)
-            val itemRows = mapGuestItems(items, share.id, listId, ids)
             db.withTransaction {
+                // Leave() may have removed this share while the fetch above was in flight. Bail
+                // out inside the same transaction that would otherwise write the mapping, so
+                // neither the resurrected area/item rows nor their guest_ids ever land.
+                if (shareDao.getById(share.id) == null) return@withTransaction
+                val areaRows = mapGuestAreas(areas, share.id, listId, ids)
+                val itemRows = mapGuestItems(items, share.id, listId, ids)
                 areaDao.deleteByList(listId)
                 areaDao.upsertAll(areaRows)
                 val pending = mutationDao.pendingItemIds(listId).toSet()
