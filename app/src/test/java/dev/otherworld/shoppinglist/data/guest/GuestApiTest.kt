@@ -5,6 +5,7 @@ import dev.otherworld.shoppinglist.data.local.GuestShareState
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -50,6 +51,23 @@ class GuestApiTest {
         api.failNext += "auth" to httpError(403, """{"message":"Invalid password"}""")
         val e = runCatching { guestApi.withUnlock(share) { api.show(showUrl) } }.exceptionOrNull()
         assertEquals(GuestPasswordNeededException::class, e!!::class)
+    }
+
+    // Every failed unlock counts toward the server's brute-force throttle for the phone's IP.
+    @Test
+    fun `a wrong stored password is forgotten, so it's never tried again`() = runTest {
+        val passwords = FakePasswords(mutableMapOf(4L to "old"))
+        val guestApi = GuestApi(api, passwords, json)
+        api.failNext += "show" to httpError(403, """{"passwordRequired":true}""")
+        api.failNext += "auth" to httpError(403, """{"message":"Invalid password"}""")
+        runCatching { guestApi.withUnlock(share) { api.show(showUrl) } }
+        assertNull(passwords.get(4))
+
+        api.calls.clear()
+        api.failNext += "show" to httpError(403, """{"passwordRequired":true}""")
+        val e = runCatching { guestApi.withUnlock(share) { api.show(showUrl) } }.exceptionOrNull()
+        assertEquals(GuestPasswordNeededException::class, e!!::class)
+        assertEquals(listOf("show $showUrl"), api.calls)
     }
 
     @Test

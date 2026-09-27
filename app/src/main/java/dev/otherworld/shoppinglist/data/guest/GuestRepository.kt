@@ -145,7 +145,14 @@ class GuestRepository @Inject constructor(
             // through a timeout on every poll.
             shareDao.markRefreshed(share.id, now)
             try {
-                val dto = guestApi.withUnlock(share) { api.show(PublicUrls.show(share.server, share.token)) }.ocs.data
+                val url = PublicUrls.show(share.server, share.token)
+                // Waiting for a new password: a plain show still finds a dead link, without an
+                // unlock attempt that would only fail again.
+                val dto = if (share.state == GuestShareState.PASSWORD_NEEDED) {
+                    api.show(url).ocs.data
+                } else {
+                    guestApi.withUnlock(share) { api.show(url) }.ocs.data
+                }
                 db.withTransaction {
                     shareDao.getById(share.id)?.let {
                         shareDao.update(it.copy(title = dto.title, permission = dto.permission, state = GuestShareState.OK, lastRefreshedAt = now))

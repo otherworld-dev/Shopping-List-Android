@@ -50,7 +50,13 @@ class GuestApi @Inject constructor(
                 api.auth(PublicUrls.auth(share.server, share.token), PublicAuthRequest(password))
             } catch (e: HttpException) {
                 when (errorOf(e)) {
-                    PublicError.WrongPassword, PublicError.PasswordRequired -> throw GuestPasswordNeededException(share.id)
+                    PublicError.WrongPassword -> {
+                        // Every failed unlock counts toward the server's brute-force throttle for
+                        // this IP, which could lock the user out of their own web login too.
+                        passwords.remove(share.id)
+                        throw GuestPasswordNeededException(share.id)
+                    }
+                    PublicError.PasswordRequired -> throw GuestPasswordNeededException(share.id)
                     else -> throw e
                 }
             }
