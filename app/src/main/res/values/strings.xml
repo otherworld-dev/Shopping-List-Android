@@ -75,6 +75,8 @@
     <string name="theme_dark">Dark</string>
     <string name="lists_section_pinned">Pinned</string>
     <string name="lists_section_others">Others</string>
+    <string name="lists_section_shared">Shared with me</string>
+    <string name="menu_settings">Settings</string>
     <string name="dialog_new_list_title">New list</string>
     <string name="dialog_list_name_label">List name</string>
     <string name="dialog_rename_list_title">Rename list</string>

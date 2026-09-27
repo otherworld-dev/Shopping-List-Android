@@ -4,12 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
-import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
-import dev.otherworld.shoppinglist.data.prefs.ThemeMode
+import dev.otherworld.shoppinglist.data.repo.ListOrdering
 import dev.otherworld.shoppinglist.data.repo.ListRepository
+import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
+import dev.otherworld.shoppinglist.domain.sort.ListSections
+import dev.otherworld.shoppinglist.domain.sort.ListSortMode
+import dev.otherworld.shoppinglist.domain.sort.SectionKey
+import dev.otherworld.shoppinglist.domain.sort.sortLists
 import dev.otherworld.shoppinglist.ui.common.UiText
 import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.flow.launchIn
@@ -21,11 +25,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 
 data class ListsUiState(
     val loading: Boolean = false,
     val lists: List<ShoppingListModel> = emptyList(),
+    val sections: ListSections = ListSections(emptyList(), emptyList(), emptyList()),
+    /** Dragging needs a server that keeps list orders. */
+    val canReorder: Boolean = false,
     val error: UiText? = null,
 )
 
@@ -34,13 +42,10 @@ class ListsViewModel @Inject constructor(
     private val repository: ListRepository,
     private val credentialStore: CredentialStore,
     private val connectivity: ConnectivityObserver,
-    private val displayPrefs: DisplayPrefs,
+    private val listSettings: ListSettingsRepository,
+    private val ordering: ListOrdering,
     realtime: RealtimeController,
 ) : ViewModel() {
-
-    val themeMode: StateFlow<ThemeMode> = displayPrefs.themeMode
-
-    fun setThemeMode(mode: ThemeMode) = displayPrefs.setThemeMode(mode)
 
     private val _loading = MutableStateFlow(true)
     private val _error = MutableStateFlow<UiText?>(null)
@@ -50,8 +55,18 @@ class ListsViewModel @Inject constructor(
     } ?: ""
 
     val state: StateFlow<ListsUiState> =
-        combine(repository.observeLists(), _loading, _error) { lists, loading, error ->
-            ListsUiState(loading = loading, lists = lists, error = error)
+        combine(
+            repository.observeLists(), listSettings.listSort, listSettings.listOrderSupported, _loading, _error,
+        ) { lists, sort, supported, loading, error ->
+            // Without server support the sort is always Recently updated, the server's own order.
+            val mode = if (supported) sort else ListSortMode.UPDATED
+            ListsUiState(
+                loading = loading,
+                lists = lists,
+                sections = sortLists(lists, mode, Locale.getDefault()),
+                canReorder = supported,
+                error = error,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ListsUiState(loading = true))
 
     init {
@@ -66,6 +81,7 @@ class ListsViewModel @Inject constructor(
             _error.value = null
             try {
                 repository.refresh()
+                runCatching { listSettings.refresh() }
             } catch (e: Exception) {
                 _error.value = errorText(e)
             } finally {
@@ -96,6 +112,10 @@ class ListsViewModel @Inject constructor(
 
     fun setPinned(list: ShoppingListModel, pinned: Boolean) {
         viewModelScope.launch { repository.setPinned(list.id, pinned) }
+    }
+
+    fun reorderSection(key: SectionKey, order: List<Long>) {
+        viewModelScope.launch { ordering.reorderSection(key, order) }
     }
 
     fun logout() = credentialStore.clear()
