@@ -55,6 +55,8 @@ class JoinViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val link = parseShareLink(savedStateHandle.get<String>("url").orEmpty())
+    /** The link's port, 443 when its URL has none, or -1 for no valid link. */
+    private val linkPort = link?.server?.toHttpUrlOrNull()?.port ?: -1
     private val _state = MutableStateFlow(
         JoinUiState(host = link?.server?.toHttpUrlOrNull()?.host.orEmpty(), serverLabel = link?.server?.let(::serverLabel).orEmpty()),
     )
@@ -138,13 +140,19 @@ class JoinViewModel @Inject constructor(
     private fun fail(e: Exception) {
         val untrusted = certHolder.consume()
         val host = _state.value.host
-        // The holder is a singleton shared with background guest refreshes against other
-        // servers, so only trust it as this link's failure when the host actually matches —
-        // otherwise it's someone else's rejected certificate and this is a normal error.
-        if (e is javax.net.ssl.SSLException && untrusted != null && untrusted.host.equals(host, ignoreCase = true)) {
+        // The holder is a singleton shared with background refreshes against other servers,
+        // including other ports on this host, so only trust it as this link's failure when the
+        // host and port actually match — otherwise it's someone else's rejected certificate and
+        // this is a normal error.
+        if (e is javax.net.ssl.SSLException && untrusted != null &&
+            untrusted.host.equals(host, ignoreCase = true) && isLinkPort(untrusted.port)
+        ) {
             pendingRaw = untrusted.certificate
             _state.update {
-                it.copy(checking = false, pendingCert = describeCert(host, untrusted.certificate, untrusted.hostnameMismatch))
+                it.copy(
+                    checking = false,
+                    pendingCert = describeCert(host, untrusted.port, untrusted.certificate, untrusted.hostnameMismatch),
+                )
             }
             return
         }
@@ -152,10 +160,13 @@ class JoinViewModel @Inject constructor(
         _state.update { it.copy(checking = false, error = message) }
     }
 
+    /** True when [port] is the link's, or either port isn't known. */
+    private fun isLinkPort(port: Int): Boolean = port == -1 || linkPort == -1 || port == linkPort
+
     fun trustPendingCert() {
         val cert = pendingRaw ?: return
-        val host = _state.value.pendingCert?.host ?: return
-        acceptedCerts.accept(host, cert)
+        val pending = _state.value.pendingCert ?: return
+        acceptedCerts.accept(pending.host, pending.port, cert)
         pendingRaw = null
         _state.update { it.copy(pendingCert = null) }
         checkLink()

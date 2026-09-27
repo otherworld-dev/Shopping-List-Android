@@ -93,14 +93,15 @@ class LoginViewModel @Inject constructor(
                 if (untrusted != null && e is javax.net.ssl.SSLException) {
                     // The server presented a certificate the device doesn't trust (or one
                     // that doesn't cover this hostname): offer the accept prompt instead of
-                    // a dead-end error. The record carries the host that actually presented
-                    // the cert, so what we display and pin are always self-consistent.
+                    // a dead-end error. The record carries the host and port that actually
+                    // presented the cert, so what we display and pin are always self-consistent.
                     pendingRaw = untrusted.certificate
                     val host = untrusted.host ?: hostOf(server)
+                    val port = if (untrusted.host != null) untrusted.port else portOf(server)
                     _state.update {
                         it.copy(
                             connecting = false, awaiting = false, error = null,
-                            pendingCert = describeCert(host, untrusted.certificate, untrusted.hostnameMismatch),
+                            pendingCert = describeCert(host, port, untrusted.certificate, untrusted.hostnameMismatch),
                         )
                     }
                 } else {
@@ -112,11 +113,11 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    /** User tapped "Trust" in the prompt: pin the certificate for this host and retry. */
+    /** User tapped "Trust" in the prompt: pin the certificate for this host and port and retry. */
     fun trustPendingCert() {
         val cert = pendingRaw ?: return
-        val host = _state.value.pendingCert?.host ?: return
-        acceptedCerts.accept(host, cert)
+        val pending = _state.value.pendingCert ?: return
+        acceptedCerts.accept(pending.host, pending.port, cert)
         pendingRaw = null
         _state.update { it.copy(pendingCert = null) }
         login(lastServer)
@@ -159,11 +160,13 @@ class LoginViewModel @Inject constructor(
         else -> UiText(R.string.login_error_failed)
     }
 
-    private fun hostOf(server: String): String {
-        val s = server.trim().trimEnd('/')
-        val url = if (s.startsWith("http://") || s.startsWith("https://")) s else "https://$s"
-        return url.toHttpUrlOrNull()?.host ?: s
-    }
+    private fun hostOf(server: String): String = urlOf(server)?.host ?: server.trim().trimEnd('/')
+
+    private fun portOf(server: String): Int = urlOf(server)?.port ?: -1
+
+    private fun urlOf(server: String) = server.trim().trimEnd('/').let { s ->
+        if (s.startsWith("http://") || s.startsWith("https://")) s else "https://$s"
+    }.toHttpUrlOrNull()
 
     fun onUrlLaunched() = _state.update { it.copy(launchUrl = null) }
 

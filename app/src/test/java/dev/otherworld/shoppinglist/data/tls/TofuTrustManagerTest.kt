@@ -11,6 +11,7 @@ import java.net.Socket
 import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.util.Base64
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLEngine
 import javax.net.ssl.X509ExtendedTrustManager
@@ -51,21 +52,28 @@ class TofuTrustManagerTest {
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     }
 
-    /** Host -> accepted cert. X509Certificate.equals compares DER encodings, so matching is byte-exact. */
-    private class FakeTrusted(private val byHost: Map<String, X509Certificate>) : TrustedCerts {
+    /**
+     * Pins keyed as the store keys them, `host|port` (or a legacy bare host), matched with the
+     * store's own lookup so these tests exercise the real key logic.
+     */
+    private class FakeTrusted(private val pins: Map<String, String>) : TrustedCerts {
         var consulted = false
-        override fun isTrustedForHost(host: String, cert: X509Certificate): Boolean {
+        override fun isTrustedForHost(host: String, port: Int, cert: X509Certificate): Boolean {
             consulted = true
-            return byHost[host] == cert
+            return CertPins.matches(pins, host, port, encode(cert))
         }
     }
 
+    private fun trusted(vararg pins: Pair<String, X509Certificate>) =
+        FakeTrusted(pins.associate { (key, cert) -> key to encode(cert) })
+
     /** An engine for a handshake with [host], which is how the trust manager learns the peer. */
-    private fun engineFor(host: String): SSLEngine = SSLContext.getDefault().createSSLEngine(host, 443)
+    private fun engineFor(host: String, port: Int = 443): SSLEngine =
+        SSLContext.getDefault().createSSLEngine(host, port)
 
     @Test
     fun `platform-valid chain passes without consulting the store`() {
-        val trusted = FakeTrusted(emptyMap())
+        val trusted = trusted()
         val holder = UntrustedCertHolder()
         val tm = TofuTrustManager(PassingDelegate(), trusted, holder)
         tm.checkServerTrusted(arrayOf(certA), "RSA")
@@ -76,7 +84,7 @@ class TofuTrustManagerTest {
     @Test
     fun `unknown cert is rejected and recorded for the prompt`() {
         val holder = UntrustedCertHolder()
-        val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(emptyMap()), holder)
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted(), holder)
         try {
             tm.checkServerTrusted(arrayOf(certA), "RSA")
             fail("expected CertificateException")
@@ -93,7 +101,7 @@ class TofuTrustManagerTest {
     @Test
     fun `explicitly accepted cert passes after platform rejection`() {
         val holder = UntrustedCertHolder()
-        val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(mapOf(HOST_A to certA)), holder)
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted("$HOST_A|443" to certA), holder)
         tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A))
         assertNull("no prompt when the cert is already accepted", holder.consume())
     }
@@ -101,7 +109,7 @@ class TofuTrustManagerTest {
     @Test
     fun `a cert accepted for one host isn't trusted for another`() {
         val holder = UntrustedCertHolder()
-        val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(mapOf(HOST_A to certA)), holder)
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted("$HOST_A|443" to certA), holder)
         try {
             tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_B))
             fail("expected CertificateException: accepting A for its host must not trust it for another")
@@ -113,23 +121,26 @@ class TofuTrustManagerTest {
     @Test
     fun `with no host known, an accepted cert isn't trusted`() {
         val holder = UntrustedCertHolder()
-        val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(mapOf(HOST_A to certA)), holder)
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted(HOST_A to certA), holder)
         try {
             tm.checkServerTrusted(arrayOf(certA), "RSA")
             fail("expected CertificateException: an approval can't be matched without the host")
         } catch (expected: CertificateException) {
         }
+        assertEquals(-1, holder.consume()?.port)
     }
 
     @Test
     fun `a different cert than the accepted one is still rejected`() {
         val holder = UntrustedCertHolder()
-        val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(mapOf(HOST_A to certB)), holder)
+        val trusted = trusted("$HOST_A|443" to certB)
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted, holder)
         try {
-            tm.checkServerTrusted(arrayOf(certA), "RSA")
+            tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A))
             fail("expected CertificateException — accepting B must not trust A")
         } catch (expected: CertificateException) {
         }
+        assertTrue("the store must actually be asked", trusted.consulted)
         assertEquals(certA, holder.consume()?.certificate)
     }
 
@@ -137,12 +148,54 @@ class TofuTrustManagerTest {
     fun `only the leaf is TOFU-matched, not intermediates`() {
         // Chain [A, B] with B accepted: the presented identity is A, so this must fail.
         val holder = UntrustedCertHolder()
-        val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(mapOf(HOST_A to certB)), holder)
+        val trusted = trusted("$HOST_A|443" to certB)
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted, holder)
         try {
-            tm.checkServerTrusted(arrayOf(certA, certB), "RSA")
+            tm.checkServerTrusted(arrayOf(certA, certB), "RSA", engineFor(HOST_A))
             fail("expected CertificateException — accepted intermediate must not trust the leaf")
         } catch (expected: CertificateException) {
         }
+        assertTrue("the store must actually be asked", trusted.consulted)
+        assertEquals(certA, holder.consume()?.certificate)
+    }
+
+    @Test
+    fun `a cert approved for one port isn't trusted on another port of that host`() {
+        val holder = UntrustedCertHolder()
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted("$HOST_A|8443" to certA), holder)
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8443))
+        try {
+            tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8444))
+            fail("expected CertificateException: an approval for :8443 must not trust :8444")
+        } catch (expected: CertificateException) {
+        }
+        val recorded = holder.consume()
+        assertEquals(HOST_A, recorded?.host)
+        assertEquals(8444, recorded?.port)
+    }
+
+    @Test
+    fun `approving another cert for a second port keeps the first port's approval`() {
+        val first = CertPins.put(emptyMap(), HOST_A, 8443, encode(certA))
+        val both = CertPins.put(first, HOST_A, 8444, encode(certB))
+        assertTrue(CertPins.matches(both, HOST_A, 8443, encode(certA)))
+        assertTrue(CertPins.matches(both, HOST_A, 8444, encode(certB)))
+
+        val holder = UntrustedCertHolder()
+        val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(both), holder)
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8443))
+        tm.checkServerTrusted(arrayOf(certB), "RSA", engineFor(HOST_A, 8444))
+        assertNull(holder.consume())
+    }
+
+    @Test
+    fun `a legacy host-only approval is trusted on any port`() {
+        val holder = UntrustedCertHolder()
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted(HOST_A to certA), holder)
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A))
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8443))
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8444))
+        assertNull(holder.consume())
     }
 
     @Test
@@ -157,6 +210,8 @@ class TofuTrustManagerTest {
             .generateCertificate(pem.byteInputStream()) as X509Certificate
 
     private companion object {
+        fun encode(cert: X509Certificate): String = Base64.getEncoder().encodeToString(cert.encoded)
+
         const val HOST_A = "test-a.example"
         const val HOST_B = "test-b.example"
 
