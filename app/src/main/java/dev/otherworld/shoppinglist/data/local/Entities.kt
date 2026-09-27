@@ -23,6 +23,8 @@ data class ListEntity(
     val updatedAt: String?,
     /** This user's pin (per-user on the server, so it never reorders anyone else's sidebar). */
     val isPinned: Boolean = false,
+    /** This user's own place in the Custom order; null until placed, and after a pin or unpin. */
+    val position: Int? = null,
 )
 
 @Entity(

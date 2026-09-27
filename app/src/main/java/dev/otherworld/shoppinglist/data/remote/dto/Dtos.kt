@@ -11,6 +11,8 @@ data class ListDto(
     val isOwner: Boolean = true,
     // Since server app 1.8.0; older servers don't send it.
     val isPinned: Boolean? = null,
+    // Since server app 1.10.0: this user's own place in the Custom order.
+    val position: Int? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
@@ -175,3 +177,18 @@ data class UpdateLinkRequest(
     val expiresAt: String? = null,
     val removeExpiry: Boolean? = null,
 )
+
+/** GET/PATCH …/settings: the user's own settings (since server app 1.9.0; listSort since 1.10.0). */
+@Serializable
+data class SettingsDto(
+    val showImages: Boolean = false,
+    val listSort: String? = null,
+)
+
+/** Only the fields set are sent; the server leaves the rest alone. */
+@Serializable
+data class UpdateSettingsRequest(val listSort: String? = null)
+
+/** POST …/lists/reorder: one section's lists in the order wanted. */
+@Serializable
+data class ReorderListsRequest(val listIds: List<Long>)

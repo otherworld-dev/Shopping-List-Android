@@ -92,7 +92,7 @@ fun ListDto.toModel() = ShoppingListModel(
     permission = permission,
     isOwner = isOwner,
     isPinned = isPinned == true,
-    position = null,
+    position = position,
     updatedAt = updatedAt,
 )
 

@@ -15,7 +15,7 @@ fun ListEntity.toModel() = ShoppingListModel(
     permission = permission,
     isOwner = isOwner,
     isPinned = isPinned,
-    position = null,
+    position = position,
     updatedAt = updatedAt,
 )
 
@@ -52,6 +52,7 @@ fun ListDto.toEntity(sortOrder: Int) = ListEntity(
     sortOrder = sortOrder,
     updatedAt = updatedAt,
     isPinned = isPinned == true,
+    position = position,
 )
 
 fun ItemDto.toEntity() = ItemEntity(
