@@ -26,10 +26,10 @@ fun interface ActiveServerHost {
  * and signals a retry. Without this, such a change fails every sync silently until the user
  * happens to log out and back in.
  *
- * Records are accepted only for the currently logged-in host, and its port when the record's
- * port is known, so a request that fails its handshake just after logout, or one to a guest
- * list's server on another port of the same host, can't arm a prompt or pin against the wrong
- * server.
+ * Records are accepted only for the currently logged-in host, so a request that fails its
+ * handshake just after logout can't re-arm a prompt or pin against the wrong server. The port
+ * isn't compared: behind a proxy the recorded port is the proxy's, and an approval holds on any
+ * port of its host anyway.
  */
 @Singleton
 class CertAlertController @Inject constructor(
@@ -63,17 +63,15 @@ class CertAlertController @Inject constructor(
         val current = activeServerHost.get() ?: return // logged out: ignore late in-flight failures
         val rec = holder.consume() ?: return
         val host = rec.host ?: return
-        if (!isActiveServer(host, rec.port, current)) return // stale / different-server record
+        if (!host.equals(current.host, ignoreCase = true)) return // stale / different-host record
         if (rec.certificate == dismissedCert) return // banner already shown for this exact cert
+        val port = if (rec.port == -1) current.port else rec.port
         pendingCert = rec.certificate
         pendingHost = host
-        pendingPort = rec.port
+        pendingPort = port
         _suppressed.value = null
-        _alert.value = describeCert(host, rec.port, rec.certificate, rec.hostnameMismatch)
+        _alert.value = describeCert(host, port, rec.certificate, rec.hostnameMismatch)
     }
-
-    private fun isActiveServer(host: String, port: Int, active: ServerAddress?): Boolean =
-        active != null && host.equals(active.host, ignoreCase = true) && (port == -1 || port == active.port)
 
     /** Re-open the prompt from the persistent "sync paused" banner. */
     fun review() {
@@ -85,10 +83,9 @@ class CertAlertController @Inject constructor(
     fun trust() {
         val cert = pendingCert
         val host = pendingHost
-        val port = pendingPort
-        // Only pin if the failing server is still the active one (guards a logout/switch race).
-        if (cert != null && host != null && isActiveServer(host, port, activeServerHost.get())) {
-            acceptedCerts.accept(host, port, cert)
+        // Only pin if the failing host is still the active server (guards a logout/switch race).
+        if (cert != null && host != null && host.equals(activeServerHost.get()?.host, ignoreCase = true)) {
+            acceptedCerts.accept(host, pendingPort, cert)
         }
         dismissedCert = null
         clearAll()

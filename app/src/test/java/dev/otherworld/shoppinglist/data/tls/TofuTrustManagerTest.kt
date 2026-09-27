@@ -58,9 +58,9 @@ class TofuTrustManagerTest {
      */
     private class FakeTrusted(private val pins: Map<String, String>) : TrustedCerts {
         var consulted = false
-        override fun isTrustedForHost(host: String, port: Int, cert: X509Certificate): Boolean {
+        override fun isTrustedForHost(host: String, cert: X509Certificate): Boolean {
             consulted = true
-            return CertPins.matches(pins, host, port, encode(cert))
+            return CertPins.matches(pins, host, encode(cert))
         }
     }
 
@@ -160,31 +160,43 @@ class TofuTrustManagerTest {
     }
 
     @Test
-    fun `a cert approved for one port isn't trusted on another port of that host`() {
+    fun `a cert approved on one port of a host is trusted on its other ports`() {
+        // Behind a proxy the handshake sees the proxy's port, not the server's.
         val holder = UntrustedCertHolder()
         val tm = TofuTrustManager(ThrowingDelegate(), trusted("$HOST_A|8443" to certA), holder)
         tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8443))
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8444))
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 3128))
+        assertNull(holder.consume())
+    }
+
+    @Test
+    fun `a cert approved on a port of one host isn't trusted on that port of another host`() {
+        val holder = UntrustedCertHolder()
+        val tm = TofuTrustManager(ThrowingDelegate(), trusted("$HOST_A|8443" to certA), holder)
         try {
-            tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8444))
-            fail("expected CertificateException: an approval for :8443 must not trust :8444")
+            tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_B, 8443))
+            fail("expected CertificateException: an approval for A must not trust B")
         } catch (expected: CertificateException) {
         }
         val recorded = holder.consume()
-        assertEquals(HOST_A, recorded?.host)
-        assertEquals(8444, recorded?.port)
+        assertEquals(HOST_B, recorded?.host)
+        assertEquals(8443, recorded?.port)
     }
 
     @Test
     fun `approving another cert for a second port keeps the first port's approval`() {
-        val first = CertPins.put(emptyMap(), HOST_A, 8443, encode(certA))
-        val both = CertPins.put(first, HOST_A, 8444, encode(certB))
-        assertTrue(CertPins.matches(both, HOST_A, 8443, encode(certA)))
-        assertTrue(CertPins.matches(both, HOST_A, 8444, encode(certB)))
+        val first = mapOf(CertPins.key(HOST_A, 8443) to encode(certA))
+        val both = first + (CertPins.key(HOST_A, 8444) to encode(certB))
+        assertTrue(CertPins.matches(both, HOST_A, encode(certA)))
+        assertTrue(CertPins.matches(both, HOST_A, encode(certB)))
 
         val holder = UntrustedCertHolder()
         val tm = TofuTrustManager(ThrowingDelegate(), FakeTrusted(both), holder)
         tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8443))
         tm.checkServerTrusted(arrayOf(certB), "RSA", engineFor(HOST_A, 8444))
+        tm.checkServerTrusted(arrayOf(certA), "RSA", engineFor(HOST_A, 8444))
+        tm.checkServerTrusted(arrayOf(certB), "RSA", engineFor(HOST_A, 8443))
         assertNull(holder.consume())
     }
 

@@ -78,10 +78,13 @@ class CertAlertControllerTest {
     }
 
     @Test
-    fun `a record for another port on the active server's host is ignored`() {
-        holder.record("server.local", 8444, certA, hostnameMismatch = false)
+    fun `a record for another port on the active server's host still prompts`() {
+        // Behind a proxy the handshake records the proxy's port, not the server's.
+        holder.record("server.local", 3128, certA, hostnameMismatch = false)
         controller.onTlsFailure()
-        assertNull(controller.alert.value)
+        assertEquals("server.local", controller.alert.value?.host)
+        controller.trust()
+        assertEquals(listOf(Triple("server.local", 3128, certA)), approver.accepted)
     }
 
     @Test
@@ -95,19 +98,13 @@ class CertAlertControllerTest {
     }
 
     @Test
-    fun `a record with the port unknown still prompts for the active host`() {
+    fun `a record with the port unknown is shown and pinned under the active server's port`() {
+        current = ServerAddress("server.local", 8443)
         holder.record("server.local", -1, certA, hostnameMismatch = false)
         controller.onTlsFailure()
-        assertEquals("server.local", controller.alert.value?.host)
-    }
-
-    @Test
-    fun `trust does not pin if the active server moved to another port`() {
-        holder.record("server.local", 443, certA, hostnameMismatch = false)
-        controller.onTlsFailure()
-        current = ServerAddress("server.local", 8443)
+        assertEquals("server.local:8443", controller.alert.value?.serverLabel)
         controller.trust()
-        assertTrue("must not pin against a different server", approver.accepted.isEmpty())
+        assertEquals(listOf(Triple("server.local", 8443, certA)), approver.accepted)
     }
 
     @Test

@@ -7,10 +7,10 @@ import javax.inject.Singleton
 /** Read side of the user-accepted certificate pins; faked in unit tests. */
 interface TrustedCerts {
     /**
-     * Exact match against the certificate the user accepted for [host] on [port] specifically
-     * ([port] is -1 when the connection's port isn't known).
+     * Exact match against a certificate the user accepted for [host], on any of its ports: the
+     * port the TLS layer sees is the proxy's when there is one, so it can't be relied on.
      */
-    fun isTrustedForHost(host: String, port: Int, cert: X509Certificate): Boolean
+    fun isTrustedForHost(host: String, cert: X509Certificate): Boolean
 }
 
 /** Write side of the user-accepted certificate pins; faked in unit tests. */

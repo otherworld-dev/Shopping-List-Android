@@ -140,18 +140,17 @@ class JoinViewModel @Inject constructor(
     private fun fail(e: Exception) {
         val untrusted = certHolder.consume()
         val host = _state.value.host
-        // The holder is a singleton shared with background refreshes against other servers,
-        // including other ports on this host, so only trust it as this link's failure when the
-        // host and port actually match — otherwise it's someone else's rejected certificate and
-        // this is a normal error.
-        if (e is javax.net.ssl.SSLException && untrusted != null &&
-            untrusted.host.equals(host, ignoreCase = true) && isLinkPort(untrusted.port)
-        ) {
+        // The holder is a singleton shared with background guest refreshes against other
+        // servers, so only trust it as this link's failure when the host actually matches —
+        // otherwise it's someone else's rejected certificate and this is a normal error. The
+        // port isn't compared: behind a proxy the recorded port is the proxy's.
+        if (e is javax.net.ssl.SSLException && untrusted != null && untrusted.host.equals(host, ignoreCase = true)) {
             pendingRaw = untrusted.certificate
+            val port = if (untrusted.port == -1) linkPort else untrusted.port
             _state.update {
                 it.copy(
                     checking = false,
-                    pendingCert = describeCert(host, untrusted.port, untrusted.certificate, untrusted.hostnameMismatch),
+                    pendingCert = describeCert(host, port, untrusted.certificate, untrusted.hostnameMismatch),
                 )
             }
             return
@@ -159,9 +158,6 @@ class JoinViewModel @Inject constructor(
         val message = if (e is LinkNotFoundException) UiText(R.string.guest_link_dead) else errorText(e)
         _state.update { it.copy(checking = false, error = message) }
     }
-
-    /** True when [port] is the link's, or either port isn't known. */
-    private fun isLinkPort(port: Int): Boolean = port == -1 || linkPort == -1 || port == linkPort
 
     fun trustPendingCert() {
         val cert = pendingRaw ?: return
