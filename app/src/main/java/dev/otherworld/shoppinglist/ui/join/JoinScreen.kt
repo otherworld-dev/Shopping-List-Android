@@ -64,13 +64,16 @@ fun JoinScreen(
                 TextButton(onClick = onClose) { Text(stringResource(R.string.action_cancel)) }
             }
             preview != null -> {
+                // A password link has no title until it's unlocked: the server heads the screen alone.
                 Text(
-                    preview.title.ifBlank { state.host },
+                    preview.title.ifBlank { state.serverLabel },
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center,
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(state.host, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (preview.title.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(state.serverLabel, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Spacer(Modifier.height(16.dp))
                 Text(
                     stringResource(

@@ -62,4 +62,13 @@ class ShareLinkTest {
             ShareLink("https://example.com/nextcloud", token).url,
         )
     }
+
+    @Test
+    fun `labels a server by its host, with the port only when it isn't the default`() {
+        assertEquals("cloud.example.com", serverLabel("https://cloud.example.com"))
+        assertEquals("cloud.example.com", serverLabel("https://cloud.example.com:443/nextcloud"))
+        assertEquals("10.0.2.2:8444", serverLabel("https://10.0.2.2:8444"))
+        assertEquals("example.com:8443", serverLabel("https://example.com:8443/nextcloud"))
+        assertEquals("[::1]:8443", serverLabel("https://[::1]:8443"))
+    }
 }

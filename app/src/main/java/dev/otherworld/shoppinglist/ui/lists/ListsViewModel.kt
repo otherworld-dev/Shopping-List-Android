@@ -10,6 +10,7 @@ import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
+import dev.otherworld.shoppinglist.domain.guest.serverLabel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.ListSections
 import dev.otherworld.shoppinglist.domain.sort.SectionKey
@@ -29,7 +30,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.Locale
 import javax.inject.Inject
 
@@ -79,7 +79,7 @@ class ListsViewModel @Inject constructor(
             val guestLists = lists.filter { it.isGuest }
                 .mapNotNull { list ->
                     shareById[list.guestShareId]?.let { share ->
-                        GuestListEntry(list, share.server.toHttpUrlOrNull()?.host ?: share.server, share.state)
+                        GuestListEntry(list, serverLabel(share.server), share.state)
                     }
                 }
                 .sortedWith { a, b -> collator.compare(a.list.title, b.list.title) }

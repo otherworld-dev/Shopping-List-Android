@@ -15,6 +15,7 @@ import dev.otherworld.shoppinglist.data.tls.CertInfo
 import dev.otherworld.shoppinglist.data.tls.UntrustedCertHolder
 import dev.otherworld.shoppinglist.data.tls.describeCert
 import dev.otherworld.shoppinglist.domain.guest.parseShareLink
+import dev.otherworld.shoppinglist.domain.guest.serverLabel
 import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.ui.common.UiText
 import dev.otherworld.shoppinglist.ui.common.errorText
@@ -33,7 +34,10 @@ data class OpenedList(val listId: Long, val title: String, val canWrite: Boolean
 
 data class JoinUiState(
     val checking: Boolean = true,
+    /** The link's host alone, as the certificate check reports it. */
     val host: String = "",
+    /** The host as shown, with the port when it isn't the default. */
+    val serverLabel: String = "",
     val preview: LinkPreview? = null,
     val error: UiText? = null,
     val passwordWrong: Boolean = false,
@@ -51,7 +55,9 @@ class JoinViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val link = parseShareLink(savedStateHandle.get<String>("url").orEmpty())
-    private val _state = MutableStateFlow(JoinUiState(host = link?.server?.toHttpUrlOrNull()?.host.orEmpty()))
+    private val _state = MutableStateFlow(
+        JoinUiState(host = link?.server?.toHttpUrlOrNull()?.host.orEmpty(), serverLabel = link?.server?.let(::serverLabel).orEmpty()),
+    )
     val state: StateFlow<JoinUiState> = _state.asStateFlow()
     private var pendingRaw: X509Certificate? = null
 

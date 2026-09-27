@@ -33,3 +33,17 @@ fun parseShareLink(raw: String): ShareLink? {
     val port = if (uri.port == -1 || uri.port == 443) "" else ":${uri.port}"
     return ShareLink("https://$host$port$prefix", token)
 }
+
+/**
+ * A link's server as shown to people: its host, plus the port when it isn't the default, so two
+ * Nextclouds on one host can be told apart.
+ */
+fun serverLabel(server: String): String {
+    val uri = try {
+        URI(server)
+    } catch (_: Exception) {
+        return server
+    }
+    val host = uri.host ?: return server
+    return if (uri.port == -1 || uri.port == 443) host else "$host:${uri.port}"
+}
