@@ -1,6 +1,7 @@
 package dev.otherworld.shoppinglist.data.repo
 
 import androidx.room.withTransaction
+import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.ItemEntity
 import dev.otherworld.shoppinglist.data.local.MutationEntity
@@ -36,6 +37,7 @@ class ItemRepository @Inject constructor(
     private val sync: SyncEngine,
     private val tempIds: TempIds,
     private val json: Json,
+    private val guests: GuestRepository,
 ) {
     private val itemDao = db.itemDao()
     private val areaDao = db.areaDao()
@@ -54,6 +56,10 @@ class ItemRepository @Inject constructor(
      * mid-fetch still populates the cache for next time.
      */
     suspend fun refresh(listId: Long) {
+        if (GuestIds.isGuest(listId)) {
+            guests.refreshItems(listId)
+            return
+        }
         if (listId <= 0) return // temp list never reached the server
         withContext(NonCancellable) {
             coroutineScope {

@@ -81,6 +81,19 @@
     <string name="dialog_delete_list_title">Delete list?</string>
     <string name="dialog_delete_list_message">“%1$s” and all its items will be permanently deleted.</string>
 
+    <!-- Share links -->
+    <string name="guest_view_only">View only: you can see this list but not change it.</string>
+    <string name="guest_link_dead">This link no longer works. Ask the person who shared it for a new one.</string>
+    <string name="guest_password_changed">The password for this list has changed.</string>
+    <string name="guest_enter_password">Enter password</string>
+    <string name="menu_leave_list">Leave list</string>
+    <string name="dialog_leave_list_title">Leave list?</string>
+    <string name="dialog_leave_list_message">%1$s will be removed from this phone. Open the link again to come back.</string>
+    <plurals name="guest_changes_dropped">
+        <item quantity="one">One change to this list couldn\'t be saved.</item>
+        <item quantity="other">%d changes to this list couldn\'t be saved.</item>
+    </plurals>
+
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_sort_lists">Sort lists</string>
