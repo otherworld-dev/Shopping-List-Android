@@ -97,7 +97,7 @@ object NetworkModule {
     @Provides
     @Singleton
     @GuestClient
-    fun provideGuestClient(logging: HttpLoggingInterceptor, tofuTls: TofuTls): OkHttpClient =
+    fun provideGuestClient(tofuTls: TofuTls): OkHttpClient =
         tofuTls.applyTo(OkHttpClient.Builder())
             .cookieJar(MemoryCookieJar())
             .addInterceptor(Interceptor { chain ->
@@ -109,7 +109,9 @@ object NetworkModule {
                         .build(),
                 )
             })
-            .addInterceptor(logging)
+            // Its own logger, never the app's BASIC one: every URL carries the link's token, which
+            // for a link without a password is all it takes to edit the list.
+            .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.NONE })
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
