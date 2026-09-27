@@ -86,6 +86,10 @@ class JoinViewModel @Inject constructor(
     fun open(password: String?) {
         val link = link ?: return
         if (_state.value.opening) return
+        // Same as checkLink(): a background guest refresh against another server can leave a
+        // stale record in this (singleton) holder; drop it before this attempt runs so a real
+        // failure here isn't confused with one that belongs to a different host.
+        certHolder.consume()
         _state.update { it.copy(opening = true, passwordWrong = false, error = null) }
         viewModelScope.launch {
             try {
@@ -127,9 +131,12 @@ class JoinViewModel @Inject constructor(
 
     private fun fail(e: Exception) {
         val untrusted = certHolder.consume()
-        if (untrusted != null && e is javax.net.ssl.SSLException) {
+        val host = _state.value.host
+        // The holder is a singleton shared with background guest refreshes against other
+        // servers, so only trust it as this link's failure when the host actually matches —
+        // otherwise it's someone else's rejected certificate and this is a normal error.
+        if (e is javax.net.ssl.SSLException && untrusted != null && untrusted.host.equals(host, ignoreCase = true)) {
             pendingRaw = untrusted.certificate
-            val host = untrusted.host ?: _state.value.host
             _state.update {
                 it.copy(checking = false, pendingCert = describeCert(host, untrusted.certificate, untrusted.hostnameMismatch))
             }

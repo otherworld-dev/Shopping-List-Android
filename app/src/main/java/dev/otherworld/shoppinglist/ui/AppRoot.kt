@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -132,6 +133,12 @@ fun AppRoot(
     val pendingLink by viewModel.pendingLink.collectAsStateWithLifecycle()
     val guestsKnown = hasGuests ?: return
     val signedIn = account != null || guestsKnown
+    // Computed once and kept across rotation: NavHost resets its whole back stack whenever
+    // startDestination changes, which would blow away an in-flight join (or any other screen)
+    // the moment signedIn flips. SignInTransitions' LaunchedEffect below already handles every
+    // later login/logout/guest-list transition, so the start destination only has to be right
+    // for the very first composition.
+    val start = rememberSaveable { if (signedIn) Routes.HOME else Routes.LOGIN }
     val navController = rememberNavController()
 
     Column(modifier.fillMaxSize()) {
@@ -143,7 +150,7 @@ fun AppRoot(
 
     NavHost(
         navController = navController,
-        startDestination = if (signedIn) Routes.HOME else Routes.LOGIN,
+        startDestination = start,
         modifier = Modifier.weight(1f),
     ) {
         composable(Routes.LOGIN) { LoginScreen() }

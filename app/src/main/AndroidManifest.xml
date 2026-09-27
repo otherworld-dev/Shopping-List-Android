@@ -38,6 +38,8 @@
                 <data android:host="*" />
                 <data android:pathPattern="/apps/shopping_list/s/.*" />
                 <data android:pathPattern="/.*/apps/shopping_list/s/.*" />
+                <data android:pathPattern="/.*/.*/apps/shopping_list/s/.*" />
+                <data android:pathPattern="/.*/.*/.*/apps/shopping_list/s/.*" />
             </intent-filter>
         </activity>
 
