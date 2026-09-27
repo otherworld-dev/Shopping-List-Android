@@ -1,5 +1,7 @@
 package dev.otherworld.shoppinglist.di
 
+import dev.otherworld.shoppinglist.data.guest.MemoryCookieJar
+import dev.otherworld.shoppinglist.data.guest.PublicApi
 import dev.otherworld.shoppinglist.data.remote.JsonConverterFactory
 import dev.otherworld.shoppinglist.data.remote.OcsAuthInterceptor
 import dev.otherworld.shoppinglist.data.remote.OcsService
@@ -91,4 +93,36 @@ object NetworkModule {
     @Singleton
     fun provideOcsService(retrofit: Retrofit): OcsService =
         retrofit.create(OcsService::class.java)
+
+    @Provides
+    @Singleton
+    @GuestClient
+    fun provideGuestClient(logging: HttpLoggingInterceptor, tofuTls: TofuTls): OkHttpClient =
+        tofuTls.applyTo(OkHttpClient.Builder())
+            .cookieJar(MemoryCookieJar())
+            .addInterceptor(Interceptor { chain ->
+                chain.proceed(
+                    chain.request().newBuilder()
+                        .header("User-Agent", "Shopping List (Android)")
+                        .header("OCS-APIRequest", "true")
+                        .header("Accept", "application/json")
+                        .build(),
+                )
+            })
+            .addInterceptor(logging)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
+            .build()
+
+    @Provides
+    @Singleton
+    fun providePublicApi(@GuestClient client: OkHttpClient, json: Json): PublicApi =
+        Retrofit.Builder()
+            .baseUrl(PLACEHOLDER_BASE_URL)
+            .client(client)
+            .addConverterFactory(JsonConverterFactory(json))
+            .build()
+            .create(PublicApi::class.java)
 }

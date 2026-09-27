@@ -11,3 +11,8 @@ annotation class LoginClient
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class ApiClient
+
+/** OkHttpClient for share links: no login, its own in-memory cookies for password unlocks. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class GuestClient
