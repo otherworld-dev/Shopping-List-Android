@@ -97,17 +97,21 @@ fun sortBought(items: List<ItemModel>, sort: BoughtSort, areas: List<ShopAreaMod
         BoughtSort.RECENT -> items.sortedByDescending(::time)
     }
 
+/** The language's collation, ignoring case and accents. */
+internal fun nameCollator(locale: Locale): Collator =
+    Collator.getInstance(locale).apply { strength = Collator.PRIMARY }
+
 /**
  * Name order for the A-Z sorts: the language's collation, ignoring case and accents, with
  * numbers in names compared by value (so "9" sorts before "10") — the behaviour of the web
  * app's `Intl.Collator(language, { sensitivity: 'base', numeric: true })`.
  */
 private fun byName(locale: Locale): Comparator<ItemModel> {
-    val collator = Collator.getInstance(locale).apply { strength = Collator.PRIMARY }
+    val collator = nameCollator(locale)
     return Comparator { a, b -> compareNatural(a.name, b.name, collator) }
 }
 
-private fun compareNatural(a: String, b: String, collator: Collator): Int {
+internal fun compareNatural(a: String, b: String, collator: Collator): Int {
     val runsA = digitRuns(a)
     val runsB = digitRuns(b)
     for (i in 0 until minOf(runsA.size, runsB.size)) {

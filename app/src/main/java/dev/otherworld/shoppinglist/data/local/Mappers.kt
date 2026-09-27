@@ -15,6 +15,8 @@ fun ListEntity.toModel() = ShoppingListModel(
     permission = permission,
     isOwner = isOwner,
     isPinned = isPinned,
+    position = null,
+    updatedAt = updatedAt,
 )
 
 fun ItemEntity.toModel() = ItemModel(
