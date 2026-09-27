@@ -16,6 +16,7 @@ import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.ReorderPayload
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import kotlinx.coroutines.NonCancellable
@@ -180,12 +181,21 @@ class ItemRepository @Inject constructor(
     }
 
     suspend fun clearChecked(listId: Long) {
+        // The public link API has no bulk endpoints; each item is deleted on its own.
+        if (GuestIds.isGuest(listId)) {
+            itemDao.getByList(listId).filter { it.checked }.forEach { deleteItem(it.toModel()) }
+            return
+        }
         itemDao.deleteCheckedByList(listId)
         enqueue(MutationTypes.CLEAR_CHECKED, listId, listId, "{}")
         sync.requestSync()
     }
 
     suspend fun uncheckAll(listId: Long) {
+        if (GuestIds.isGuest(listId)) {
+            itemDao.getByList(listId).filter { it.checked }.forEach { check(it.toModel(), false) }
+            return
+        }
         itemDao.uncheckAllByList(listId)
         enqueue(MutationTypes.UNCHECK_ALL, listId, listId, "{}")
         sync.requestSync()

@@ -2,10 +2,10 @@ package dev.otherworld.shoppinglist.data.guest
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /** What a failed public API call means. */
 sealed interface PublicError {
@@ -16,15 +16,19 @@ sealed interface PublicError {
     data class Other(val code: Int) : PublicError
 }
 
-/** Reads the public API's error body: an OCS envelope whose data says why. */
+/**
+ * Reads the public API's error body: an OCS envelope whose data says why. Only the app's own
+ * "Not found" is a missing link; a bare 404 (the app disabled, a proxy) is kept as its code.
+ */
 fun classifyPublicError(code: Int, body: String?, json: Json): PublicError {
-    if (code == 404) return PublicError.NotFound
     val data = body?.let {
         runCatching { json.parseToJsonElement(it).jsonObject["ocs"]?.jsonObject?.get("data") as? JsonObject }.getOrNull()
     }
+    val message = (data?.get("message") as? JsonPrimitive)?.contentOrNull
+    if (code == 404 && message == "Not found") return PublicError.NotFound
     if (code == 403 && data != null) {
-        if (data["passwordRequired"]?.jsonPrimitive?.booleanOrNull == true) return PublicError.PasswordRequired
-        when (data["message"]?.jsonPrimitive?.contentOrNull) {
+        if ((data["passwordRequired"] as? JsonPrimitive)?.booleanOrNull == true) return PublicError.PasswordRequired
+        when (message) {
             "Invalid password" -> return PublicError.WrongPassword
             "Read-only access" -> return PublicError.ReadOnly
         }
@@ -37,6 +41,9 @@ class GuestPasswordNeededException(val shareId: Long) : RuntimeException()
 
 /** The link was deleted or expired, or its list was removed. */
 class GuestLinkDeadException(val shareId: Long) : RuntimeException()
+
+/** The friend's server answered 404 without the app saying so (the app disabled, a proxy): try again later. */
+class GuestServerTroubleException(val shareId: Long) : RuntimeException()
 
 /** The owner made the link view only. */
 class GuestReadOnlyException(val shareId: Long) : RuntimeException()

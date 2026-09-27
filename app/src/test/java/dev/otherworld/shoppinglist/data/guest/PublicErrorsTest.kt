@@ -26,6 +26,21 @@ class PublicErrorsTest {
     }
 
     @Test
+    fun `a 404 without the app's own message is not a missing link`() {
+        assertEquals(PublicError.Other(404), classifyPublicError(404, body("[]"), json))
+    }
+
+    @Test
+    fun `a 404 page from a proxy is not a missing link`() {
+        assertEquals(PublicError.Other(404), classifyPublicError(404, "<html><body>Not Found</body></html>", json))
+    }
+
+    @Test
+    fun `an odd message shape is ignored rather than thrown`() {
+        assertEquals(PublicError.Other(403), classifyPublicError(403, body("""{"message":{"text":"Nope"}}"""), json))
+    }
+
+    @Test
     fun `builds the public API's urls`() {
         val server = "https://example.com/nextcloud"
         val base = "https://example.com/nextcloud/ocs/v2.php/apps/shopping_list/api/v1/public/tok"
