@@ -25,6 +25,8 @@ data class ListEntity(
     val isPinned: Boolean = false,
     /** This user's own place in the Custom order; null until placed, and after a pin or unpin. */
     val position: Int? = null,
+    /** The share link this list was opened from; null for the user's own and shared lists. */
+    val guestShareId: Long? = null,
 )
 
 @Entity(
@@ -68,6 +70,51 @@ data class MutationEntity(
     val payload: String,  // JSON, op-specific
     val attempts: Int = 0,
 )
+
+/** A share link opened in the app: one guest list from someone else's server. */
+@Entity(
+    tableName = "guest_shares",
+    indices = [Index(value = ["server", "token"], unique = true)],
+)
+data class GuestShareEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val server: String,
+    val token: String,
+    val permission: Int,
+    val passwordProtected: Boolean,
+    val title: String,
+    val state: String,
+    val lastRefreshedAt: Long,
+    /** Queued changes dropped because the link stopped working or became view only, not yet told. */
+    val droppedChanges: Int,
+)
+
+object GuestShareState {
+    const val OK = "ok"
+    const val PASSWORD_NEEDED = "passwordNeeded"
+    const val DEAD = "dead"
+}
+
+/** Maps a row on a friend's server to its local id, which is [dev.otherworld.shoppinglist.domain.guest.GuestIds.fromSeq] of [seq]. */
+@Entity(
+    tableName = "guest_ids",
+    indices = [Index(value = ["shareId", "kind", "remoteId"], unique = true)],
+)
+data class GuestIdEntity(
+    @PrimaryKey(autoGenerate = true) val seq: Long = 0,
+    val shareId: Long,
+    val kind: String,
+    /** 0 for the list itself, which the public API never numbers. */
+    val remoteId: Long,
+)
+
+object GuestIdKind {
+    const val LIST = "list"
+    const val ITEM = "item"
+    const val AREA = "area"
+}
+
+data class GuestListRef(val id: Long, val guestShareId: Long)
 
 class Converters {
     @TypeConverter

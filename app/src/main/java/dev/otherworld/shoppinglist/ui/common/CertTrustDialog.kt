@@ -52,7 +52,7 @@ fun CertTrustDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(stringResource(introRes))
-                CertField(R.string.cert_field_server, info.host)
+                CertField(R.string.cert_field_server, info.serverLabel)
                 CertField(R.string.cert_field_subject, info.subject)
                 CertField(R.string.cert_field_issuer, issuer)
                 CertField(R.string.cert_field_validity, validity)

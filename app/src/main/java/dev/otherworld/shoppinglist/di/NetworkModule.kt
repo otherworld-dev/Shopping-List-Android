@@ -1,5 +1,7 @@
 package dev.otherworld.shoppinglist.di
 
+import dev.otherworld.shoppinglist.data.guest.MemoryCookieJar
+import dev.otherworld.shoppinglist.data.guest.PublicApi
 import dev.otherworld.shoppinglist.data.remote.JsonConverterFactory
 import dev.otherworld.shoppinglist.data.remote.OcsAuthInterceptor
 import dev.otherworld.shoppinglist.data.remote.OcsService
@@ -91,4 +93,38 @@ object NetworkModule {
     @Singleton
     fun provideOcsService(retrofit: Retrofit): OcsService =
         retrofit.create(OcsService::class.java)
+
+    @Provides
+    @Singleton
+    @GuestClient
+    fun provideGuestClient(tofuTls: TofuTls): OkHttpClient =
+        tofuTls.applyTo(OkHttpClient.Builder())
+            .cookieJar(MemoryCookieJar())
+            .addInterceptor(Interceptor { chain ->
+                chain.proceed(
+                    chain.request().newBuilder()
+                        .header("User-Agent", "Shopping List (Android)")
+                        .header("OCS-APIRequest", "true")
+                        .header("Accept", "application/json")
+                        .build(),
+                )
+            })
+            // Its own logger, never the app's BASIC one: every URL carries the link's token, which
+            // for a link without a password is all it takes to edit the list.
+            .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.NONE })
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
+            .build()
+
+    @Provides
+    @Singleton
+    fun providePublicApi(@GuestClient client: OkHttpClient, json: Json): PublicApi =
+        Retrofit.Builder()
+            .baseUrl(PLACEHOLDER_BASE_URL)
+            .client(client)
+            .addConverterFactory(JsonConverterFactory(json))
+            .build()
+            .create(PublicApi::class.java)
 }

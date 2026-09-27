@@ -35,5 +35,5 @@ class ListOrdering @Inject constructor(
     }
 
     private suspend fun currentSections(): ListSections =
-        sortLists(lists.observeLists().first(), settings.listSort.value, Locale.getDefault())
+        sortLists(lists.observeLists().first().filter { !it.isGuest }, settings.listSort.value, Locale.getDefault())
 }

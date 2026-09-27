@@ -16,6 +16,7 @@ import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
 import dev.otherworld.shoppinglist.data.sync.TitlePayload
 import dev.otherworld.shoppinglist.data.sync.positionAfterRefresh
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,10 @@ import kotlinx.serialization.json.Json
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** The user's own lists the server no longer has. Unsynced, still-queued and guest lists stay. */
+internal fun ownListsGone(localIds: List<Long>, serverIds: Set<Long>, pending: Set<Long>): List<Long> =
+    localIds.filter { it > 0 && !GuestIds.isGuest(it) && it !in serverIds && it !in pending }
 
 @Singleton
 class ListRepository @Inject constructor(
@@ -55,7 +60,7 @@ class ListRepository @Inject constructor(
             val localOrderWins = localChangeWins(queuedBefore, editsBefore, orderEdits.get(), reorderQueued())
             val pending = mutationDao.pendingListIds().toSet()
             val serverIds = dtos.map { it.id }.toSet()
-            val toDelete = listDao.allIds().filter { it > 0 && it !in serverIds && it !in pending }
+            val toDelete = ownListsGone(listDao.allIds(), serverIds, pending)
             listDao.deleteByIds(toDelete)
             dtos.forEachIndexed { index, dto ->
                 if (dto.id !in pending) {

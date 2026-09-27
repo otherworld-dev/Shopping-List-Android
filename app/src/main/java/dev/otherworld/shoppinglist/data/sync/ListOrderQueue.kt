@@ -1,11 +1,16 @@
 package dev.otherworld.shoppinglist.data.sync
 
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
+
 /** The payload with a synced list's real id in place of its temp id, or null if it isn't in it. */
 internal fun ListOrderPayload.remapped(oldId: Long, newId: Long): ListOrderPayload? =
     if (oldId in listIds) copy(listIds = listIds.map { if (it == oldId) newId else it }) else null
 
-/** A list made offline and deleted before it synced never reached the server, so it's left out. */
-internal fun ListOrderPayload.idsToSend(): List<Long> = listIds.filter { it > 0 }
+/**
+ * A list made offline and deleted before it synced never reached the server, and a guest list
+ * never belongs to it either, so both are left out.
+ */
+internal fun ListOrderPayload.idsToSend(): List<Long> = listIds.filter { it > 0 && !GuestIds.isGuest(it) }
 
 /**
  * Whether a refresh keeps this phone's copy rather than the server's response. A change still

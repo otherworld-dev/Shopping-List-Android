@@ -2,7 +2,12 @@ package dev.otherworld.shoppinglist.data.sync
 
 import android.os.SystemClock
 import androidx.room.withTransaction
+import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.guest.GuestSendResult
+import dev.otherworld.shoppinglist.data.guest.GuestSender
+import dev.otherworld.shoppinglist.data.guest.GuestShareMarks
 import dev.otherworld.shoppinglist.data.local.AppDatabase
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
 import dev.otherworld.shoppinglist.data.local.toModel
@@ -40,12 +45,16 @@ import javax.inject.Singleton
  * server id is resolved at drain time. Creates run first (FIFO), so by the time a dependent
  * op runs the temp id has been remapped to the server id (in Room and in the queue).
  *
- * Error policy (see [SyncErrorPolicy]): network errors stop the drain (retry on reconnect);
- * 404s are discarded (deleted elsewhere); server errors (5xx, 429) are transient and retry
- * WITHOUT burning an attempt, so a restarting server never costs queued changes; only genuine
- * rejections count toward [MAX_ATTEMPTS] before being discarded. A [SyncBackoff] cooldown
- * spaces failed drains out, so a burst of requestSync calls (a multi-line paste) can't
- * exhaust a mutation's attempts inside a second.
+ * Each change goes to a [Destination]: the user's own server, or the server behind one share
+ * link. Changes keep their order within a destination, and a failure pauses only its own
+ * destination for the rest of the drain, so one server being down never holds up another.
+ *
+ * Error policy (see [SyncErrorPolicy]): network errors pause the destination (retry on
+ * reconnect); 404s are discarded (deleted elsewhere); server errors (5xx, 429) are transient and
+ * retry WITHOUT burning an attempt, so a restarting server never costs queued changes; only
+ * genuine rejections count toward [MAX_ATTEMPTS] before being discarded. A [SyncBackoff]
+ * cooldown per destination spaces failed drains out, so a burst of requestSync calls (a
+ * multi-line paste) can't exhaust a mutation's attempts inside a second.
  */
 @Singleton
 class SyncEngine @Inject constructor(
@@ -54,15 +63,20 @@ class SyncEngine @Inject constructor(
     private val connectivity: ConnectivityObserver,
     private val json: Json,
     private val smartInput: SmartInput,
+    private val guestSender: GuestSender,
+    private val shareMarks: GuestShareMarks,
+    private val credentialStore: CredentialStore,
 ) {
     private val itemDao = db.itemDao()
     private val listDao = db.listDao()
     private val areaDao = db.areaDao()
     private val mutationDao = db.mutationDao()
+    private val shareDao = db.guestShareDao()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
-    private val backoff = SyncBackoff()
+    private val backoffs = mutableMapOf<Destination, SyncBackoff>()
+    private fun backoff(d: Destination) = backoffs.getOrPut(d) { SyncBackoff() }
 
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing.asStateFlow()
@@ -80,47 +94,96 @@ class SyncEngine @Inject constructor(
     }
 
     /**
-     * Drains the queue once. Returns true only when the queue fully drained; false when offline,
-     * cooling down after a failure, or halted mid-drain — [SyncWorker] then schedules a retry.
+     * Drains the queue once. A destination that fails (offline, down, rate limited, waiting for a
+     * password) is skipped for the rest of this drain while the others carry on. Returns true only
+     * when the queue fully drained; [SyncWorker] schedules a retry otherwise.
      */
     suspend fun drain(): Boolean = mutex.withLock {
         if (!connectivity.isOnline.value) return false
-        if (!backoff.isReady(SystemClock.elapsedRealtime())) return false
         _syncing.value = true
         try {
+            val now = SystemClock.elapsedRealtime()
+            val blocked = mutableSetOf<Destination>()
+            if (credentialStore.current() == null) blocked += Destination.Own
+            shareDao.all().filter { it.state != GuestShareState.OK }.forEach { blocked += Destination.Guest(it.id) }
+            backoffs.forEach { (d, b) -> if (!b.isReady(now)) blocked += d }
             while (true) {
-                val m = mutationDao.oldest() ?: break
-                val outcome = runCatching { execute(m) }
-                if (outcome.isSuccess) {
-                    backoff.recordSuccess()
-                    mutationDao.deleteBySeq(m.seq)
-                    continue
-                }
-                when (SyncErrorPolicy.classify(outcome.exceptionOrNull())) {
-                    SyncErrorAction.HALT -> return false // network down — retry on reconnect
-                    SyncErrorAction.DISCARD -> mutationDao.deleteBySeq(m.seq) // gone on server — benign
-                    SyncErrorAction.TRANSIENT -> {
-                        // Server trouble, not this mutation's fault: cool down and retry later
-                        // with the attempt count untouched.
-                        backoff.recordFailure(SystemClock.elapsedRealtime())
-                        return false
-                    }
-                    SyncErrorAction.COUNT_ATTEMPT -> {
-                        backoff.recordFailure(SystemClock.elapsedRealtime())
-                        val attempts = m.attempts + 1
-                        if (attempts >= MAX_ATTEMPTS) {
-                            mutationDao.deleteBySeq(m.seq)
-                            _failures.tryEmit(Unit) // gave up — surface it
-                        } else {
-                            mutationDao.update(m.copy(attempts = attempts))
-                            return false // back off; retry later
-                        }
-                    }
+                val guestListShares = listDao.guestLists().associate { it.id to it.guestShareId }
+                val m = firstRunnable(mutationDao.all(), { destinationOf(it, guestListShares) }, blocked) ?: break
+                when (val d = destinationOf(m, guestListShares)) {
+                    Destination.Orphan -> mutationDao.deleteBySeq(m.seq)
+                    else -> if (!sendOne(m, d)) blocked += d
                 }
             }
-            true
+            mutationDao.oldest() == null
         } finally {
             _syncing.value = false
+        }
+    }
+
+    /** Sends one change; false when its destination must wait for the rest of this drain. */
+    private suspend fun sendOne(m: MutationEntity, d: Destination): Boolean {
+        val outcome = runCatching {
+            if (d is Destination.Guest) executeGuest(m, d.shareId) else { execute(m); false }
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (outcome.isSuccess) {
+            backoff(d).recordSuccess()
+            if (!outcome.getOrThrow()) mutationDao.deleteBySeq(m.seq)
+            return true
+        }
+        return when (val action = failureAction(outcome.exceptionOrNull(), d)) {
+            is FailureAction.MarkDead -> { shareMarks.dead(action.shareId); false }
+            is FailureAction.MarkReadOnly -> { shareMarks.readOnly(action.shareId); false }
+            is FailureAction.MarkPasswordNeeded -> { shareMarks.passwordNeeded(action.shareId); false }
+            // Network down: retry on reconnect.
+            is FailureAction.Halt -> {
+                if (action.backoff) backoff(d).recordFailure(now)
+                false
+            }
+            FailureAction.Discard -> { mutationDao.deleteBySeq(m.seq); true } // gone on server — benign
+            // Server trouble, not this mutation's fault: cool down with the attempt count untouched.
+            FailureAction.Transient -> { backoff(d).recordFailure(now); false }
+            FailureAction.CountAttempt -> {
+                backoff(d).recordFailure(now)
+                val attempts = m.attempts + 1
+                if (attempts >= MAX_ATTEMPTS) {
+                    mutationDao.deleteBySeq(m.seq)
+                    _failures.tryEmit(Unit) // gave up — surface it
+                    true
+                } else {
+                    mutationDao.update(m.copy(attempts = attempts))
+                    false
+                }
+            }
+        }
+    }
+
+    /**
+     * Sends one guest change. True when its queue row was kept: a ticked create's row becomes the
+     * tick (same seq, so it goes next), which then retries alone and never re-creates the item.
+     */
+    private suspend fun executeGuest(m: MutationEntity, shareId: Long): Boolean {
+        val share = shareDao.getById(shareId) ?: return false
+        val localAreas = areaDao.getByList(m.listId).map { it.toModel() }
+        val result = guestSender.send(m, share, localAreas) as? GuestSendResult.Created ?: return false
+        result.detectedAreaId?.let { area ->
+            itemDao.getById(m.targetId)?.let { row -> if (row.shopAreaId == null) itemDao.upsert(row.copy(shopAreaId = area)) }
+        }
+        return db.withTransaction {
+            remapItemId(tempId = m.targetId, realId = result.localId, updatedAt = result.updatedAt)
+            if (!result.tickPending) return@withTransaction false
+            // Re-read: the remap has already rewritten this row's targetId.
+            val row = mutationDao.getBySeq(m.seq) ?: return@withTransaction false
+            mutationDao.update(
+                row.copy(
+                    type = MutationTypes.CHECK,
+                    targetId = result.localId,
+                    payload = json.encodeToString(CheckPayload.serializer(), CheckPayload(true)),
+                    attempts = 0,
+                ),
+            )
+            true
         }
     }
 

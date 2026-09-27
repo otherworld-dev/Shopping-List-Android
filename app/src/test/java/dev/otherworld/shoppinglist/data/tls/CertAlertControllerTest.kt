@@ -20,16 +20,16 @@ class CertAlertControllerTest {
     private val certB = parse(CERT_B_PEM)
 
     private class FakeApprover : CertApprover {
-        val accepted = mutableListOf<Pair<String, X509Certificate>>()
-        override fun accept(host: String, cert: X509Certificate) {
-            accepted += host to cert
+        val accepted = mutableListOf<Triple<String, Int, X509Certificate>>()
+        override fun accept(host: String, port: Int, cert: X509Certificate) {
+            accepted += Triple(host, port, cert)
         }
     }
 
     private val holder = UntrustedCertHolder()
     private val approver = FakeApprover()
-    private var currentHost: String? = "server.local"
-    private val controller = CertAlertController(holder, approver, ActiveServerHost { currentHost })
+    private var current: ServerAddress? = ServerAddress("server.local", 443)
+    private val controller = CertAlertController(holder, approver, ActiveServerHost { current })
 
     @Test
     fun `no recorded failure means no prompt`() {
@@ -39,55 +39,94 @@ class CertAlertControllerTest {
 
     @Test
     fun `a recorded failure surfaces a prompt for that host`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         assertEquals("server.local", controller.alert.value?.host)
+        assertEquals("the default port isn't shown", "server.local", controller.alert.value?.serverLabel)
+    }
+
+    @Test
+    fun `an IPv6 server's port is shown apart from the address`() {
+        current = ServerAddress("fe80::1", 8443)
+        holder.record("fe80::1", 8443, certA, hostnameMismatch = false)
+        controller.onTlsFailure()
+        assertEquals("[fe80::1]:8443", controller.alert.value?.serverLabel)
     }
 
     @Test
     fun `a record without a host does not prompt`() {
-        holder.record(null, certA, hostnameMismatch = false)
+        holder.record(null, -1, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         assertNull(controller.alert.value)
     }
 
     @Test
     fun `while a prompt is showing a second failure is ignored`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         val first = controller.alert.value
-        holder.record("server.local", certB, hostnameMismatch = false)
+        holder.record("server.local", 443, certB, hostnameMismatch = false)
         controller.onTlsFailure()
         assertSame("still the first prompt", first, controller.alert.value)
     }
 
     @Test
     fun `a record for a different host than the active server is ignored`() {
-        holder.record("other.server", certA, hostnameMismatch = false)
+        holder.record("other.server", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         assertNull(controller.alert.value)
     }
 
     @Test
+    fun `a record for another port on the active server's host still prompts`() {
+        // Behind a proxy the handshake records the proxy's port, not the server's.
+        holder.record("server.local", 3128, certA, hostnameMismatch = false)
+        controller.onTlsFailure()
+        assertEquals("server.local", controller.alert.value?.host)
+        controller.trust()
+        assertEquals(listOf(Triple("server.local", 3128, certA)), approver.accepted)
+    }
+
+    @Test
+    fun `a record for the active server's own non-default port prompts`() {
+        current = ServerAddress("server.local", 8443)
+        holder.record("server.local", 8443, certA, hostnameMismatch = false)
+        controller.onTlsFailure()
+        assertEquals("server.local:8443", controller.alert.value?.serverLabel)
+        controller.trust()
+        assertEquals(listOf(Triple("server.local", 8443, certA)), approver.accepted)
+    }
+
+    @Test
+    fun `a record with the port unknown is shown and pinned under the active server's port`() {
+        current = ServerAddress("server.local", 8443)
+        holder.record("server.local", -1, certA, hostnameMismatch = false)
+        controller.onTlsFailure()
+        assertEquals("server.local:8443", controller.alert.value?.serverLabel)
+        controller.trust()
+        assertEquals(listOf(Triple("server.local", 8443, certA)), approver.accepted)
+    }
+
+    @Test
     fun `a failure after logout does not arm a prompt`() {
-        currentHost = null // logged out
-        holder.record("server.local", certA, hostnameMismatch = false)
+        current = null // logged out
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         assertNull(controller.alert.value)
     }
 
     @Test
     fun `trust does not pin if the active server changed`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
-        currentHost = "different.server" // user switched servers before tapping Trust
+        current = ServerAddress("different.server", 443) // user switched servers before tapping Trust
         controller.trust()
         assertTrue("must not pin against a different server", approver.accepted.isEmpty())
     }
 
     @Test
     fun `dismiss leaves a persistent banner that review re-opens`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.dismiss()
         assertNull(controller.alert.value)
@@ -100,12 +139,12 @@ class CertAlertControllerTest {
 
     @Test
     fun `a newly rotated cert supersedes the banner with a fresh prompt`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.dismiss()
         assertNotNull(controller.suppressed.value)
 
-        holder.record("server.local", certB, hostnameMismatch = false)
+        holder.record("server.local", 443, certB, hostnameMismatch = false)
         controller.onTlsFailure()
         assertNotNull(controller.alert.value)
         assertNull("banner cleared by the new prompt", controller.suppressed.value)
@@ -113,35 +152,35 @@ class CertAlertControllerTest {
 
     @Test
     fun `dismiss suppresses re-prompting for the same certificate`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.dismiss()
         assertNull(controller.alert.value)
 
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         assertNull("same cert must not nag again after dismissal", controller.alert.value)
     }
 
     @Test
     fun `a different certificate still prompts after a dismissal`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.dismiss()
 
-        holder.record("server.local", certB, hostnameMismatch = false)
+        holder.record("server.local", 443, certB, hostnameMismatch = false)
         controller.onTlsFailure()
         assertNotNull("a newly rotated cert must still prompt", controller.alert.value)
     }
 
     @Test
     fun `trust pins the certificate for its host and clears the prompt`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.trust()
 
         assertNull(controller.alert.value)
-        assertEquals(listOf("server.local" to certA), approver.accepted)
+        assertEquals(listOf(Triple("server.local", 443, certA)), approver.accepted)
     }
 
     @Test
@@ -149,27 +188,27 @@ class CertAlertControllerTest {
         // Dismiss cert A, then (later) approve it: a subsequent failure with A must prompt again
         // only if it is not pinned — but since trust pins it, this asserts suppression is reset,
         // not that the pin is bypassed. Use a fresh failure after trust to prove the flag cleared.
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.dismiss()
         // Approve a different cert to clear suppression without pinning A.
-        holder.record("server.local", certB, hostnameMismatch = false)
+        holder.record("server.local", 443, certB, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.trust() // pins B, clears dismissedCert
 
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         assertNotNull("dismissal suppression must reset after an approval", controller.alert.value)
     }
 
     @Test
     fun `logout resets the dismissal suppression`() {
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         controller.dismiss()
         controller.onLoggedOut()
 
-        holder.record("server.local", certA, hostnameMismatch = false)
+        holder.record("server.local", 443, certA, hostnameMismatch = false)
         controller.onTlsFailure()
         assertTrue("after logout the same cert prompts again", controller.alert.value != null)
     }

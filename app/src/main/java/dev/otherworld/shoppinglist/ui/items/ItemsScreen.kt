@@ -87,6 +87,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.prefs.Density
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
@@ -111,6 +112,8 @@ import java.util.Locale
 fun ItemsScreen(
     onBack: () -> Unit,
     onManageAreas: () -> Unit,
+    onEnterPassword: (String) -> Unit = {},
+    onLeft: () -> Unit = {},
     viewModel: ItemsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -118,6 +121,7 @@ fun ItemsScreen(
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
     var showReorderAreas by rememberSaveable { mutableStateOf(false) }
+    var confirmLeave by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -133,6 +137,13 @@ fun ItemsScreen(
         state.notice?.let {
             snackbarHostState.showSnackbar(it.asString(context))
             viewModel.consumeNotice()
+        }
+    }
+    LaunchedEffect(state.droppedChanges) {
+        val dropped = state.droppedChanges
+        if (dropped > 0) {
+            snackbarHostState.showSnackbar(context.resources.getQuantityString(R.plurals.guest_changes_dropped, dropped, dropped))
+            viewModel.clearDropped()
         }
     }
 
@@ -239,14 +250,20 @@ fun ItemsScreen(
                     }
                     if (state.canWrite) {
                         HorizontalDivider()
-                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_reorder_areas)) },
-                            enabled = state.areas.size >= 2,
-                            onClick = { overflow = false; showReorderAreas = true },
-                        )
+                        if (!state.isGuest) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_reorder_areas)) },
+                                enabled = state.areas.size >= 2,
+                                onClick = { overflow = false; showReorderAreas = true },
+                            )
+                        }
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; viewModel.uncheckAll() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; viewModel.clearChecked() })
+                    }
+                    if (state.isGuest) {
+                        HorizontalDivider()
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_leave_list)) }, onClick = { overflow = false; confirmLeave = true })
                     }
                 }
             }
@@ -259,6 +276,13 @@ fun ItemsScreen(
             modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp).imePadding(),
         ) {
             Column(Modifier.fillMaxSize()) {
+                if (state.isGuest) {
+                    GuestBanner(
+                        state = state,
+                        onEnterPassword = { viewModel.passwordLink(onEnterPassword) },
+                        onLeave = { confirmLeave = true },
+                    )
+                }
                 if (state.canWrite) {
                     AddItemRow(onAdd = { name -> viewModel.addItem(name, null) })
                     RowDivider()
@@ -341,6 +365,16 @@ fun ItemsScreen(
             areas = state.areas,
             onReorder = viewModel::reorderAreas,
             onDismiss = { showReorderAreas = false },
+        )
+    }
+
+    if (confirmLeave) {
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.dialog_leave_list_title),
+            message = stringResource(R.string.dialog_leave_list_message, state.title),
+            confirmLabel = stringResource(R.string.action_leave),
+            onConfirm = { confirmLeave = false; viewModel.leave(onLeft) },
+            onDismiss = { confirmLeave = false },
         )
     }
 }
@@ -782,4 +816,21 @@ private fun ItemEditDialog(
             }
         },
     )
+}
+
+@Composable
+private fun GuestBanner(state: ItemsUiState, onEnterPassword: () -> Unit, onLeave: () -> Unit) {
+    val (message, action) = when {
+        state.guestState == GuestShareState.DEAD ->
+            stringResource(R.string.guest_link_dead) to (stringResource(R.string.menu_leave_list) to onLeave)
+        state.guestState == GuestShareState.PASSWORD_NEEDED ->
+            stringResource(R.string.guest_password_changed) to (stringResource(R.string.guest_enter_password) to onEnterPassword)
+        !state.canWrite -> stringResource(R.string.guest_view_only) to null
+        else -> return
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        action?.let { (label, onClick) -> TextButton(onClick = onClick) { Text(label) } }
+    }
+    RowDivider()
 }

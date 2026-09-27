@@ -1,5 +1,6 @@
 package dev.otherworld.shoppinglist
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,6 +15,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import dev.otherworld.shoppinglist.data.guest.PendingLinks
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.theme.ServerTheme
 import dev.otherworld.shoppinglist.ui.AppRoot
@@ -28,9 +30,14 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var serverTheme: ServerTheme
     @Inject lateinit var displayPrefs: DisplayPrefs
+    @Inject lateinit var pendingLinks: PendingLinks
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Only on a fresh start: a recreated activity (rotation) would offer the same link again,
+        // and so would Recents, which relaunches with the intent the task was first opened with.
+        val fromHistory = ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (savedInstanceState == null && !fromHistory) pendingLinks.offer(intent?.dataString)
         setContent {
             val brandHex by serverTheme.brandHex.collectAsStateWithLifecycle()
             val brand = parseHexColor(brandHex) ?: DefaultBrand
@@ -57,5 +64,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        pendingLinks.offer(intent.dataString)
     }
 }

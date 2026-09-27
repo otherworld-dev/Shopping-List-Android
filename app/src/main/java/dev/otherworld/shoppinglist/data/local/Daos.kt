@@ -32,6 +32,12 @@ interface ListDao {
 
     @Query("DELETE FROM lists WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
+
+    @Query("SELECT * FROM lists WHERE guestShareId = :shareId")
+    suspend fun getByGuestShare(shareId: Long): ListEntity?
+
+    @Query("SELECT id, guestShareId FROM lists WHERE guestShareId IS NOT NULL")
+    suspend fun guestLists(): List<GuestListRef>
 }
 
 @Dao
@@ -106,6 +112,9 @@ interface MutationDao {
     @Query("SELECT * FROM mutations ORDER BY seq ASC LIMIT 1")
     suspend fun oldest(): MutationEntity?
 
+    @Query("SELECT * FROM mutations WHERE seq = :seq")
+    suspend fun getBySeq(seq: Long): MutationEntity?
+
     @Query("SELECT COUNT(*) FROM mutations")
     fun count(): Flow<Int>
 
@@ -149,4 +158,73 @@ interface MutationDao {
 
     @Query("DELETE FROM mutations WHERE entity = :entity AND targetId = :id")
     suspend fun deleteByTarget(entity: String, id: Long)
+
+    /** Drops everything queued for one list; returns how many changes that was. */
+    @Query("DELETE FROM mutations WHERE listId = :listId")
+    suspend fun deleteByList(listId: Long): Int
+}
+
+@Dao
+interface GuestShareDao {
+    @Query("SELECT * FROM guest_shares ORDER BY title COLLATE NOCASE")
+    fun observeAll(): Flow<List<GuestShareEntity>>
+
+    @Query("SELECT COUNT(*) FROM guest_shares")
+    fun observeCount(): Flow<Int>
+
+    @Query(
+        "SELECT guest_shares.* FROM guest_shares " +
+            "INNER JOIN lists ON lists.guestShareId = guest_shares.id WHERE lists.id = :listId",
+    )
+    fun observeForList(listId: Long): Flow<GuestShareEntity?>
+
+    @Query("SELECT * FROM guest_shares")
+    suspend fun all(): List<GuestShareEntity>
+
+    @Query("SELECT * FROM guest_shares WHERE id = :id")
+    suspend fun getById(id: Long): GuestShareEntity?
+
+    @Query("SELECT * FROM guest_shares WHERE server = :server AND token = :token")
+    suspend fun find(server: String, token: String): GuestShareEntity?
+
+    @Query(
+        "SELECT guest_shares.* FROM guest_shares " +
+            "INNER JOIN lists ON lists.guestShareId = guest_shares.id WHERE lists.id = :listId",
+    )
+    suspend fun forList(listId: Long): GuestShareEntity?
+
+    @Insert
+    suspend fun insert(share: GuestShareEntity): Long
+
+    @Update
+    suspend fun update(share: GuestShareEntity)
+
+    /** Stamps the refresh gate on its own, so a failed attempt still holds it (no retry storm). */
+    @Query("UPDATE guest_shares SET lastRefreshedAt = :at WHERE id = :id")
+    suspend fun markRefreshed(id: Long, at: Long)
+
+    // Single-column updates, so they can't undo a concurrent change to the rest of the row.
+    @Query("UPDATE guest_shares SET state = :state WHERE id = :id")
+    suspend fun setState(id: Long, state: String)
+
+    @Query("UPDATE guest_shares SET droppedChanges = 0 WHERE id = :id")
+    suspend fun clearDropped(id: Long)
+
+    @Query("DELETE FROM guest_shares WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
+interface GuestIdDao {
+    @Query("SELECT * FROM guest_ids WHERE shareId = :shareId AND kind = :kind AND remoteId = :remoteId")
+    suspend fun find(shareId: Long, kind: String, remoteId: Long): GuestIdEntity?
+
+    @Query("SELECT * FROM guest_ids WHERE seq = :seq")
+    suspend fun bySeq(seq: Long): GuestIdEntity?
+
+    @Insert
+    suspend fun insert(row: GuestIdEntity): Long
+
+    @Query("DELETE FROM guest_ids WHERE shareId = :shareId")
+    suspend fun deleteByShare(shareId: Long)
 }

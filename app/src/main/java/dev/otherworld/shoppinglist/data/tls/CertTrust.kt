@@ -6,17 +6,20 @@ import javax.inject.Singleton
 
 /** Read side of the user-accepted certificate pins; faked in unit tests. */
 interface TrustedCerts {
-    /** Exact (byte-equal) match against any user-accepted certificate. */
-    fun isTrusted(cert: X509Certificate): Boolean
-
-    /** Exact match against the certificate the user accepted for [host] specifically. */
+    /**
+     * Exact match against a certificate the user accepted for [host], on any of its ports: the
+     * port the TLS layer sees is the proxy's when there is one, so it can't be relied on.
+     */
     fun isTrustedForHost(host: String, cert: X509Certificate): Boolean
 }
 
 /** Write side of the user-accepted certificate pins; faked in unit tests. */
 interface CertApprover {
-    /** Records [cert] as approved for [host], replacing any previous approval for that host. */
-    fun accept(host: String, cert: X509Certificate)
+    /**
+     * Records [cert] as approved for [host] on [port] (-1 when unknown), replacing any previous
+     * approval for that same host and port.
+     */
+    fun accept(host: String, port: Int, cert: X509Certificate)
 }
 
 /**
@@ -28,6 +31,8 @@ interface CertApprover {
 class UntrustedCertHolder @Inject constructor() {
     data class Untrusted(
         val host: String?,
+        /** The connection's port, or -1 when it isn't known. */
+        val port: Int,
         val certificate: X509Certificate,
         val hostnameMismatch: Boolean,
     )
@@ -35,8 +40,8 @@ class UntrustedCertHolder @Inject constructor() {
     // AtomicReference so two concurrently-failing handshakes can't both read the same record.
     private val pending = java.util.concurrent.atomic.AtomicReference<Untrusted?>(null)
 
-    fun record(host: String?, certificate: X509Certificate, hostnameMismatch: Boolean) {
-        pending.set(Untrusted(host, certificate, hostnameMismatch))
+    fun record(host: String?, port: Int, certificate: X509Certificate, hostnameMismatch: Boolean) {
+        pending.set(Untrusted(host, port, certificate, hostnameMismatch))
     }
 
     /** Returns and clears the last rejected certificate, if any. */

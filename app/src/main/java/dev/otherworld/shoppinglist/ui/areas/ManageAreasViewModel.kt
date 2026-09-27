@@ -33,9 +33,12 @@ class ManageAreasViewModel @Inject constructor(
     val areas: StateFlow<List<ShopAreaModel>> = areaRepository.observeAreas(listId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Other lists, available as sources to copy areas from. */
+    /**
+     * Other lists, available as sources to copy areas from. A guest list can't be a source: that
+     * would call the user's own server with an id that only makes sense on the friend's.
+     */
     val otherLists: StateFlow<List<ShoppingListModel>> = listRepository.observeLists()
-        .map { lists -> lists.filter { it.id != listId } }
+        .map { lists -> lists.filter { it.id != listId && !it.isGuest } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _error = MutableStateFlow<UiText?>(null)

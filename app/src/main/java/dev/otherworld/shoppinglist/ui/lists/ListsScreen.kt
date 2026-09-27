@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.ui.common.ConfirmDialog
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
@@ -60,14 +62,17 @@ fun ListsScreen(
     onShareList: (ShoppingListModel) -> Unit,
     onManageTags: () -> Unit,
     onOpenSettings: () -> Unit,
+    onLogIn: () -> Unit,
     viewModel: ListsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val accountLabel by viewModel.accountLabel.collectAsStateWithLifecycle()
     dev.otherworld.shoppinglist.ui.common.PollEffect { viewModel.poll() }
     var menuOpen by remember { mutableStateOf(false) }
     var showCreate by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<ShoppingListModel?>(null) }
     var deleteTarget by remember { mutableStateOf<ShoppingListModel?>(null) }
+    var leaveTarget by remember { mutableStateOf<GuestListEntry?>(null) }
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -79,9 +84,9 @@ fun ListsScreen(
                 title = {
                     Column {
                         Text(stringResource(R.string.header_shopping_list), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        if (viewModel.accountLabel.isNotEmpty()) {
+                        if (accountLabel.isNotEmpty()) {
                             Text(
-                                viewModel.accountLabel,
+                                accountLabel,
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -95,28 +100,39 @@ fun ListsScreen(
                         Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_manage_tags)) },
-                            onClick = { menuOpen = false; onManageTags() },
-                        )
+                        if (state.loggedIn) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_manage_tags)) },
+                                onClick = { menuOpen = false; onManageTags() },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.menu_settings)) },
                             onClick = { menuOpen = false; onOpenSettings() },
                         )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_log_out)) },
-                            onClick = { menuOpen = false; viewModel.logout() },
-                        )
+                        if (state.loggedIn) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_log_out)) },
+                                onClick = { menuOpen = false; viewModel.logout() },
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_log_in)) },
+                                onClick = { menuOpen = false; onLogIn() },
+                            )
+                        }
                     }
                 },
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showCreate = true },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.fab_new_list)) },
-            )
+            if (state.loggedIn) {
+                ExtendedFloatingActionButton(
+                    onClick = { showCreate = true },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.fab_new_list)) },
+                )
+            }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -150,10 +166,10 @@ fun ListsScreen(
                             .fillMaxHeight()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        var rows by remember { mutableStateOf(buildListRows(state.sections)) }
+                        var rows by remember { mutableStateOf(buildListRows(state.sections, state.guestLists)) }
                         var dragging by remember { mutableStateOf(false) }
-                        LaunchedEffect(state.sections, dragging) {
-                            if (!dragging) rows = buildListRows(state.sections)
+                        LaunchedEffect(state.sections, state.guestLists, dragging) {
+                            if (!dragging) rows = buildListRows(state.sections, state.guestLists)
                         }
                         val lazyListState = rememberLazyListState()
                         val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
@@ -203,6 +219,12 @@ fun ListsScreen(
                                                 } else emptyList(),
                                             )
                                         }
+                                        is ListsRow.Guest -> GuestListRow(
+                                            entry = row.entry,
+                                            alt = row.alt,
+                                            onClick = { onOpenList(row.entry.list) },
+                                            onLeave = { leaveTarget = row.entry },
+                                        )
                                     }
                                 }
                             }
@@ -237,6 +259,15 @@ fun ListsScreen(
             message = stringResource(R.string.dialog_delete_list_message, target.title),
             onConfirm = { deleteTarget = null; viewModel.deleteList(target.id) },
             onDismiss = { deleteTarget = null },
+        )
+    }
+    leaveTarget?.let { target ->
+        ConfirmDialog(
+            title = stringResource(R.string.dialog_leave_list_title),
+            message = stringResource(R.string.dialog_leave_list_message, target.list.title),
+            confirmLabel = stringResource(R.string.action_leave),
+            onConfirm = { leaveTarget = null; target.list.guestShareId?.let(viewModel::leave) },
+            onDismiss = { leaveTarget = null },
         )
     }
 }
@@ -308,6 +339,38 @@ private fun ListRow(
                             onClick = { menu = false; onDelete() },
                         )
                     }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun GuestListRow(entry: GuestListEntry, alt: Boolean, onClick: () -> Unit, onLeave: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val status = when (entry.state) {
+        GuestShareState.DEAD -> stringResource(R.string.guest_link_dead_short)
+        GuestShareState.PASSWORD_NEEDED -> stringResource(R.string.guest_password_needed_short)
+        else -> null
+    }
+    ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = androidx.compose.material3.ListItemDefaults.colors(
+            containerColor = if (alt) dev.otherworld.shoppinglist.ui.theme.LocalRowShade.current else androidx.compose.ui.graphics.Color.Transparent,
+        ),
+        leadingContent = { Icon(Icons.Filled.Link, contentDescription = null) },
+        headlineContent = { Text(entry.list.title) },
+        supportingContent = { Text(listOfNotNull(entry.host, status).joinToString(" · ")) },
+        trailingContent = {
+            Box {
+                IconButton(onClick = { menu = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.menu_leave_list)) },
+                        onClick = { menu = false; onLeave() },
+                    )
                 }
             }
         },

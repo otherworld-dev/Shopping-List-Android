@@ -6,6 +6,9 @@ import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.ListSections
 import dev.otherworld.shoppinglist.domain.sort.SectionKey
 
+/** A list opened from a share link, with where it lives and how the link is doing. */
+data class GuestListEntry(val list: ShoppingListModel, val host: String, val state: String)
+
 /** The lists screen as rows (captions and lists), so it can be drag-reordered. */
 internal sealed interface ListsRow {
     val key: String
@@ -17,13 +20,18 @@ internal sealed interface ListsRow {
     data class Entry(val section: SectionKey, val list: ShoppingListModel, val alt: Boolean) : ListsRow {
         override val key get() = "list-${list.id}"
     }
+
+    data class Guest(val entry: GuestListEntry, val alt: Boolean) : ListsRow {
+        override val key get() = "guest-${entry.list.id}"
+    }
 }
 
 /**
  * Pinned lists first; your own lists next, captioned Others only when there's a Pinned
- * section above them; then Shared with me. Mirrors the web app's sidebar.
+ * section above them; then Shared with me; then lists from share links, last and not
+ * draggable. Mirrors the web app's sidebar.
  */
-internal fun buildListRows(sections: ListSections): List<ListsRow> {
+internal fun buildListRows(sections: ListSections, guests: List<GuestListEntry> = emptyList()): List<ListsRow> {
     val rows = mutableListOf<ListsRow>()
     fun add(section: SectionKey, caption: Int?) {
         val lists = sections[section]
@@ -34,6 +42,10 @@ internal fun buildListRows(sections: ListSections): List<ListsRow> {
     add(SectionKey.PINNED, R.string.lists_section_pinned)
     add(SectionKey.OWNED, if (sections.pinned.isNotEmpty()) R.string.lists_section_others else null)
     add(SectionKey.SHARED, R.string.lists_section_shared)
+    if (guests.isNotEmpty()) {
+        rows += ListsRow.Caption(R.string.lists_section_links)
+        guests.forEachIndexed { i, entry -> rows += ListsRow.Guest(entry, alt = i % 2 == 1) }
+    }
     return rows
 }
 

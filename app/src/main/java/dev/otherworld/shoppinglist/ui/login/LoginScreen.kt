@@ -116,6 +116,14 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                         Text(stringResource(R.string.login_button))
                     }
                 }
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    stringResource(R.string.login_shared_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 420.dp),
+                )
             }
         }
     }

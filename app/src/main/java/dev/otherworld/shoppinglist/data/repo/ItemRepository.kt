@@ -1,6 +1,7 @@
 package dev.otherworld.shoppinglist.data.repo
 
 import androidx.room.withTransaction
+import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.ItemEntity
 import dev.otherworld.shoppinglist.data.local.MutationEntity
@@ -16,6 +17,7 @@ import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.ReorderPayload
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import kotlinx.coroutines.NonCancellable
@@ -35,6 +37,7 @@ class ItemRepository @Inject constructor(
     private val sync: SyncEngine,
     private val tempIds: TempIds,
     private val json: Json,
+    private val guests: GuestRepository,
 ) {
     private val itemDao = db.itemDao()
     private val areaDao = db.areaDao()
@@ -53,6 +56,10 @@ class ItemRepository @Inject constructor(
      * mid-fetch still populates the cache for next time.
      */
     suspend fun refresh(listId: Long) {
+        if (GuestIds.isGuest(listId)) {
+            guests.refreshItems(listId)
+            return
+        }
         if (listId <= 0) return // temp list never reached the server
         withContext(NonCancellable) {
             coroutineScope {
@@ -107,17 +114,20 @@ class ItemRepository @Inject constructor(
             sortOrder = itemDao.maxSortOrder(listId) + 1,
             updatedAt = null,
         )
-        itemDao.upsert(entity)
-        enqueue(
-            MutationTypes.CREATE, id, listId,
-            json.encodeToString(
-                ItemCreatePayload.serializer(),
-                ItemCreatePayload(
-                    name, quantity, unit, shopAreaId, areaExplicit, checked,
-                    detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
+        // One transaction, so a refresh never sees the row without its queued create and drops it.
+        db.withTransaction {
+            itemDao.upsert(entity)
+            enqueue(
+                MutationTypes.CREATE, id, listId,
+                json.encodeToString(
+                    ItemCreatePayload.serializer(),
+                    ItemCreatePayload(
+                        name, quantity, unit, shopAreaId, areaExplicit, checked,
+                        detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
+                    ),
                 ),
-            ),
-        )
+            )
+        }
         sync.requestSync()
         return entity.toModel()
     }
@@ -180,12 +190,21 @@ class ItemRepository @Inject constructor(
     }
 
     suspend fun clearChecked(listId: Long) {
+        // The public link API has no bulk endpoints; each item is deleted on its own.
+        if (GuestIds.isGuest(listId)) {
+            itemDao.getByList(listId).filter { it.checked }.forEach { deleteItem(it.toModel()) }
+            return
+        }
         itemDao.deleteCheckedByList(listId)
         enqueue(MutationTypes.CLEAR_CHECKED, listId, listId, "{}")
         sync.requestSync()
     }
 
     suspend fun uncheckAll(listId: Long) {
+        if (GuestIds.isGuest(listId)) {
+            itemDao.getByList(listId).filter { it.checked }.forEach { check(it.toModel(), false) }
+            return
+        }
         itemDao.uncheckAllByList(listId)
         enqueue(MutationTypes.UNCHECK_ALL, listId, listId, "{}")
         sync.requestSync()

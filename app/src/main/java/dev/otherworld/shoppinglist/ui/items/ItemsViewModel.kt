@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.guest.GuestRepository
+import dev.otherworld.shoppinglist.data.local.GuestShareEntity
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.prefs.Density
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.repo.AreaRepository
@@ -13,7 +16,9 @@ import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.model.ItemModel
+import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.BoughtSort
@@ -25,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -46,6 +52,10 @@ data class ItemsUiState(
     val boughtSort: BoughtSort = BoughtSort.AREA,
     /** Folded area groups on this list, as [dev.otherworld.shoppinglist.domain.sort.CollapsedAreas] keys. */
     val collapsedAreas: Set<String> = emptySet(),
+    val isGuest: Boolean = false,
+    /** GuestShareState of the link a guest list came from; null for the user's own lists. */
+    val guestState: String? = null,
+    val droppedChanges: Int = 0,
 )
 
 @HiltViewModel
@@ -58,12 +68,14 @@ class ItemsViewModel @Inject constructor(
     private val realtime: RealtimeController,
     private val syncEngine: SyncEngine,
     private val displayPrefs: DisplayPrefs,
+    private val guests: GuestRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val listId: Long = savedStateHandle.get<Long>("listId") ?: 0L
     private val title: String = savedStateHandle.get<String>("title").orEmpty()
     private val canWrite: Boolean = savedStateHandle.get<Boolean>("canWrite") ?: true
+    private val isGuest = GuestIds.isGuest(listId)
 
     private val _loading = MutableStateFlow(true)
     private val _error = MutableStateFlow<UiText?>(null)
@@ -80,18 +92,21 @@ class ItemsViewModel @Inject constructor(
         displayPrefs.openSort,
         displayPrefs.boughtSort,
         displayPrefs.collapsedAreas(listId),
+        guests.observeShareForList(listId),
     ) { values ->
         @Suppress("UNCHECKED_CAST")
+        val share = values[10] as GuestShareEntity?
         ItemsUiState(
             listId = listId,
-            title = title,
-            canWrite = canWrite,
+            title = share?.title ?: title,
+            // A guest list's permission can change under it (the owner makes the link view only).
+            canWrite = if (share != null) share.permission >= Permission.WRITE && share.state != GuestShareState.DEAD else canWrite,
             loading = values[3] as Boolean,
             items = values[0] as List<ItemModel>,
             areas = values[1] as List<ShopAreaModel>,
             // Writable other lists as move targets, sorted by title (matches the web app).
-            otherLists = (values[2] as List<ShoppingListModel>)
-                .filter { it.id != listId && it.id > 0 && (it.isOwner || it.canWrite) }
+            otherLists = if (isGuest) emptyList() else (values[2] as List<ShoppingListModel>)
+                .filter { it.id != listId && it.id > 0 && !it.isGuest && (it.isOwner || it.canWrite) }
                 .sortedBy { it.title.lowercase() },
             error = values[4] as UiText?,
             notice = values[5] as UiText?,
@@ -99,6 +114,9 @@ class ItemsViewModel @Inject constructor(
             openSort = values[7] as OpenSort,
             boughtSort = values[8] as BoughtSort,
             collapsedAreas = values[9] as Set<String>,
+            isGuest = isGuest,
+            guestState = share?.state,
+            droppedChanges = share?.droppedChanges ?: 0,
         )
     }.stateIn(
         viewModelScope,
@@ -109,13 +127,17 @@ class ItemsViewModel @Inject constructor(
             canWrite = canWrite,
             loading = true,
             density = displayPrefs.density.value,
+            isGuest = isGuest,
         ),
     )
 
     init {
         refresh()
-        realtime.ensureConnected()
-        viewModelScope.launch { realtime.events.collect { poll() } }
+        // Push events come from the user's own server, which knows nothing of a guest list.
+        if (!isGuest) {
+            realtime.ensureConnected()
+            viewModelScope.launch { realtime.events.collect { poll() } }
+        }
         // Surface durable background-sync failures (a queued mutation was given up on).
         viewModelScope.launch {
             syncEngine.failures.collect { _error.value = UiText(R.string.error_sync_failed) }
@@ -270,4 +292,20 @@ class ItemsViewModel @Inject constructor(
     fun consumeError() = _error.update { null }
 
     fun consumeNotice() = _notice.update { null }
+
+    fun clearDropped() {
+        viewModelScope.launch { guests.observeShareForList(listId).first()?.let { guests.clearDropped(it.id) } }
+    }
+
+    fun leave(onLeft: () -> Unit) {
+        viewModelScope.launch {
+            guests.observeShareForList(listId).first()?.let { guests.leave(it.id) }
+            onLeft()
+        }
+    }
+
+    /** The list's share link, for opening it again to enter a changed password. */
+    fun passwordLink(onLink: (String) -> Unit) {
+        viewModelScope.launch { guests.linkFor(listId)?.let(onLink) }
+    }
 }
