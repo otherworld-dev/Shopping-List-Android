@@ -3,12 +3,8 @@ package dev.otherworld.shoppinglist.data.sync
 import android.os.SystemClock
 import androidx.room.withTransaction
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
-import dev.otherworld.shoppinglist.data.guest.GuestLinkDeadException
-import dev.otherworld.shoppinglist.data.guest.GuestPasswordNeededException
-import dev.otherworld.shoppinglist.data.guest.GuestReadOnlyException
 import dev.otherworld.shoppinglist.data.guest.GuestSendResult
 import dev.otherworld.shoppinglist.data.guest.GuestSender
-import dev.otherworld.shoppinglist.data.guest.GuestServerTroubleException
 import dev.otherworld.shoppinglist.data.guest.GuestShareMarks
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.GuestShareState
@@ -136,24 +132,19 @@ class SyncEngine @Inject constructor(
             if (!outcome.getOrThrow()) mutationDao.deleteBySeq(m.seq)
             return true
         }
-        when (val e = outcome.exceptionOrNull()) {
-            is GuestLinkDeadException -> { shareMarks.dead(e.shareId); return false }
-            is GuestReadOnlyException -> { shareMarks.readOnly(e.shareId); return false }
-            is GuestPasswordNeededException -> { shareMarks.passwordNeeded(e.shareId); return false }
-            // A 404 that isn't the app's own is the friend's server misbehaving, not a lost link.
-            is GuestServerTroubleException -> { backoff(d).recordFailure(now); return false }
-        }
-        return when (SyncErrorPolicy.classify(outcome.exceptionOrNull())) {
-            SyncErrorAction.HALT -> {
-                // Network down: retry on reconnect. An unreachable friend's server can take up to
-                // a minute to time out, so it cools down rather than stalling every drain.
-                if (d is Destination.Guest) backoff(d).recordFailure(now)
+        return when (val action = failureAction(outcome.exceptionOrNull(), d)) {
+            is FailureAction.MarkDead -> { shareMarks.dead(action.shareId); false }
+            is FailureAction.MarkReadOnly -> { shareMarks.readOnly(action.shareId); false }
+            is FailureAction.MarkPasswordNeeded -> { shareMarks.passwordNeeded(action.shareId); false }
+            // Network down: retry on reconnect.
+            is FailureAction.Halt -> {
+                if (action.backoff) backoff(d).recordFailure(now)
                 false
             }
-            SyncErrorAction.DISCARD -> { mutationDao.deleteBySeq(m.seq); true } // gone on server — benign
+            FailureAction.Discard -> { mutationDao.deleteBySeq(m.seq); true } // gone on server — benign
             // Server trouble, not this mutation's fault: cool down with the attempt count untouched.
-            SyncErrorAction.TRANSIENT -> { backoff(d).recordFailure(now); false }
-            SyncErrorAction.COUNT_ATTEMPT -> {
+            FailureAction.Transient -> { backoff(d).recordFailure(now); false }
+            FailureAction.CountAttempt -> {
                 backoff(d).recordFailure(now)
                 val attempts = m.attempts + 1
                 if (attempts >= MAX_ATTEMPTS) {
