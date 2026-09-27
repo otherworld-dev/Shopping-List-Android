@@ -11,10 +11,12 @@ import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ListPreferencesRequest
+import dev.otherworld.shoppinglist.data.remote.dto.ReorderListsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -196,6 +198,14 @@ class SyncEngine @Inject constructor(
                 val p = json.decodeFromString<PinPayload>(m.payload)
                 service.updateListPreferences(m.targetId, ListPreferencesRequest(p.isPinned))
             }
+            MutationTypes.REORDER_LISTS -> {
+                val ids = json.decodeFromString<ListOrderPayload>(m.payload).idsToSend()
+                if (ids.isNotEmpty()) service.reorderLists(ReorderListsRequest(ids))
+            }
+            MutationTypes.UPDATE_SETTINGS -> {
+                val p = json.decodeFromString<SettingsPayload>(m.payload)
+                service.updateSettings(UpdateSettingsRequest(listSort = p.listSort))
+            }
             MutationTypes.DELETE -> service.deleteList(m.targetId)
         }
     }
@@ -248,6 +258,7 @@ class SyncEngine @Inject constructor(
             areaDao.remapListId(tempId, realId)
             mutationDao.remapTarget(MutationEntities.LIST, tempId, realId)
             mutationDao.remapListId(tempId, realId)
+            remapListOrderIds(tempId, realId)
         }
     }
 
@@ -259,6 +270,14 @@ class SyncEngine @Inject constructor(
                 val updated = p.copy(sortedIds = p.sortedIds.map { if (it == oldId) newId else it })
                 mutationDao.update(mutation.copy(payload = json.encodeToString(ReorderPayload.serializer(), updated)))
             }
+        }
+    }
+
+    /** Rewrite queued list orders that still hold a list's temp id. */
+    private suspend fun remapListOrderIds(oldId: Long, newId: Long) {
+        for (mutation in mutationDao.byType(MutationTypes.REORDER_LISTS)) {
+            val updated = json.decodeFromString<ListOrderPayload>(mutation.payload).remapped(oldId, newId) ?: continue
+            mutationDao.update(mutation.copy(payload = json.encodeToString(ListOrderPayload.serializer(), updated)))
         }
     }
 

@@ -38,6 +38,12 @@ data class TitlePayload(val title: String)
 @Serializable
 data class PinPayload(val isPinned: Boolean)
 
+@Serializable
+data class ListOrderPayload(val listIds: List<Long>)
+
+@Serializable
+data class SettingsPayload(val listSort: String)
+
 object MutationEntities {
     const val ITEM = "item"
     const val LIST = "list"
@@ -54,4 +60,8 @@ object MutationTypes {
     const val UNCHECK_ALL = "uncheckAll"
     const val RENAME = "rename"
     const val UPDATE_PREFERENCES = "updatePreferences"
+
+    // Not "reorder": MutationDao.reorderMutations() treats every 'reorder' row as an item reorder.
+    const val REORDER_LISTS = "reorderLists"
+    const val UPDATE_SETTINGS = "updateSettings"
 }

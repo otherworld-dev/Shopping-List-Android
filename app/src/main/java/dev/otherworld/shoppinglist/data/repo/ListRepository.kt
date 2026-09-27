@@ -7,12 +7,14 @@ import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
 import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
+import dev.otherworld.shoppinglist.data.sync.ListOrderPayload
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
 import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.PinPayload
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
 import dev.otherworld.shoppinglist.data.sync.TitlePayload
+import dev.otherworld.shoppinglist.data.sync.positionAfterRefresh
 import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import kotlinx.coroutines.flow.Flow
@@ -41,12 +43,17 @@ class ListRepository @Inject constructor(
     suspend fun refresh() {
         val dtos = service.getLists().ocs.data
         val pending = mutationDao.pendingListIds().toSet()
+        val reorderPending = mutationDao.countByType(MutationTypes.REORDER_LISTS) > 0
         db.withTransaction {
             val serverIds = dtos.map { it.id }.toSet()
             val toDelete = listDao.allIds().filter { it > 0 && it !in serverIds && it !in pending }
             listDao.deleteByIds(toDelete)
             dtos.forEachIndexed { index, dto ->
-                if (dto.id !in pending) listDao.upsert(dto.toEntity(index))
+                if (dto.id !in pending) {
+                    val entity = dto.toEntity(index)
+                    val local = listDao.getById(dto.id)?.position
+                    listDao.upsert(entity.copy(position = positionAfterRefresh(entity.position, local, reorderPending)))
+                }
             }
         }
         sync.requestSync()
@@ -72,8 +79,30 @@ class ListRepository @Inject constructor(
 
     /** Pins or unpins a list for this user; offline-first, so it waits in the queue like a rename. */
     suspend fun setPinned(id: Long, isPinned: Boolean) {
-        listDao.getById(id)?.let { listDao.update(it.copy(isPinned = isPinned)) }
+        listDao.getById(id)?.let { listDao.update(it.copy(isPinned = isPinned, position = null)) }
         enqueue(MutationTypes.UPDATE_PREFERENCES, id, json.encodeToString(PinPayload.serializer(), PinPayload(isPinned)))
+        sync.requestSync()
+    }
+
+    /**
+     * Saves one section's order for this user: at once on the phone, then queued, like a pin.
+     * [listIds] may hold temp ids of lists not yet synced; the sync engine swaps in real ones.
+     */
+    suspend fun reorderLists(listIds: List<Long>) {
+        db.withTransaction {
+            listIds.forEachIndexed { index, id ->
+                listDao.getById(id)?.let { listDao.update(it.copy(position = index)) }
+            }
+            mutationDao.insert(
+                MutationEntity(
+                    entity = MutationEntities.LIST,
+                    type = MutationTypes.REORDER_LISTS,
+                    targetId = 0,
+                    listId = 0,
+                    payload = json.encodeToString(ListOrderPayload.serializer(), ListOrderPayload(listIds)),
+                ),
+            )
+        }
         sync.requestSync()
     }
 
