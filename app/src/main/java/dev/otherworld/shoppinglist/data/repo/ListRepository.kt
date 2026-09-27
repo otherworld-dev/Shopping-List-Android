@@ -41,9 +41,13 @@ class ListRepository @Inject constructor(
 
     /** Fetches lists from the server and reconciles them into Room without clobbering pending edits. */
     suspend fun refresh() {
+        // Checked on both sides of the fetch: a reorder sent or queued while it's in flight
+        // would otherwise let the response's stale positions overwrite the local order.
+        val reorderQueuedBefore = mutationDao.countByType(MutationTypes.REORDER_LISTS) > 0
         val dtos = service.getLists().ocs.data
         val pending = mutationDao.pendingListIds().toSet()
-        val reorderPending = mutationDao.countByType(MutationTypes.REORDER_LISTS) > 0
+        val reorderPending = reorderQueuedBefore ||
+            mutationDao.countByType(MutationTypes.REORDER_LISTS) > 0
         db.withTransaction {
             val serverIds = dtos.map { it.id }.toSet()
             val toDelete = listDao.allIds().filter { it > 0 && it !in serverIds && it !in pending }

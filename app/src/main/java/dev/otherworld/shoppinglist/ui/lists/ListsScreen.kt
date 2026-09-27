@@ -279,7 +279,7 @@ private fun ListRow(
         leadingContent = {
             Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
         },
-        headlineContent = { Text(list.title, modifier = handleModifier) },
+        headlineContent = { Text(list.title, modifier = Modifier.fillMaxWidth().then(handleModifier)) },
         supportingContent = if (!list.isOwner) {
             { Text(if (list.canWrite) stringResource(R.string.list_shared_with_you) else stringResource(R.string.list_shared_readonly)) }
         } else null,
