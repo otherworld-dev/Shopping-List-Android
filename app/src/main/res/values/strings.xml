@@ -9,6 +9,7 @@
     <string name="action_set">Set</string>
     <string name="action_share">Share</string>
     <string name="action_rename">Rename</string>
+    <string name="action_leave">Leave</string>
 
     <!-- Errors and notices -->
     <string name="error_offline">You\'re offline, check your connection and try again.</string>

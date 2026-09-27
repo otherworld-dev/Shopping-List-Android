@@ -265,6 +265,7 @@ fun ListsScreen(
         ConfirmDialog(
             title = stringResource(R.string.dialog_leave_list_title),
             message = stringResource(R.string.dialog_leave_list_message, target.list.title),
+            confirmLabel = stringResource(R.string.action_leave),
             onConfirm = { leaveTarget = null; target.list.guestShareId?.let(viewModel::leave) },
             onDismiss = { leaveTarget = null },
         )

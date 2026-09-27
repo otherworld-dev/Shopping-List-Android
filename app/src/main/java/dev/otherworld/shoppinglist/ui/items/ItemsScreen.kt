@@ -372,6 +372,7 @@ fun ItemsScreen(
         dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
             title = stringResource(R.string.dialog_leave_list_title),
             message = stringResource(R.string.dialog_leave_list_message, state.title),
+            confirmLabel = stringResource(R.string.action_leave),
             onConfirm = { confirmLeave = false; viewModel.leave(onLeft) },
             onDismiss = { confirmLeave = false },
         )
