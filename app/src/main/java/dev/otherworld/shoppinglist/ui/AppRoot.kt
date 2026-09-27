@@ -47,6 +47,7 @@ import dev.otherworld.shoppinglist.ui.areas.ManageAreasScreen
 import dev.otherworld.shoppinglist.ui.items.ItemsScreen
 import dev.otherworld.shoppinglist.ui.lists.ListsScreen
 import dev.otherworld.shoppinglist.ui.login.LoginScreen
+import dev.otherworld.shoppinglist.ui.settings.SettingsScreen
 import dev.otherworld.shoppinglist.ui.share.SharingScreen
 import dev.otherworld.shoppinglist.ui.tags.ManageTagsScreen
 import kotlinx.coroutines.flow.StateFlow
@@ -155,7 +156,7 @@ fun AppRoot(
                     navController.navigate("share/${list.id}?title=${Uri.encode(list.title)}")
                 },
                 onManageTags = { navController.navigate("tags") },
-                onOpenSettings = {},
+                onOpenSettings = { navController.navigate("settings") },
             )
         }
 
@@ -197,6 +198,10 @@ fun AppRoot(
 
         composable("tags") {
             ManageTagsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable("settings") {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
     } // Column
