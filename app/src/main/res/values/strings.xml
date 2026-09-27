@@ -93,6 +93,15 @@
         <item quantity="one">One change to this list couldn\'t be saved.</item>
         <item quantity="other">%d changes to this list couldn\'t be saved.</item>
     </plurals>
+    <string name="join_checking">Checking the link…</string>
+    <string name="join_can_edit">You can add, tick off and change items.</string>
+    <string name="join_view_only">You can see this list but not change it.</string>
+    <string name="join_has_password">This list has a password.</string>
+    <string name="join_password_label">Password</string>
+    <string name="join_password_wrong">That password isn\'t right.</string>
+    <string name="join_open">Open list</string>
+    <string name="join_link_invalid">This isn\'t a Shopping List share link.</string>
+    <string name="login_shared_hint">Someone shared a list with you? Tap the link they sent and choose Open in the app.</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>

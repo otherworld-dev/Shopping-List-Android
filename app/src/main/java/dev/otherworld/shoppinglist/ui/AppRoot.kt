@@ -33,6 +33,8 @@ import androidx.navigation.navArgument
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.Account
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.guest.GuestRepository
+import dev.otherworld.shoppinglist.data.guest.PendingLinks
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
@@ -45,12 +47,15 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import dev.otherworld.shoppinglist.ui.areas.ManageAreasScreen
 import dev.otherworld.shoppinglist.ui.items.ItemsScreen
+import dev.otherworld.shoppinglist.ui.join.JoinScreen
 import dev.otherworld.shoppinglist.ui.lists.ListsScreen
 import dev.otherworld.shoppinglist.ui.login.LoginScreen
 import dev.otherworld.shoppinglist.ui.settings.SettingsScreen
 import dev.otherworld.shoppinglist.ui.share.SharingScreen
 import dev.otherworld.shoppinglist.ui.tags.ManageTagsScreen
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 object Routes {
@@ -66,28 +71,23 @@ class AppViewModel @Inject constructor(
     private val syncEngine: SyncEngine,
     private val certAlerts: CertAlertController,
     private val listSettings: ListSettingsRepository,
+    guests: GuestRepository,
+    private val pendingLinks: PendingLinks,
 ) : ViewModel() {
     val account: StateFlow<Account?> = credentialStore.accountFlow
     val certAlert: StateFlow<CertInfo?> = certAlerts.alert
     val suppressedCert: StateFlow<CertInfo?> = certAlerts.suppressed
 
-    // Track previous account state to detect login/logout transitions (survives rotation)
-    private var previouslyLoggedIn: Boolean? = null
+    /** Null until the guest lists have been read, so the first screen is never a guess. */
+    val hasGuests: StateFlow<Boolean?> =
+        guests.observeHasShares().stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val pendingLink: StateFlow<String?> = pendingLinks.link
+    private val transitions = SignInTransitions()
 
-    fun shouldNavigateOnAccountChange(currentAccount: Account?): NavigationAction? {
-        val wasLoggedIn = previouslyLoggedIn
-        val isLoggedIn = currentAccount != null
-        previouslyLoggedIn = isLoggedIn
+    fun navigationFor(account: Account?, hasGuests: Boolean): NavigationAction? =
+        transitions.next(loggedIn = account != null, hasGuests = hasGuests)
 
-        return when {
-            wasLoggedIn == null -> null  // First call, no navigation
-            !wasLoggedIn && isLoggedIn -> NavigationAction.TO_HOME
-            wasLoggedIn && !isLoggedIn -> NavigationAction.TO_LOGIN
-            else -> null  // No state change
-        }
-    }
-
-    enum class NavigationAction { TO_HOME, TO_LOGIN }
+    fun consumeLink() = pendingLinks.consume()
 
     init {
         // On login: adopt the server's brand colour and open the real-time push connection.
@@ -128,6 +128,10 @@ fun AppRoot(
     val account by viewModel.account.collectAsStateWithLifecycle()
     val certAlert by viewModel.certAlert.collectAsStateWithLifecycle()
     val suppressedCert by viewModel.suppressedCert.collectAsStateWithLifecycle()
+    val hasGuests by viewModel.hasGuests.collectAsStateWithLifecycle()
+    val pendingLink by viewModel.pendingLink.collectAsStateWithLifecycle()
+    val guestsKnown = hasGuests ?: return
+    val signedIn = account != null || guestsKnown
     val navController = rememberNavController()
 
     Column(modifier.fillMaxSize()) {
@@ -139,7 +143,7 @@ fun AppRoot(
 
     NavHost(
         navController = navController,
-        startDestination = if (account == null) Routes.LOGIN else Routes.HOME,
+        startDestination = if (signedIn) Routes.HOME else Routes.LOGIN,
         modifier = Modifier.weight(1f),
     ) {
         composable(Routes.LOGIN) { LoginScreen() }
@@ -173,6 +177,23 @@ fun AppRoot(
             ItemsScreen(
                 onBack = { navController.popBackStack() },
                 onManageAreas = { navController.navigate("areas/$listId?title=$title") },
+                onEnterPassword = { link -> navController.navigate("join?url=${Uri.encode(link)}") },
+                onLeft = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = "join?url={url}",
+            arguments = listOf(navArgument("url") { type = NavType.StringType; defaultValue = "" }),
+        ) {
+            JoinScreen(
+                onOpened = { opened ->
+                    navController.navigate(Routes.HOME) { popUpTo(0) { inclusive = true } }
+                    navController.navigate(
+                        "items/${opened.listId}?title=${Uri.encode(opened.title)}&canWrite=${opened.canWrite}",
+                    )
+                },
+                onClose = { navController.popBackStack() },
             )
         }
 
@@ -219,26 +240,30 @@ fun AppRoot(
         }
     }
 
-    // React to login/logout from anywhere by switching the active destination.
-    // ViewModel tracks previous state and survives rotation.
-    LaunchedEffect(account) {
-        when (viewModel.shouldNavigateOnAccountChange(account)) {
-            AppViewModel.NavigationAction.TO_HOME -> {
+    // React to login/logout/guest-list changes from anywhere by switching the active
+    // destination. ViewModel tracks previous state and survives rotation.
+    LaunchedEffect(account, guestsKnown) {
+        when (viewModel.navigationFor(account, guestsKnown)) {
+            // Only from the login screen: joining a list navigates on its own, and a login from
+            // guest mode returns to the lists already underneath.
+            NavigationAction.TO_HOME -> if (navController.currentDestination?.route == Routes.LOGIN) {
                 navController.navigate(Routes.HOME) {
                     popUpTo(Routes.LOGIN) { inclusive = true }
                     launchSingleTop = true
                 }
             }
-            AppViewModel.NavigationAction.TO_LOGIN -> {
-                navController.navigate(Routes.LOGIN) {
-                    popUpTo(0) { inclusive = true }
-                    launchSingleTop = true
-                }
+            NavigationAction.TO_LOGIN -> navController.navigate(Routes.LOGIN) {
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
             }
-            null -> {
-                // No navigation needed (first composition or rotation)
-            }
+            null -> Unit
         }
+    }
+
+    LaunchedEffect(pendingLink) {
+        val link = pendingLink ?: return@LaunchedEffect
+        viewModel.consumeLink()
+        navController.navigate("join?url=${Uri.encode(link)}")
     }
 }
 
