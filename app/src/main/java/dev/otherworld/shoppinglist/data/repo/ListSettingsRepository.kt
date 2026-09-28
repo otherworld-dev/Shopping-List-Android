@@ -2,6 +2,7 @@ package dev.otherworld.shoppinglist.data.repo
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.remote.OcsService
@@ -33,6 +34,7 @@ class ListSettingsRepository @Inject constructor(
     db: AppDatabase,
     private val sync: SyncEngine,
     private val json: Json,
+    private val credentialStore: CredentialStore,
 ) {
     private val prefs = context.getSharedPreferences("list_settings", Context.MODE_PRIVATE)
     private val mutationDao = db.mutationDao()
@@ -69,9 +71,11 @@ class ListSettingsRepository @Inject constructor(
         }
     }
 
+    /** With no account the sort only sorts this phone's lists, so it stays on the phone. */
     suspend fun setListSort(mode: ListSortMode) {
         sortLock.withLock {
             remember(mode)
+            if (credentialStore.current() == null) return
             mutationDao.insert(
                 MutationEntity(
                     entity = MutationEntities.LIST,

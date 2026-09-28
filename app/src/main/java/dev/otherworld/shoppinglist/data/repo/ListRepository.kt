@@ -1,6 +1,7 @@
 package dev.otherworld.shoppinglist.data.repo
 
 import androidx.room.withTransaction
+import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.ListEntity
 import dev.otherworld.shoppinglist.data.local.MutationEntity
@@ -15,6 +16,7 @@ import dev.otherworld.shoppinglist.data.sync.PinPayload
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
 import dev.otherworld.shoppinglist.data.sync.TitlePayload
+import dev.otherworld.shoppinglist.data.sync.planUpload
 import dev.otherworld.shoppinglist.data.sync.positionAfterRefresh
 import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.model.Permission
@@ -37,6 +39,7 @@ class ListRepository @Inject constructor(
     private val sync: SyncEngine,
     private val tempIds: TempIds,
     private val json: Json,
+    private val credentialStore: CredentialStore,
 ) {
     private val listDao = db.listDao()
     private val itemDao = db.itemDao()
@@ -48,6 +51,8 @@ class ListRepository @Inject constructor(
 
     fun observeLists(): Flow<List<ShoppingListModel>> =
         listDao.observeAll().map { rows -> rows.map { it.toModel() } }
+
+    suspend fun localListCount(): Int = listDao.localLists().size
 
     /** Fetches lists from the server and reconciles them into Room without clobbering pending edits. */
     suspend fun refresh() {
@@ -73,9 +78,13 @@ class ListRepository @Inject constructor(
         sync.requestSync()
     }
 
-    /** Optimistically creates a list locally and queues it; returns the local id for navigation. */
+    /**
+     * Optimistically creates a list locally and queues it; returns the local id for navigation.
+     * With no account the list is kept on this phone only and nothing is queued.
+     */
     suspend fun createList(title: String): Long {
         val id = tempIds.next()
+        val local = credentialStore.current() == null
         listDao.upsert(
             ListEntity(
                 id = id,
@@ -84,8 +93,10 @@ class ListRepository @Inject constructor(
                 isOwner = true,
                 sortOrder = -1, // surface new lists at the top until next refresh
                 updatedAt = null,
+                isLocal = local,
             ),
         )
+        if (local) return id
         enqueue(MutationTypes.CREATE, id, json.encodeToString(TitlePayload.serializer(), TitlePayload(title)))
         sync.requestSync()
         return id
@@ -94,8 +105,11 @@ class ListRepository @Inject constructor(
     /** Pins or unpins a list for this user; offline-first, so it waits in the queue like a rename. */
     suspend fun setPinned(id: Long, isPinned: Boolean) {
         db.withTransaction {
-            listDao.getById(id)?.let { listDao.update(it.copy(isPinned = isPinned, position = null)) }
-            enqueue(MutationTypes.UPDATE_PREFERENCES, id, json.encodeToString(PinPayload.serializer(), PinPayload(isPinned)))
+            val list = listDao.getById(id)
+            list?.let { listDao.update(it.copy(isPinned = isPinned, position = null)) }
+            if (list?.isLocal != true) {
+                enqueue(MutationTypes.UPDATE_PREFERENCES, id, json.encodeToString(PinPayload.serializer(), PinPayload(isPinned)))
+            }
             orderEdits.incrementAndGet()
         }
         sync.requestSync()
@@ -110,6 +124,9 @@ class ListRepository @Inject constructor(
             listIds.forEachIndexed { index, id ->
                 listDao.getById(id)?.let { listDao.update(it.copy(position = index)) }
             }
+            orderEdits.incrementAndGet()
+            // With no account every list shown is on this phone only, so there's nothing to send.
+            if (credentialStore.current() == null) return@withTransaction
             mutationDao.insert(
                 MutationEntity(
                     entity = MutationEntities.LIST,
@@ -119,15 +136,42 @@ class ListRepository @Inject constructor(
                     payload = json.encodeToString(ListOrderPayload.serializer(), ListOrderPayload(listIds)),
                 ),
             )
-            orderEdits.incrementAndGet()
         }
         sync.requestSync()
     }
 
     suspend fun renameList(id: Long, title: String) {
-        listDao.getById(id)?.let { listDao.update(it.copy(title = title)) }
+        val list = listDao.getById(id)
+        list?.let { listDao.update(it.copy(title = title)) }
+        if (list?.isLocal == true) return
         enqueue(MutationTypes.RENAME, id, json.encodeToString(TitlePayload.serializer(), TitlePayload(title)))
         sync.requestSync()
+    }
+
+    /**
+     * Sends a phone-only list to the account: it becomes an ordinary unsynced list, with its
+     * items and pin queued behind its create, and syncs like one made offline.
+     */
+    suspend fun uploadLocal(id: Long) {
+        val queued = db.withTransaction { queueUpload(id) }
+        if (queued) sync.requestSync()
+    }
+
+    /** [uploadLocal] for every phone-only list, oldest first so they keep their order. */
+    suspend fun uploadAllLocal() {
+        val queued = db.withTransaction {
+            listDao.localLists().sortedByDescending { it.id }.map { queueUpload(it.id) }.any { it }
+        }
+        if (queued) sync.requestSync()
+    }
+
+    /** Must run inside a transaction. False when the list isn't (or is no longer) phone-only. */
+    private suspend fun queueUpload(id: Long): Boolean {
+        val list = listDao.getById(id)?.takeIf { it.isLocal } ?: return false
+        if (credentialStore.current() == null) return false
+        listDao.update(list.copy(isLocal = false))
+        planUpload(list, itemDao.getByList(id), json).forEach { mutationDao.insert(it) }
+        return true
     }
 
     suspend fun deleteList(id: Long) {

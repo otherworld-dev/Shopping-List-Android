@@ -126,7 +126,7 @@ fun ListsScreen(
             )
         },
         floatingActionButton = {
-            if (state.loggedIn) {
+            if (state.canCreate) {
                 ExtendedFloatingActionButton(
                     onClick = { showCreate = true },
                     icon = { Icon(Icons.Filled.Add, contentDescription = null) },
@@ -197,6 +197,10 @@ fun ListsScreen(
                                                 onRename = { renameTarget = row.list },
                                                 onDelete = { deleteTarget = row.list },
                                                 onShare = { onShareList(row.list) },
+                                                // A phone-only list can go to the account once there is one.
+                                                onUpload = if (state.loggedIn && row.list.isLocal) {
+                                                    { viewModel.uploadList(row.list.id) }
+                                                } else null,
                                                 handleModifier = if (state.canReorder) {
                                                     Modifier.longPressDraggableHandle(
                                                         onDragStarted = { dragging = true },
@@ -292,6 +296,7 @@ private fun ListRow(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onShare: () -> Unit,
+    onUpload: (() -> Unit)? = null,
     handleModifier: Modifier = Modifier,
     moveActions: List<CustomAccessibilityAction> = emptyList(),
 ) {
@@ -311,9 +316,11 @@ private fun ListRow(
             Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
         },
         headlineContent = { Text(list.title, modifier = Modifier.fillMaxWidth().then(handleModifier)) },
-        supportingContent = if (!list.isOwner) {
-            { Text(if (list.canWrite) stringResource(R.string.list_shared_with_you) else stringResource(R.string.list_shared_readonly)) }
-        } else null,
+        supportingContent = when {
+            list.isLocal -> { { Text(stringResource(R.string.list_on_this_phone)) } }
+            !list.isOwner -> { { Text(if (list.canWrite) stringResource(R.string.list_shared_with_you) else stringResource(R.string.list_shared_readonly)) } }
+            else -> null
+        },
         trailingContent = {
             Box {
                 IconButton(onClick = { menu = true }) {
@@ -325,11 +332,20 @@ private fun ListRow(
                         text = { Text(stringResource(if (list.isPinned) R.string.menu_unpin_list else R.string.menu_pin_list)) },
                         onClick = { menu = false; onPin() },
                     )
-                    if (list.isOwner) {
+                    onUpload?.let { upload ->
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_share)) },
-                            onClick = { menu = false; onShare() },
+                            text = { Text(stringResource(R.string.action_upload_to_account)) },
+                            onClick = { menu = false; upload() },
                         )
+                    }
+                    if (list.isOwner) {
+                        // Sharing lives on the server, which a phone-only list isn't on.
+                        if (!list.isLocal) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_share)) },
+                                onClick = { menu = false; onShare() },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_rename)) },
                             onClick = { menu = false; onRename() },

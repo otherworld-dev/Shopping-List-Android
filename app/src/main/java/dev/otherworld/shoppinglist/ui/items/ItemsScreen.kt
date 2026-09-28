@@ -250,7 +250,8 @@ fun ItemsScreen(
                     }
                     if (state.canWrite) {
                         HorizontalDivider()
-                        if (!state.isGuest) {
+                        // Areas live on the server: not for a guest list or one kept on the phone.
+                        if (!state.isGuest && !state.isLocal) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.menu_reorder_areas)) },
@@ -781,12 +782,15 @@ private fun ItemEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.size(8.dp))
-                Box {
-                    TextButton(onClick = { areaMenu = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
-                    DropdownMenu(expanded = areaMenu, onDismissRequest = { areaMenu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
-                        areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
-                            DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
+                // A list with no areas (always so for one kept on the phone) has nothing to pick.
+                if (areas.isNotEmpty()) {
+                    Box {
+                        TextButton(onClick = { areaMenu = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
+                        DropdownMenu(expanded = areaMenu, onDismissRequest = { areaMenu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
+                            areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
+                                DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
+                            }
                         }
                     }
                 }

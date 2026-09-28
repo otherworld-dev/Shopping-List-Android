@@ -46,4 +46,32 @@ class SignInTransitionsTest {
         t.next(loggedIn = false, hasGuests = true)
         assertEquals(NavigationAction.TO_HOME, t.next(loggedIn = true, hasGuests = true))
     }
+
+    @Test
+    fun `choosing to use the app without an account goes to the lists`() {
+        val t = SignInTransitions()
+        t.next(loggedIn = false, hasGuests = false, localMode = false)
+        assertEquals(NavigationAction.TO_HOME, t.next(loggedIn = false, hasGuests = false, localMode = true))
+    }
+
+    @Test
+    fun `logging in from local mode goes to the lists`() {
+        val t = SignInTransitions()
+        t.next(loggedIn = false, hasGuests = false, localMode = true)
+        assertEquals(NavigationAction.TO_HOME, t.next(loggedIn = true, hasGuests = false, localMode = true))
+    }
+
+    @Test
+    fun `logging out in local mode stays on the lists`() {
+        val t = SignInTransitions()
+        t.next(loggedIn = true, hasGuests = false, localMode = true)
+        assertNull(t.next(loggedIn = false, hasGuests = false, localMode = true))
+    }
+
+    @Test
+    fun `choosing local mode from guest mode goes to the lists`() {
+        val t = SignInTransitions()
+        t.next(loggedIn = false, hasGuests = true, localMode = false)
+        assertEquals(NavigationAction.TO_HOME, t.next(loggedIn = false, hasGuests = true, localMode = true))
+    }
 }

@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
+import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
@@ -42,7 +44,23 @@ data class ListsUiState(
     /** Lists opened from share links, A to Z. */
     val guestLists: List<GuestListEntry> = emptyList(),
     val loggedIn: Boolean = false,
+    /** Logged in, or using the app without an account. */
+    val canCreate: Boolean = false,
     val error: UiText? = null,
+)
+
+/**
+ * The user's own lists to show. Logged out, only the lists kept on this phone: an old account's
+ * lists stay in Room with their queued changes, waiting for that login, but aren't shown.
+ */
+internal fun ownListsShown(lists: List<ShoppingListModel>, loggedIn: Boolean): List<ShoppingListModel> =
+    lists.filter { !it.isGuest && (loggedIn || it.isLocal) }
+
+private data class ListSources(
+    val lists: List<ShoppingListModel>,
+    val shares: List<GuestShareEntity>,
+    val loggedIn: Boolean,
+    val localMode: Boolean,
 )
 
 @HiltViewModel
@@ -53,6 +71,7 @@ class ListsViewModel @Inject constructor(
     private val listSettings: ListSettingsRepository,
     private val ordering: ListOrdering,
     private val guests: GuestRepository,
+    localMode: LocalMode,
     realtime: RealtimeController,
 ) : ViewModel() {
 
@@ -64,16 +83,16 @@ class ListsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     private val listsAndGuests = combine(
-        repository.observeLists(), guests.observeShares(), credentialStore.accountFlow,
-    ) { lists, shares, account -> Triple(lists, shares, account != null) }
+        repository.observeLists(), guests.observeShares(), credentialStore.accountFlow, localMode.enabled,
+    ) { lists, shares, account, local -> ListSources(lists, shares, account != null, local) }
 
     val state: StateFlow<ListsUiState> =
         combine(
             listsAndGuests, listSettings.listSort, listSettings.listOrderSupported, _loading, _error,
-        ) { (lists, shares, loggedIn), sort, supported, loading, error ->
-            // Logged out, the user's own lists stay in Room (their queued changes wait for a login)
-            // but aren't shown.
-            val own = if (loggedIn) lists.filter { !it.isGuest } else emptyList()
+        ) { (lists, shares, loggedIn, localMode), sort, supported, loading, error ->
+            val own = ownListsShown(lists, loggedIn)
+            // With no account the phone's lists sort and reorder on the phone alone.
+            val sortable = supported || !loggedIn
             val shareById = shares.associateBy { it.id }
             val collator = java.text.Collator.getInstance(Locale.getDefault())
             val guestLists = lists.filter { it.isGuest }
@@ -86,10 +105,11 @@ class ListsViewModel @Inject constructor(
             ListsUiState(
                 loading = loading,
                 lists = own + guestLists.map { it.list },
-                sections = if (supported) sortLists(own, sort, Locale.getDefault()) else splitLists(own),
+                sections = if (sortable) sortLists(own, sort, Locale.getDefault()) else splitLists(own),
                 guestLists = guestLists,
                 loggedIn = loggedIn,
-                canReorder = supported && loggedIn,
+                canCreate = loggedIn || localMode,
+                canReorder = sortable,
                 error = error,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ListsUiState(loading = true))
@@ -153,6 +173,10 @@ class ListsViewModel @Inject constructor(
 
     fun deleteList(id: Long) {
         viewModelScope.launch { repository.deleteList(id) }
+    }
+
+    fun uploadList(id: Long) {
+        viewModelScope.launch { repository.uploadLocal(id) }
     }
 
     fun setPinned(list: ShoppingListModel, pinned: Boolean) {

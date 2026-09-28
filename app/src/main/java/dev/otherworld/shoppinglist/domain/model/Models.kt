@@ -24,6 +24,8 @@ data class ShoppingListModel(
     val updatedAt: String? = null,
     /** Set for a list opened from someone's share link (see GuestIds). */
     val guestShareId: Long? = null,
+    /** Kept on this phone only, never synced (see ListEntity.isLocal). */
+    val isLocal: Boolean = false,
 ) {
     val canWrite: Boolean get() = permission >= Permission.WRITE
     val isGuest: Boolean get() = guestShareId != null

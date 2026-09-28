@@ -27,6 +27,8 @@ data class ListEntity(
     val position: Int? = null,
     /** The share link this list was opened from; null for the user's own and shared lists. */
     val guestShareId: Long? = null,
+    /** Kept on this phone only: its changes are never queued, until it's uploaded to an account. */
+    val isLocal: Boolean = false,
 )
 
 @Entity(
