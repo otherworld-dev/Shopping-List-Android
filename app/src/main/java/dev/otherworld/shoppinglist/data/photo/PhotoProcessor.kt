@@ -69,7 +69,11 @@ class PhotoProcessor @Inject constructor(
     /** Throws away a camera picture once uploaded or abandoned; a picked one isn't ours to touch. */
     fun discard(source: Uri) {
         if (source.authority != authority) return
-        source.lastPathSegment?.let { File(cameraDir, it).delete() }
+        val name = source.lastPathSegment ?: return
+        // The segment comes decoded, so an encoded "../" would climb out; only delete inside cache/photos.
+        val dir = cameraDir.canonicalFile
+        val file = File(dir, name).canonicalFile
+        if (file.parentFile == dir) file.delete()
     }
 
     // ImageDecoder reads HEIC too, and applies the EXIF rotation itself.
