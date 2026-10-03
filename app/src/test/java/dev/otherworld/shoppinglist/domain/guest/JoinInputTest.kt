@@ -151,4 +151,54 @@ class JoinInputTest {
         assertEquals(JoinInput.Invalid, parseJoinInput("hello there"))
         assertEquals(JoinInput.Invalid, parseJoinInput("https://cloud.example.com/"))
     }
+
+    // A pasted message is read word by word first: deleting its spaces would glue a link to the
+    // next word, or a word onto an invite's server.
+    @Test
+    fun `a link followed by more text keeps its own token`() {
+        assertEquals(
+            JoinInput.Link(ShareLink("https://cloud.example.com", token)),
+            parseJoinInput("https://cloud.example.com/apps/shopping_list/s/$token thanks!"),
+        )
+        assertEquals(
+            JoinInput.Link(ShareLink("https://cloud.example.com", token)),
+            parseJoinInput("https://cloud.example.com/apps/shopping_list/s/$token\nHoliday shopping"),
+        )
+    }
+
+    @Test
+    fun `an invite after words keeps its own server`() {
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("Join my list cloud.example.com/K7QM-3XPD"))
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("Shopping list invite\ncloud.example.com/K7QM-3XPD"))
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("Join my list:\u00A0cloud.example.com/K7QM-3XPD"))
+    }
+
+    @Test
+    fun `a code typed in pieces inside a message still reads`() {
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("my list cloud.example.com/K7QM 3XPD"))
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("cloud.example.com/K7QM - 3XPD"))
+        assertEquals(JoinInput.NeedsServer, parseJoinInput("K7QM - 3XPD"))
+    }
+
+    @Test
+    fun `punctuation around a link or invite is not part of it`() {
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("Join my list: cloud.example.com/K7QM-3XPD."))
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("(cloud.example.com/K7QM-3XPD)"))
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("cloud.example.com/K7QM-3XPD!"))
+        assertEquals(
+            JoinInput.Link(ShareLink("https://cloud.example.com", token)),
+            parseJoinInput("Here: https://cloud.example.com/apps/shopping_list/s/$token."),
+        )
+        assertEquals(JoinInput.NeedsServer, parseJoinInput("K7QM-3XPD."))
+    }
+
+    @Test
+    fun `an http address elsewhere in a message doesn't hide the invite`() {
+        assertEquals(
+            JoinInput.Code("https://cloud.example.com", "K7QM3XPD"),
+            parseJoinInput("Get the app from http://example.org - my list: cloud.example.com/K7QM-3XPD"),
+        )
+        assertEquals(JoinInput.Insecure, parseJoinInput("Use http://192.168.0.11:8080/K7QM-3XPD please"))
+        assertEquals(JoinInput.Invalid, parseJoinInput("see http://example.org for the app"))
+    }
 }

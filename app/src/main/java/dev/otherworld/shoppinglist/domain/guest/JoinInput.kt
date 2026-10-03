@@ -86,43 +86,59 @@ private fun ServerResult.toInput(code: String): JoinInput = when (this) {
     ServerResult.Invalid -> JoinInput.InvalidServer
 }
 
-/** One piece of input on its own: a link, an invite string, or a bare code. */
-private fun parseOne(raw: String, server: String): JoinInput {
+/** A link or an invite string in one piece of text; anything else is [JoinInput.Invalid]. */
+private fun parsePiece(raw: String): JoinInput {
     val text = clean(raw)
     if (text.isEmpty()) return JoinInput.Invalid
     parseShareLink(text)?.let { return JoinInput.Link(it) }
-    if (text.startsWith("http://", ignoreCase = true)) return JoinInput.Insecure
+    if (text.startsWith("http://", ignoreCase = true)) {
+        // Only an http link or invite is worth a message of its own; any other http address
+        // (the app's web page, say) is just another word.
+        val asHttps = parsePiece("https://" + text.substring("http://".length))
+        return if (asHttps is JoinInput.Link || asHttps is JoinInput.Code) JoinInput.Insecure else JoinInput.Invalid
+    }
     val trimmed = text.trimEnd('/')
     val slash = trimmed.lastIndexOf('/')
-    if (slash >= 0) {
-        val code = normaliseCode(trimmed.substring(slash + 1)) ?: return JoinInput.Invalid
-        return when (val result = normaliseServer(trimmed.substring(0, slash))) {
-            is ServerResult.Ok -> JoinInput.Code(result.server, code)
-            ServerResult.Insecure -> JoinInput.Insecure
-            // The invite's own server is broken, so the whole thing isn't an invite.
-            ServerResult.Invalid -> JoinInput.Invalid
-        }
+    if (slash < 0) return JoinInput.Invalid
+    val code = normaliseCode(trimmed.substring(slash + 1)) ?: return JoinInput.Invalid
+    return when (val result = normaliseServer(trimmed.substring(0, slash))) {
+        is ServerResult.Ok -> JoinInput.Code(result.server, code)
+        ServerResult.Insecure -> JoinInput.Insecure
+        // The invite's own server is broken, so the whole thing isn't an invite.
+        ServerResult.Invalid -> JoinInput.Invalid
     }
-    val code = normaliseCode(text) ?: return JoinInput.Invalid
-    if (server.isBlank()) return JoinInput.NeedsServer
-    return normaliseServer(server).toInput(code)
 }
+
+/** Brackets, quotes and sentence punctuation a link or invite can sit inside in a message. */
+private const val LEADING_PUNCTUATION = "(<\"'“‘«"
+private const val TRAILING_PUNCTUATION = ".,;:!?)>\"'”’»"
+
+private fun trimPunctuation(text: String): String =
+    text.trimStart { it in LEADING_PUNCTUATION }.trimEnd { it in TRAILING_PUNCTUATION }
 
 /**
  * Reads the Join a shared list screen: [input] is a share link, an invite string
  * (`cloud.example.com/K7QM-3XPD`, split at the last "/") or a bare code, and [server] is the
- * Server field, which only counts for a bare code. A whole pasted message that doesn't read as
- * one thing is tried word by word, so the link or invite inside it is still found.
+ * Server field, which only counts for a bare code.
+ *
+ * A pasted message is read word by word, never with its spaces deleted, which would glue a link
+ * to the next word or a word onto an invite's server. Two or three neighbouring words are also
+ * tried together, for a code typed in pieces ("K7QM 3XPD", "K7QM - 3XPD"), but only after every
+ * single word, and a link or invite anywhere beats an http one.
  */
 fun parseJoinInput(input: String, server: String = ""): JoinInput {
-    val whole = parseOne(input, server)
-    if (whole != JoinInput.Invalid) return whole
-    return input.split(Regex("\\s+"))
-        .filter { it.isNotEmpty() }
-        .takeIf { it.size > 1 }
-        ?.map { parseOne(it, server) }
-        ?.firstOrNull { it is JoinInput.Link || it is JoinInput.Code || it == JoinInput.Insecure }
-        ?: JoinInput.Invalid
+    // isWhitespace, not the regex \s: on the JVM that's ASCII only, and misses U+00A0.
+    val words = String(CharArray(input.length) { if (input[it].isWhitespace()) ' ' else input[it] })
+        .split(' ').map(::trimPunctuation).filter { it.isNotEmpty() }
+    val found = (1..3).asSequence()
+        .flatMap { n -> words.windowed(n) { it.joinToString("") } }
+        .map(::parsePiece)
+        .toList()
+    found.firstOrNull { it is JoinInput.Link || it is JoinInput.Code }?.let { return it }
+    if (JoinInput.Insecure in found) return JoinInput.Insecure
+    val code = normaliseCode(trimPunctuation(input.trim())) ?: return JoinInput.Invalid
+    if (server.isBlank()) return JoinInput.NeedsServer
+    return normaliseServer(server).toInput(code)
 }
 
 /** Whether [input] is a code on its own, which is when the screen shows its Server field. */
