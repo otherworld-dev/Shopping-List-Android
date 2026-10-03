@@ -126,6 +126,8 @@ data class ShareDto(
     val token: String? = null,
     val hasPassword: Boolean = false,
     val expiresAt: String? = null,
+    /** A link share's invite code (server app 1.10.0 and later). */
+    val code: String? = null,
 )
 
 @Serializable

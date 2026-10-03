@@ -104,6 +104,8 @@ class SharingViewModel @Inject constructor(
 
     fun linkUrl(token: String): String = repository.linkUrl(token)
 
+    fun inviteText(code: String): String = repository.inviteFor(code).orEmpty()
+
     fun consumeError() = _state.update { it.copy(error = null) }
 
     /** Searches once typing pauses, like the web app's 300 ms debounce; a newer query cancels an older one. */

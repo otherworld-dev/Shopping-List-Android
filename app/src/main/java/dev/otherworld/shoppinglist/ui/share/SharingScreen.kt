@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -46,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.domain.guest.formatInviteCode
 import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.domain.model.ShareType
 import dev.otherworld.shoppinglist.domain.share.ShareeOption
@@ -121,6 +123,7 @@ fun SharingScreen(
                 onCreate = { viewModel.createLink(write = false) },
                 onToggleWrite = { viewModel.setLinkPermission(state.link!!, it) },
                 onCopy = { clipboard.setText(AnnotatedString(viewModel.linkUrl(it))) },
+                onCopyInvite = { clipboard.setText(AnnotatedString(viewModel.inviteText(it))) },
                 onPassword = { passwordTarget = state.link },
                 onClearPassword = { viewModel.setLinkPassword(state.link!!, null) },
                 onRemove = { viewModel.removeLink(state.link!!) },
@@ -235,6 +238,7 @@ private fun LinkSection(
     onCreate: () -> Unit,
     onToggleWrite: (Boolean) -> Unit,
     onCopy: (String) -> Unit,
+    onCopyInvite: (String) -> Unit,
     onPassword: () -> Unit,
     onClearPassword: () -> Unit,
     onRemove: () -> Unit,
@@ -253,8 +257,17 @@ private fun LinkSection(
                 Text(stringResource(R.string.label_can_edit), modifier = Modifier.weight(1f))
                 Switch(checked = link.canWrite, onCheckedChange = onToggleWrite)
             }
+            formatInviteCode(link.code)?.let { code ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.link_code), modifier = Modifier.weight(1f))
+                    SelectionContainer { Text(code, style = MaterialTheme.typography.titleMedium) }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 link.token?.let { token -> TextButton(onClick = { onCopy(token) }) { Text(stringResource(R.string.link_copy)) } }
+                link.code?.takeIf { formatInviteCode(it) != null }?.let { code ->
+                    TextButton(onClick = { onCopyInvite(code) }) { Text(stringResource(R.string.link_copy_invite)) }
+                }
                 if (link.hasPassword) {
                     TextButton(onClick = onClearPassword) { Text(stringResource(R.string.link_remove_password)) }
                 } else {

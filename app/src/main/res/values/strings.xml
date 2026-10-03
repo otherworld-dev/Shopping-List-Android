@@ -236,6 +236,8 @@
     <string name="link_create">Create public link</string>
     <string name="link_public">Public link</string>
     <string name="link_copy">Copy link</string>
+    <string name="link_code">Code</string>
+    <string name="link_copy_invite">Copy invite</string>
     <string name="link_remove_password">Remove password</string>
     <string name="link_set_password">Set password</string>
     <string name="link_delete">Delete link</string>
