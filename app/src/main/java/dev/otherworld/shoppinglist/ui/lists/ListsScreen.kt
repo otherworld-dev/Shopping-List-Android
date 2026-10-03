@@ -63,6 +63,7 @@ fun ListsScreen(
     onManageTags: () -> Unit,
     onOpenSettings: () -> Unit,
     onLogIn: () -> Unit,
+    onJoinList: () -> Unit,
     viewModel: ListsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -106,6 +107,10 @@ fun ListsScreen(
                                 onClick = { menuOpen = false; onManageTags() },
                             )
                         }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.join_entry_title)) },
+                            onClick = { menuOpen = false; onJoinList() },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.menu_settings)) },
                             onClick = { menuOpen = false; onOpenSettings() },

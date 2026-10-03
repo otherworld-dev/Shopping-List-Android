@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import dev.otherworld.shoppinglist.ui.areas.ManageAreasScreen
 import dev.otherworld.shoppinglist.ui.items.ItemsScreen
+import dev.otherworld.shoppinglist.ui.join.JoinEntryScreen
 import dev.otherworld.shoppinglist.ui.join.JoinScreen
 import dev.otherworld.shoppinglist.ui.lists.ListsScreen
 import dev.otherworld.shoppinglist.ui.login.LoginScreen
@@ -73,6 +74,7 @@ import javax.inject.Inject
 object Routes {
     const val LOGIN = "login"
     const val HOME = "home"
+    const val JOIN_NEW = "join-new"
 }
 
 @HiltViewModel
@@ -203,7 +205,7 @@ fun AppRoot(
         startDestination = start,
         modifier = Modifier.weight(1f),
     ) {
-        composable(Routes.LOGIN) { LoginScreen() }
+        composable(Routes.LOGIN) { LoginScreen(onJoin = { navController.navigate(Routes.JOIN_NEW) }) }
 
         composable(Routes.HOME) {
             ListsScreen(
@@ -219,6 +221,7 @@ fun AppRoot(
                 onManageTags = { navController.navigate("tags") },
                 onOpenSettings = { navController.navigate("settings") },
                 onLogIn = { navController.navigate(Routes.LOGIN) },
+                onJoinList = { navController.navigate(Routes.JOIN_NEW) },
             )
         }
 
@@ -251,6 +254,15 @@ fun AppRoot(
                         "items/${opened.listId}?title=${Uri.encode(opened.title)}&canWrite=${opened.canWrite}",
                     )
                 },
+                onClose = { navController.popBackStack() },
+            )
+        }
+
+        // Stays under Join, so Cancel there comes back with what was typed; opening a list
+        // resets the stack to Home anyway.
+        composable(Routes.JOIN_NEW) {
+            JoinEntryScreen(
+                onLink = { link -> navController.navigate("join?url=${Uri.encode(link.url)}") },
                 onClose = { navController.popBackStack() },
             )
         }

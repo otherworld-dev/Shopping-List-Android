@@ -113,7 +113,22 @@
     <string name="join_password_wrong">That password isn\'t right.</string>
     <string name="join_open">Open list</string>
     <string name="join_link_invalid">This isn\'t a Shopping List share link.</string>
-    <string name="login_shared_hint">Someone shared a list with you? Tap the link they sent and choose Open in the app.</string>
+    <string name="join_too_many_tries">Too many tries. Wait a minute and try again.</string>
+
+    <!-- Join a shared list: a link, an invite or a code typed into the app -->
+    <string name="join_entry_title">Join a shared list</string>
+    <string name="join_entry_help">Paste the link or invite you were sent, or type the code.</string>
+    <string name="join_entry_input_label">Link or invite</string>
+    <string name="join_entry_server_label">Server</string>
+    <string name="join_entry_server_placeholder">cloud.example.com</string>
+    <string name="join_entry_continue">Continue</string>
+    <string name="join_entry_invalid">That isn\'t a share link or invite code.</string>
+    <string name="join_entry_insecure">This server uses http, which the app can\'t connect to. Ask for an https link.</string>
+    <string name="join_entry_server_needed">Enter the server the code is for.</string>
+    <string name="join_entry_server_invalid">That isn\'t a server address.</string>
+    <string name="join_entry_codes_unsupported">This server doesn\'t support invite codes yet. Ask for the link instead.</string>
+    <string name="join_entry_code_not_found">That code doesn\'t work. Check it, or ask for a new one.</string>
+    <string name="join_entry_app_missing">Couldn\'t find Shopping List on that server.</string>
 
     <!-- Local mode: lists kept on this phone, no account -->
     <string name="login_use_without_account">Use without an account</string>
