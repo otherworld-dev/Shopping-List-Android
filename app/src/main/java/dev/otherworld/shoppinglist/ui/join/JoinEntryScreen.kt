@@ -52,6 +52,7 @@ fun JoinEntryScreen(
     // The Server field is for a code on its own; it stays while it has text.
     val showServer = server.isNotEmpty() || isBareCode(input)
     val serverFocus = remember { FocusRequester() }
+    var pasted by remember { mutableStateOf(false) }
     val submit = { viewModel.submit(input, server) }
 
     LaunchedEffect(state.link) {
@@ -60,8 +61,10 @@ fun JoinEntryScreen(
             onLink(it)
         }
     }
+    // Only after a paste: typing a host whose first part looks like a code ("nextcamp.example.com")
+    // mustn't send the rest of it into the Server field.
     LaunchedEffect(showServer) {
-        if (showServer && server.isEmpty()) serverFocus.requestFocus()
+        if (showServer && server.isEmpty() && pasted) serverFocus.requestFocus()
     }
 
     Column(
@@ -75,7 +78,10 @@ fun JoinEntryScreen(
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(
             value = input,
-            onValueChange = { input = it },
+            onValueChange = {
+                pasted = looksPasted(input, it)
+                input = it
+            },
             label = { Text(stringResource(R.string.join_entry_input_label)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(
@@ -128,3 +134,6 @@ fun JoinEntryScreen(
         )
     }
 }
+
+/** Whether an edit added several characters at once, as a paste does and typing doesn't. */
+internal fun looksPasted(before: String, after: String): Boolean = after.length - before.length > 1
