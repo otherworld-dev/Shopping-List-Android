@@ -9,7 +9,7 @@ import dev.otherworld.shoppinglist.data.guest.CodesUnsupportedException
 import dev.otherworld.shoppinglist.data.guest.InviteCodes
 import dev.otherworld.shoppinglist.data.guest.ShoppingListMissingException
 import dev.otherworld.shoppinglist.data.guest.TooManyTriesException
-import dev.otherworld.shoppinglist.data.tls.AcceptedCertStore
+import dev.otherworld.shoppinglist.data.tls.CertApprover
 import dev.otherworld.shoppinglist.data.tls.CertInfo
 import dev.otherworld.shoppinglist.data.tls.UntrustedCertHolder
 import dev.otherworld.shoppinglist.data.tls.describeCert
@@ -49,7 +49,7 @@ internal fun joinEntryErrorText(e: Throwable): UiText = when (e) {
 @HiltViewModel
 class JoinEntryViewModel @Inject constructor(
     private val codes: InviteCodes,
-    private val acceptedCerts: AcceptedCertStore,
+    private val acceptedCerts: CertApprover,
     private val certHolder: UntrustedCertHolder,
 ) : ViewModel() {
 
