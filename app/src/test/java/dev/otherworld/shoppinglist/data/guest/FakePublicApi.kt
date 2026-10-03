@@ -3,6 +3,7 @@ package dev.otherworld.shoppinglist.data.guest
 import dev.otherworld.shoppinglist.data.remote.OcsBody
 import dev.otherworld.shoppinglist.data.remote.OcsMeta
 import dev.otherworld.shoppinglist.data.remote.OcsResponse
+import dev.otherworld.shoppinglist.data.remote.dto.CapabilitiesResponse
 import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
@@ -34,6 +35,8 @@ class FakePublicApi : PublicApi {
     var items = listOf<ItemDto>()
     var areas = listOf<ShopAreaDto>()
     var nextItemId = 500L
+    var capabilities = CapabilitiesResponse()
+    var codeToken = "tok"
 
     private fun record(op: String, url: String, body: Any? = null) {
         calls += "$op $url"
@@ -59,6 +62,8 @@ class FakePublicApi : PublicApi {
     override suspend fun deleteItem(url: String) = record("deleteItem", url)
     override suspend fun reorder(url: String, body: ReorderRequest) = record("reorder", url, body)
     override suspend fun areas(url: String) = record("areas", url).let { ocs(areas) }
+    override suspend fun capabilities(url: String) = record("capabilities", url).let { ocs(capabilities) }
+    override suspend fun resolveCode(url: String) = record("resolveCode", url).let { ocs(CodeLookupDto(codeToken)) }
 }
 
 class FakePasswords(private val stored: MutableMap<Long, String> = mutableMapOf()) : GuestPasswords {

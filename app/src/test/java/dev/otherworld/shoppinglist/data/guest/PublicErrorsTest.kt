@@ -52,4 +52,13 @@ class PublicErrorsTest {
         assertEquals("$base/items/reorder", PublicUrls.reorder(server, "tok"))
         assertEquals("$base/areas", PublicUrls.areas(server, "tok"))
     }
+
+    @Test
+    fun `tells a code lookup's failures apart`() {
+        assertEquals(CodeError.NotFound, classifyCodeError(404, body("""{"message":"Not found"}"""), json))
+        assertEquals(CodeError.AppMissing, classifyCodeError(404, body("[]"), json))
+        assertEquals(CodeError.AppMissing, classifyCodeError(404, "<html><body>Not Found</body></html>", json))
+        assertEquals(CodeError.TooManyTries, classifyCodeError(429, null, json))
+        assertEquals(CodeError.Other(500), classifyCodeError(500, "<html>oops</html>", json))
+    }
 }
