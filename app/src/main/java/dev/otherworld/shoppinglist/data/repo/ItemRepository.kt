@@ -39,6 +39,7 @@ class ItemRepository @Inject constructor(
     private val json: Json,
     private val guests: GuestRepository,
 ) {
+    private val listDao = db.listDao()
     private val itemDao = db.itemDao()
     private val areaDao = db.areaDao()
     private val mutationDao = db.mutationDao()
@@ -224,8 +225,11 @@ class ItemRepository @Inject constructor(
         sync.requestSync()
     }
 
-    private suspend fun enqueue(type: String, targetId: Long, listId: Long, payload: String) =
+    /** Queues a change for the server, unless its list is kept on this phone only. */
+    private suspend fun enqueue(type: String, targetId: Long, listId: Long, payload: String) {
+        if (listDao.isLocal(listId)) return
         insertMutation(type, targetId, listId, payload)
+    }
 
     private suspend fun insertMutation(type: String, targetId: Long, listId: Long, payload: String) {
         mutationDao.insert(

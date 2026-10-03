@@ -41,6 +41,7 @@ import dev.otherworld.shoppinglist.ui.common.openCustomTab
 @Composable
 fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val localMode by viewModel.localMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var server by rememberSaveable { mutableStateOf("") }
 
@@ -124,6 +125,12 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                     textAlign = TextAlign.Center,
                     modifier = Modifier.widthIn(max = 420.dp),
                 )
+                if (!localMode) {
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick = viewModel::useWithoutAccount) {
+                        Text(stringResource(R.string.login_use_without_account))
+                    }
+                }
             }
         }
     }

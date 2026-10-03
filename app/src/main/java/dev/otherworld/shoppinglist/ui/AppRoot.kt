@@ -10,16 +10,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -34,8 +37,10 @@ import androidx.navigation.navArgument
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.data.auth.Account
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.guest.PendingLinks
+import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
@@ -54,7 +59,10 @@ import dev.otherworld.shoppinglist.ui.login.LoginScreen
 import dev.otherworld.shoppinglist.ui.settings.SettingsScreen
 import dev.otherworld.shoppinglist.ui.share.SharingScreen
 import dev.otherworld.shoppinglist.ui.tags.ManageTagsScreen
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -74,8 +82,11 @@ class AppViewModel @Inject constructor(
     private val listSettings: ListSettingsRepository,
     guests: GuestRepository,
     private val pendingLinks: PendingLinks,
+    private val lists: ListRepository,
+    localMode: LocalMode,
 ) : ViewModel() {
     val account: StateFlow<Account?> = credentialStore.accountFlow
+    val localMode: StateFlow<Boolean> = localMode.enabled
     val certAlert: StateFlow<CertInfo?> = certAlerts.alert
     val suppressedCert: StateFlow<CertInfo?> = certAlerts.suppressed
 
@@ -85,8 +96,23 @@ class AppViewModel @Inject constructor(
     val pendingLink: StateFlow<String?> = pendingLinks.link
     private val transitions = SignInTransitions()
 
-    fun navigationFor(account: Account?, hasGuests: Boolean): NavigationAction? =
-        transitions.next(loggedIn = account != null, hasGuests = hasGuests)
+    private val _uploadOffer = MutableStateFlow<UploadOffer?>(null)
+    val uploadOffer: StateFlow<UploadOffer?> = _uploadOffer.asStateFlow()
+
+    /** Null before the first account value, so the one there at start-up isn't taken for a login. */
+    private var wasLoggedIn: Boolean? = null
+
+    fun navigationFor(account: Account?, hasGuests: Boolean, localMode: Boolean): NavigationAction? =
+        transitions.next(loggedIn = account != null, hasGuests = hasGuests, localMode = localMode)
+
+    fun uploadLocalLists() {
+        _uploadOffer.value = null
+        viewModelScope.launch { lists.uploadAllLocal() }
+    }
+
+    fun keepLocalLists() {
+        _uploadOffer.value = null
+    }
 
     fun consumeLink() = pendingLinks.consume()
 
@@ -94,14 +120,22 @@ class AppViewModel @Inject constructor(
         // On login: adopt the server's brand colour and open the real-time push connection.
         account
             .onEach {
+                val previous = wasLoggedIn
+                wasLoggedIn = it != null
                 if (it != null) {
                     serverTheme.refresh()
                     realtime.ensureConnected()
+                    val local = lists.localListCount()
+                    if (offersUpload(previous, loggedIn = true, localLists = local)) {
+                        _uploadOffer.value = UploadOffer(local, it.server.removePrefix("https://").removePrefix("http://").trimEnd('/'))
+                    }
                 } else {
                     serverTheme.clear()
-                    listSettings.clear()
+                    // Only on a real logout: at start-up with no account the sort is local mode's own.
+                    if (previous == true) listSettings.clear()
                     certAlerts.onLoggedOut()
                 }
+                if (it == null) _uploadOffer.value = null
             }
             .launchIn(viewModelScope)
 
@@ -131,8 +165,10 @@ fun AppRoot(
     val suppressedCert by viewModel.suppressedCert.collectAsStateWithLifecycle()
     val hasGuests by viewModel.hasGuests.collectAsStateWithLifecycle()
     val pendingLink by viewModel.pendingLink.collectAsStateWithLifecycle()
+    val localMode by viewModel.localMode.collectAsStateWithLifecycle()
+    val uploadOffer by viewModel.uploadOffer.collectAsStateWithLifecycle()
     val guestsKnown = hasGuests ?: return
-    val signedIn = account != null || guestsKnown
+    val signedIn = account != null || guestsKnown || localMode
     // Computed once and kept across rotation: NavHost resets its whole back stack whenever
     // startDestination changes, which would blow away an in-flight join (or any other screen)
     // the moment signedIn flips. SignInTransitions' LaunchedEffect below already handles every
@@ -248,10 +284,19 @@ fun AppRoot(
         }
     }
 
-    // React to login/logout/guest-list changes from anywhere by switching the active
+    // Offer to send the phone's lists to an account just logged in to.
+    uploadOffer?.let { offer ->
+        UploadOfferDialog(
+            offer = offer,
+            onUpload = viewModel::uploadLocalLists,
+            onKeep = viewModel::keepLocalLists,
+        )
+    }
+
+    // React to login/logout/guest-list/local-mode changes from anywhere by switching the active
     // destination. ViewModel tracks previous state and survives rotation.
-    LaunchedEffect(account, guestsKnown) {
-        when (viewModel.navigationFor(account, guestsKnown)) {
+    LaunchedEffect(account, guestsKnown, localMode) {
+        when (viewModel.navigationFor(account, guestsKnown, localMode)) {
             // Only from the login screen: joining a list navigates on its own, and a login from
             // guest mode returns to the lists already underneath.
             NavigationAction.TO_HOME -> if (navController.currentDestination?.route == Routes.LOGIN) {
@@ -295,4 +340,16 @@ private fun CertPausedBanner(onClick: () -> Unit) {
             )
         }
     }
+}
+
+/** Dismissing it keeps the lists on the phone; each can still be uploaded from its menu. */
+@Composable
+private fun UploadOfferDialog(offer: UploadOffer, onUpload: () -> Unit, onKeep: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(stringResource(R.string.upload_dialog_title)) },
+        text = { Text(pluralStringResource(R.plurals.upload_dialog_body, offer.count, offer.count, offer.server)) },
+        confirmButton = { TextButton(onClick = onUpload) { Text(stringResource(R.string.action_upload)) } },
+        dismissButton = { TextButton(onClick = onKeep) { Text(stringResource(R.string.action_keep_on_phone)) } },
+    )
 }

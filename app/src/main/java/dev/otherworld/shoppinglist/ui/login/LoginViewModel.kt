@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.auth.LoginFlowV2Client
 import dev.otherworld.shoppinglist.data.tls.AcceptedCertStore
 import dev.otherworld.shoppinglist.data.tls.CertInfo
@@ -37,10 +38,16 @@ class LoginViewModel @Inject constructor(
     private val credentialStore: CredentialStore,
     private val acceptedCerts: AcceptedCertStore,
     private val certHolder: UntrustedCertHolder,
+    private val localModeStore: LocalMode,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
+
+    /** Already chosen, so the login screen was opened to add an account and needn't offer it again. */
+    val localMode: StateFlow<Boolean> = localModeStore.enabled
+
+    fun useWithoutAccount() = localModeStore.enable()
 
     private var pollJob: Job? = null
     private var lastServer: String = ""

@@ -38,6 +38,15 @@ interface ListDao {
 
     @Query("SELECT id, guestShareId FROM lists WHERE guestShareId IS NOT NULL")
     suspend fun guestLists(): List<GuestListRef>
+
+    @Query("SELECT COALESCE((SELECT isLocal FROM lists WHERE id = :id), 0)")
+    suspend fun isLocal(id: Long): Boolean
+
+    @Query("SELECT * FROM lists WHERE isLocal = 1")
+    suspend fun localLists(): List<ListEntity>
+
+    @Query("SELECT COUNT(*) FROM lists WHERE isLocal = 1")
+    fun observeLocalCount(): Flow<Int>
 }
 
 @Dao

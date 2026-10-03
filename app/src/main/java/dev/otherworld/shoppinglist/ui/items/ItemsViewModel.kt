@@ -53,6 +53,8 @@ data class ItemsUiState(
     /** Folded area groups on this list, as [dev.otherworld.shoppinglist.domain.sort.CollapsedAreas] keys. */
     val collapsedAreas: Set<String> = emptySet(),
     val isGuest: Boolean = false,
+    /** Kept on this phone only, so no areas, sharing or moves. */
+    val isLocal: Boolean = false,
     /** GuestShareState of the link a guest list came from; null for the user's own lists. */
     val guestState: String? = null,
     val droppedChanges: Int = 0,
@@ -96,6 +98,9 @@ class ItemsViewModel @Inject constructor(
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val share = values[10] as GuestShareEntity?
+        @Suppress("UNCHECKED_CAST")
+        val lists = values[2] as List<ShoppingListModel>
+        val isLocal = lists.firstOrNull { it.id == listId }?.isLocal == true
         ItemsUiState(
             listId = listId,
             title = share?.title ?: title,
@@ -104,8 +109,9 @@ class ItemsViewModel @Inject constructor(
             loading = values[3] as Boolean,
             items = values[0] as List<ItemModel>,
             areas = values[1] as List<ShopAreaModel>,
-            // Writable other lists as move targets, sorted by title (matches the web app).
-            otherLists = if (isGuest) emptyList() else (values[2] as List<ShoppingListModel>)
+            // Writable other lists as move targets, sorted by title (matches the web app). A move
+            // is a server call, so none from a list kept on the phone.
+            otherLists = if (isGuest || isLocal) emptyList() else lists
                 .filter { it.id != listId && it.id > 0 && !it.isGuest && (it.isOwner || it.canWrite) }
                 .sortedBy { it.title.lowercase() },
             error = values[4] as UiText?,
@@ -115,6 +121,7 @@ class ItemsViewModel @Inject constructor(
             boughtSort = values[8] as BoughtSort,
             collapsedAreas = values[9] as Set<String>,
             isGuest = isGuest,
+            isLocal = isLocal,
             guestState = share?.state,
             droppedChanges = share?.droppedChanges ?: 0,
         )

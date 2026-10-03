@@ -108,6 +108,18 @@
     <string name="join_link_invalid">This isn\'t a Shopping List share link.</string>
     <string name="login_shared_hint">Someone shared a list with you? Tap the link they sent and choose Open in the app.</string>
 
+    <!-- Local mode: lists kept on this phone, no account -->
+    <string name="login_use_without_account">Use without an account</string>
+    <string name="list_on_this_phone">On this phone</string>
+    <string name="action_upload_to_account">Upload to account</string>
+    <string name="upload_dialog_title">Add your lists to this account?</string>
+    <plurals name="upload_dialog_body">
+        <item quantity="one">You have one list on this phone. Upload it to your account on %2$s, or keep it on this phone only.</item>
+        <item quantity="other">You have %1$d lists on this phone. Upload them to your account on %2$s, or keep them on this phone only.</item>
+    </plurals>
+    <string name="action_upload">Upload</string>
+    <string name="action_keep_on_phone">Keep on phone</string>
+
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_sort_lists">Sort lists</string>

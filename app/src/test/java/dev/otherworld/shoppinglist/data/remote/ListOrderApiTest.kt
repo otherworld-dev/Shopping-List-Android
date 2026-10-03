@@ -42,7 +42,7 @@ class ListOrderApiTest {
     }
 
     @Test
-    fun `the database upgrades one version at a time up to 4`() {
-        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4), AppDatabase.MIGRATIONS.map { it.startVersion to it.endVersion })
+    fun `the database upgrades one version at a time up to 5`() {
+        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5), AppDatabase.MIGRATIONS.map { it.startVersion to it.endVersion })
     }
 }

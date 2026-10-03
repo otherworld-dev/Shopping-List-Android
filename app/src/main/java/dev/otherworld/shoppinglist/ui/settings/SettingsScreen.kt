@@ -37,10 +37,16 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
+import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.prefs.ThemeMode
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.domain.sort.ListSortMode
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -49,10 +55,17 @@ class SettingsViewModel @Inject constructor(
     private val displayPrefs: DisplayPrefs,
     listSettings: ListSettingsRepository,
     private val ordering: ListOrdering,
+    credentialStore: CredentialStore,
+    localMode: LocalMode,
 ) : ViewModel() {
     val themeMode = displayPrefs.themeMode
     val listSort = listSettings.listSort
-    val listOrderSupported = listSettings.listOrderSupported
+
+    /** A server that keeps list orders (1.10.0 or later), or no account and the phone's own lists. */
+    val canSortLists: StateFlow<Boolean> = combine(
+        listSettings.listOrderSupported, credentialStore.accountFlow, localMode.enabled,
+    ) { supported, account, local -> supported || (account == null && local) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun setThemeMode(mode: ThemeMode) = displayPrefs.setThemeMode(mode)
 
@@ -66,7 +79,7 @@ class SettingsViewModel @Inject constructor(
 fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val listSort by viewModel.listSort.collectAsStateWithLifecycle()
-    val supported by viewModel.listOrderSupported.collectAsStateWithLifecycle()
+    val canSortLists by viewModel.canSortLists.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -89,8 +102,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            // Needs a server that keeps list orders (server app 1.10.0 or later).
-            if (supported) {
+            if (canSortLists) {
                 Section(stringResource(R.string.settings_sort_lists)) {
                     Choice(stringResource(R.string.sort_recently_updated), listSort == ListSortMode.UPDATED) { viewModel.setListSort(ListSortMode.UPDATED) }
                     Choice(stringResource(R.string.sort_a_to_z), listSort == ListSortMode.ALPHA) { viewModel.setListSort(ListSortMode.ALPHA) }

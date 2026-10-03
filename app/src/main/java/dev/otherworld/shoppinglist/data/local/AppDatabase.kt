@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GuestShareEntity::class,
         GuestIdEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -66,6 +66,11 @@ abstract class AppDatabase : RoomDatabase() {
                             "ON `guest_ids` (`shareId`, `kind`, `remoteId`)",
                     )
                     db.execSQL("ALTER TABLE lists ADD COLUMN guestShareId INTEGER")
+                }
+            },
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE lists ADD COLUMN isLocal INTEGER NOT NULL DEFAULT 0")
                 }
             },
         )

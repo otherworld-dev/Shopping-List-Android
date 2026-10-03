@@ -18,6 +18,7 @@ fun ListEntity.toModel() = ShoppingListModel(
     position = position,
     updatedAt = updatedAt,
     guestShareId = guestShareId,
+    isLocal = isLocal,
 )
 
 fun ItemEntity.toModel() = ItemModel(
