@@ -46,6 +46,8 @@ data class ItemEntity(
     val checkedBy: String?,
     val sortOrder: Int,
     val updatedAt: String?,
+    /** The key of the item's photo on the server (it changes with every new photo); null for none. */
+    val imageKey: String? = null,
 )
 
 @Entity(

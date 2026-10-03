@@ -129,6 +129,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.browser)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.reorderable)
 
     // Test

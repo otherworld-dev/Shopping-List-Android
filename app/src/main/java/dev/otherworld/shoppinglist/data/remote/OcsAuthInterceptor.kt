@@ -7,6 +7,9 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import javax.inject.Inject
 
+/** Any absolute placeholder; [OcsAuthInterceptor] swaps the host per request. */
+const val PLACEHOLDER_BASE_URL = "https://shopping-list.invalid/"
+
 /**
  * Rewrites the placeholder host of every OCS request to the currently connected server
  * (supporting subpath installs) and attaches HTTP Basic auth plus the headers Nextcloud

@@ -1,6 +1,8 @@
 package dev.otherworld.shoppinglist
 
 import android.app.Application
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -21,11 +23,12 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @HiltAndroidApp
-class ShoppingListApp : Application(), Configuration.Provider {
+class ShoppingListApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var connectivity: ConnectivityObserver
     @Inject lateinit var syncEngine: SyncEngine
+    @Inject lateinit var imageLoader: ImageLoader
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -33,6 +36,9 @@ class ShoppingListApp : Application(), Configuration.Provider {
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
             .build()
+
+    /** Coil's default loader is the one that knows how to reach the photos (see ImageModule). */
+    override fun newImageLoader(): ImageLoader = imageLoader
 
     override fun onCreate() {
         super.onCreate()

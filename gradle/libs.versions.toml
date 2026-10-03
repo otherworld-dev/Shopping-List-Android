@@ -19,6 +19,7 @@ work = "2.9.1"
 browser = "1.8.0"
 datastore = "1.1.1"
 coil = "2.7.0"
+exifinterface = "1.3.7"
 reorderable = "2.4.0"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
@@ -60,6 +61,7 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }

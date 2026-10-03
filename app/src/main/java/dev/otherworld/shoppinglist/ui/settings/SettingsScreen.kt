@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -19,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -60,6 +62,13 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     val themeMode = displayPrefs.themeMode
     val listSort = listSettings.listSort
+    val showImages = displayPrefs.showImages
+
+    /** Signed in to a server too old for photos (before 1.9.0), so none can be added there. */
+    val imagesUnsupported: StateFlow<Boolean> = combine(
+        listSettings.itemImagesSupported, credentialStore.accountFlow,
+    ) { supported, account -> account != null && !supported }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** A server that keeps list orders (1.10.0 or later), or no account and the phone's own lists. */
     val canSortLists: StateFlow<Boolean> = combine(
@@ -68,6 +77,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun setThemeMode(mode: ThemeMode) = displayPrefs.setThemeMode(mode)
+
+    fun setShowImages(show: Boolean) = displayPrefs.setShowImages(show)
 
     fun setListSort(mode: ListSortMode) {
         viewModelScope.launch { ordering.setListSort(mode) }
@@ -80,6 +91,8 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val listSort by viewModel.listSort.collectAsStateWithLifecycle()
     val canSortLists by viewModel.canSortLists.collectAsStateWithLifecycle()
+    val showImages by viewModel.showImages.collectAsStateWithLifecycle()
+    val imagesUnsupported by viewModel.imagesUnsupported.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -109,6 +122,22 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     Choice(stringResource(R.string.sort_custom), listSort == ListSortMode.CUSTOM) { viewModel.setListSort(ListSortMode.CUSTOM) }
                 }
             }
+            Section(stringResource(R.string.settings_item_images)) {
+                Toggle(stringResource(R.string.settings_show_item_images), showImages, viewModel::setShowImages)
+                Text(
+                    stringResource(R.string.settings_item_images_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (imagesUnsupported) {
+                    Text(
+                        stringResource(R.string.settings_item_images_old_server),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
             Section(stringResource(R.string.settings_theme)) {
                 Choice(stringResource(R.string.theme_system), themeMode == ThemeMode.SYSTEM) { viewModel.setThemeMode(ThemeMode.SYSTEM) }
                 Choice(stringResource(R.string.theme_light), themeMode == ThemeMode.LIGHT) { viewModel.setThemeMode(ThemeMode.LIGHT) }
@@ -126,6 +155,20 @@ private fun Section(title: String, content: @Composable () -> Unit) {
         modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
     )
     Column(Modifier.selectableGroup()) { content() }
+}
+
+@Composable
+private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, onValueChange = onChange, role = Role.Switch)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = null)
+    }
 }
 
 @Composable

@@ -26,10 +26,13 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
+import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
+import retrofit2.http.Part
 import retrofit2.http.PUT
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -114,6 +117,21 @@ interface OcsService {
         @Path("id") id: Long,
         @Body body: MoveItemRequest,
     )
+
+    /** Attaches a photo, replacing any earlier one (since server 1.9.0); one file in "image". */
+    @Multipart
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/image")
+    suspend fun uploadItemImage(
+        @Path("listId") listId: Long,
+        @Path("id") id: Long,
+        @Part image: MultipartBody.Part,
+    ): OcsResponse<ItemDto>
+
+    @DELETE("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/image")
+    suspend fun removeItemImage(
+        @Path("listId") listId: Long,
+        @Path("id") id: Long,
+    ): OcsResponse<ItemDto>
 
     // ---- Shop areas ----
 

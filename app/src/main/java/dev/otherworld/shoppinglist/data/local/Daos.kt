@@ -89,6 +89,13 @@ interface ItemDao {
 
     @Query("UPDATE items SET listId = :newId WHERE listId = :oldId")
     suspend fun remapListId(oldId: Long, newId: Long)
+
+    /** Items on the user's own lists that they can change: where the server spreads a photo. */
+    @Query(
+        "SELECT items.* FROM items JOIN lists ON items.listId = lists.id " +
+            "WHERE lists.guestShareId IS NULL AND lists.isLocal = 0 AND (lists.isOwner = 1 OR lists.permission >= 1)",
+    )
+    suspend fun inEditableOwnLists(): List<ItemEntity>
 }
 
 @Dao

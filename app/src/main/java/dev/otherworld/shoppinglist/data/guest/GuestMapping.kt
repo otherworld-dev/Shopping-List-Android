@@ -31,5 +31,6 @@ internal suspend fun mapGuestItems(dtos: List<ItemDto>, shareId: Long, listId: L
             checkedBy = it.checkedBy,
             sortOrder = it.sortOrder,
             updatedAt = it.updatedAt,
+            imageKey = it.imageKey,
         )
     }

@@ -40,7 +40,23 @@ data class NotifyPushEndpoints(
 data class ShoppingListCaps(
     val version: String? = null,
     val features: List<String> = emptyList(),
+    val itemImages: ItemImagesCaps? = null,
 )
+
+/** The server's limits for item photos (since server app 1.9.0). */
+@Serializable
+data class ItemImagesCaps(
+    val maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES,
+    val maxSide: Int = 1280,
+    val thumbSide: Int = 160,
+) {
+    companion object {
+        const val DEFAULT_MAX_UPLOAD_BYTES = 10L * 1024 * 1024
+    }
+}
 
 /** Whether the server keeps each user's list order (server app 1.10.0 and later). */
 fun CapabilitiesBlock.supportsListOrder(): Boolean = shoppingList?.features?.contains("list-order") == true
+
+/** Whether the server can keep a photo on an item (server app 1.9.0 and later). */
+fun CapabilitiesBlock.supportsItemImages(): Boolean = shoppingList?.features?.contains("item-images") == true

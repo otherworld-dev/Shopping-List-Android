@@ -20,6 +20,12 @@
     <string name="error_item_not_synced">This item hasn\'t synced yet, try again in a moment.</string>
     <string name="error_move_offline">You\'re offline, moving items needs a connection.</string>
     <string name="error_move_failed">Couldn\'t move the item.</string>
+    <string name="error_photo_offline">You\'re offline, adding or removing photos needs a connection.</string>
+    <string name="error_photo_too_large">That photo is too large.</string>
+    <string name="error_photo_unsupported">That file isn\'t a picture the server can use.</string>
+    <string name="error_photo_upload_failed">Couldn\'t add the photo.</string>
+    <string name="error_photo_remove_failed">Couldn\'t remove the photo.</string>
+    <string name="error_no_camera">There\'s no camera app on this phone.</string>
     <string name="notice_item_moved">Moved “%1$s” to %2$s</string>
     <string name="notice_keywords_added">Keywords for your language added</string>
 
@@ -28,6 +34,7 @@
     <string name="cd_more">More</string>
     <string name="cd_refresh">Refresh</string>
     <string name="cd_delete">Delete</string>
+    <string name="cd_item_photo">Photo of the item</string>
     <string name="cd_remove">Remove</string>
     <string name="cd_list_options">List options</string>
 
@@ -126,6 +133,19 @@
     <string name="sort_recently_updated">Recently updated</string>
     <string name="sort_custom">Custom (drag to reorder)</string>
     <string name="settings_theme">Theme</string>
+    <string name="settings_item_images">Item images</string>
+    <string name="settings_show_item_images">Show item images</string>
+    <string name="settings_item_images_hint">Add a photo to an item from its edit window. Photos are part of the list, so everyone with access can see them. This switch only changes what you see on this phone.</string>
+    <string name="settings_item_images_old_server">Your server needs Shopping List 1.9.0 or later to add photos.</string>
+
+    <!-- Item photos -->
+    <string name="photo_take">Take photo</string>
+    <string name="photo_choose">Choose photo</string>
+    <string name="photo_replace">Replace photo</string>
+    <string name="photo_remove">Remove photo</string>
+    <string name="photo_load_failed">Could not load image</string>
+    <string name="dialog_remove_photo_title">Remove photo?</string>
+    <string name="dialog_remove_photo_message">The photo will also be removed from other items called %1$s.</string>
 
     <!-- Items -->
     <string name="menu_refresh">Refresh</string>

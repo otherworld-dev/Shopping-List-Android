@@ -97,6 +97,12 @@ import dev.otherworld.shoppinglist.domain.sort.CollapsedAreas
 import dev.otherworld.shoppinglist.domain.sort.OpenSort
 import dev.otherworld.shoppinglist.domain.sort.groupOpenItems
 import dev.otherworld.shoppinglist.domain.sort.sortBought
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import dev.otherworld.shoppinglist.data.photo.ItemPhotoUrls
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import dev.otherworld.shoppinglist.domain.text.formatListAsText
 import dev.otherworld.shoppinglist.ui.common.PollEffect
@@ -117,6 +123,7 @@ fun ItemsScreen(
     viewModel: ItemsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val photos by viewModel.photos.collectAsStateWithLifecycle()
     PollEffect { viewModel.poll() }
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
@@ -127,6 +134,47 @@ fun ItemsScreen(
     val scope = rememberCoroutineScope()
     val copiedMessage = stringResource(R.string.list_copied)
     val context = LocalContext.current
+
+    // The item a photo is being taken or picked for, and the camera's file; saved, since the
+    // camera app can outlive this process.
+    var photoItemId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var cameraTarget by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var viewing by remember { mutableStateOf<ItemPhotoUrls?>(null) }
+    var confirmRemovePhoto by remember { mutableStateOf<ItemModel?>(null) }
+    fun photoItem() = photoItemId?.let { id -> state.items.firstOrNull { it.id == id } }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val target = cameraTarget
+        val item = photoItem()
+        if (target != null) {
+            if (taken && item != null) viewModel.attachPhoto(item, target) else viewModel.cameraCancelled(target)
+        }
+        cameraTarget = null
+        photoItemId = null
+    }
+    val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+        val item = photoItem()
+        if (picked != null && item != null) viewModel.attachPhoto(item, picked)
+        photoItemId = null
+    }
+    val noCamera = stringResource(R.string.error_no_camera)
+    fun takePhotoFor(item: ItemModel) {
+        val target = viewModel.newCameraTarget()
+        photoItemId = item.id
+        cameraTarget = target
+        try {
+            takePicture.launch(target)
+        } catch (e: ActivityNotFoundException) {
+            viewModel.cameraCancelled(target)
+            cameraTarget = null
+            photoItemId = null
+            scope.launch { snackbarHostState.showSnackbar(noCamera) }
+        }
+    }
+    fun choosePhotoFor(item: ItemModel) {
+        photoItemId = item.id
+        pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
     LaunchedEffect(state.error) {
         state.error?.let {
             snackbarHostState.showSnackbar(it.asString(context))
@@ -333,6 +381,8 @@ fun ItemsScreen(
                                                 onClick = { if (state.canWrite) editTarget = row.item },
                                                 compact = state.density == Density.COMPACT,
                                                 handleModifier = dragModifier,
+                                                photoUrl = photos.urls[row.item.id]?.thumbnail,
+                                                onPhotoClick = { viewing = photos.urls[row.item.id] },
                                             )
                                             RowDivider()
                                         }
@@ -350,6 +400,8 @@ fun ItemsScreen(
     }
 
     editTarget?.let { item ->
+        // The photo changes under the open dialog, so it follows the live row, not the snapshot.
+        val live = state.items.firstOrNull { it.id == item.id } ?: item
         ItemEditDialog(
             item = item,
             areas = state.areas,
@@ -358,6 +410,33 @@ fun ItemsScreen(
             onMove = { target -> editTarget = null; viewModel.moveItem(item, target) },
             onDelete = { editTarget = null; viewModel.deleteItem(item) },
             onDismiss = { editTarget = null },
+            photo = if (photos.canEdit) {
+                {
+                    PhotoSection(
+                        urls = photos.urls[live.id],
+                        hasPhoto = live.imageKey != null,
+                        busy = live.id in photos.busy,
+                        onView = { viewing = photos.urls[live.id] },
+                        onTake = { takePhotoFor(live) },
+                        onChoose = { choosePhotoFor(live) },
+                        onRemove = { confirmRemovePhoto = live },
+                    )
+                }
+            } else {
+                null
+            },
+        )
+    }
+
+    viewing?.let { urls -> PhotoViewer(urls, onDismiss = { viewing = null }) }
+
+    confirmRemovePhoto?.let { item ->
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.dialog_remove_photo_title),
+            message = stringResource(R.string.dialog_remove_photo_message, item.name.trim()),
+            confirmLabel = stringResource(R.string.photo_remove),
+            onConfirm = { confirmRemovePhoto = null; viewModel.removePhoto(item) },
+            onDismiss = { confirmRemovePhoto = null },
         )
     }
 
@@ -604,6 +683,8 @@ internal fun ItemRow(
     onClick: () -> Unit,
     compact: Boolean = false,
     handleModifier: Modifier = Modifier,
+    photoUrl: String? = null,
+    onPhotoClick: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -634,6 +715,11 @@ internal fun ItemRow(
             }
         } else {
             checkbox()
+        }
+        // Smaller in compact rows, so the photo never makes the row taller than the checkbox.
+        if (photoUrl != null) {
+            Spacer(Modifier.width(4.dp))
+            PhotoThumb(photoUrl, if (compact) 28.dp else 32.dp, onClick = onPhotoClick)
         }
         Spacer(Modifier.width(8.dp))
         Text(
@@ -753,6 +839,7 @@ private fun ItemEditDialog(
     onMove: (ShoppingListModel) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
+    photo: (@Composable () -> Unit)? = null,
 ) {
     var name by rememberSaveable { mutableStateOf(item.name) }
     var quantity by rememberSaveable { mutableStateOf(item.quantity.orEmpty()) }
@@ -806,6 +893,7 @@ private fun ItemEditDialog(
                         }
                     }
                 }
+                photo?.invoke()
             }
         },
         confirmButton = {

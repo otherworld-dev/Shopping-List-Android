@@ -5,6 +5,7 @@ import dev.otherworld.shoppinglist.data.guest.PublicApi
 import dev.otherworld.shoppinglist.data.remote.JsonConverterFactory
 import dev.otherworld.shoppinglist.data.remote.OcsAuthInterceptor
 import dev.otherworld.shoppinglist.data.remote.OcsService
+import dev.otherworld.shoppinglist.data.remote.PLACEHOLDER_BASE_URL
 import dev.otherworld.shoppinglist.data.tls.TlsFailureInterceptor
 import dev.otherworld.shoppinglist.data.tls.TofuTls
 import dagger.Module
@@ -23,9 +24,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-
-    /** Any absolute placeholder; the auth interceptor swaps the host per request. */
-    private const val PLACEHOLDER_BASE_URL = "https://shopping-list.invalid/"
 
     @Provides
     @Singleton

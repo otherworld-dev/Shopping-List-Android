@@ -6,6 +6,8 @@ import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.remote.OcsService
+import dev.otherworld.shoppinglist.data.remote.dto.ItemImagesCaps
+import dev.otherworld.shoppinglist.data.remote.dto.supportsItemImages
 import dev.otherworld.shoppinglist.data.remote.dto.supportsListOrder
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
 import dev.otherworld.shoppinglist.data.sync.MutationTypes
@@ -49,11 +51,30 @@ class ListSettingsRepository @Inject constructor(
     private val _supported = MutableStateFlow(prefs.getBoolean(KEY_SUPPORTED, false))
     val listOrderSupported: StateFlow<Boolean> = _supported.asStateFlow()
 
-    /** Whether the server keeps list orders, then this user's sort (see [refreshSort]). */
+    private val _imagesSupported = MutableStateFlow(prefs.getBoolean(KEY_IMAGES, false))
+
+    /** Whether the server can keep a photo on an item (server app 1.9.0 and later). */
+    val itemImagesSupported: StateFlow<Boolean> = _imagesSupported.asStateFlow()
+
+    /** The largest photo the server takes, from its capabilities. */
+    val maxUploadBytes: Long
+        get() = prefs.getLong(KEY_MAX_UPLOAD, ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES)
+
+    /** What the server can do (list orders, photos), then this user's sort (see [refreshSort]). */
     suspend fun refresh() {
-        val supported = service.capabilities().ocs.data.capabilities.supportsListOrder()
+        val caps = service.capabilities().ocs.data.capabilities
+        val supported = caps.supportsListOrder()
+        val images = caps.supportsItemImages()
         _supported.value = supported
-        prefs.edit().putBoolean(KEY_SUPPORTED, supported).apply()
+        _imagesSupported.value = images
+        prefs.edit()
+            .putBoolean(KEY_SUPPORTED, supported)
+            .putBoolean(KEY_IMAGES, images)
+            .putLong(
+                KEY_MAX_UPLOAD,
+                caps.shoppingList?.itemImages?.maxUploadBytes ?: ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES,
+            )
+            .apply()
         refreshSort()
     }
 
@@ -95,6 +116,7 @@ class ListSettingsRepository @Inject constructor(
         prefs.edit().clear().apply()
         _listSort.value = ListSortMode.UPDATED
         _supported.value = false
+        _imagesSupported.value = false
     }
 
     private suspend fun settingsQueued() = mutationDao.countByType(MutationTypes.UPDATE_SETTINGS) > 0
@@ -107,5 +129,7 @@ class ListSettingsRepository @Inject constructor(
     private companion object {
         const val KEY_SORT = "list_sort"
         const val KEY_SUPPORTED = "list_order_supported"
+        const val KEY_IMAGES = "item_images_supported"
+        const val KEY_MAX_UPLOAD = "item_images_max_upload"
     }
 }
