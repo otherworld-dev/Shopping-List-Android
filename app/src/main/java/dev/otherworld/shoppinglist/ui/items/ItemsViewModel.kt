@@ -1,11 +1,16 @@
 package dev.otherworld.shoppinglist.ui.items
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.guest.GuestIdStore
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
+import dev.otherworld.shoppinglist.data.photo.ItemPhotoUrls
+import dev.otherworld.shoppinglist.data.photo.PhotoSize
+import dev.otherworld.shoppinglist.data.photo.PhotoUrls
 import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.prefs.Density
@@ -13,6 +18,8 @@ import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.repo.AreaRepository
 import dev.otherworld.shoppinglist.data.repo.ItemRepository
 import dev.otherworld.shoppinglist.data.repo.ListRepository
+import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
+import dev.otherworld.shoppinglist.data.repo.PhotoRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
@@ -26,7 +33,10 @@ import dev.otherworld.shoppinglist.domain.sort.OpenSort
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import dev.otherworld.shoppinglist.ui.common.UiText
 import dev.otherworld.shoppinglist.ui.common.errorText
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -34,7 +44,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
+
+/** Photos on this list's items: whether they show, whether this user can change them, and where they are. */
+data class PhotoUiState(
+    val show: Boolean = false,
+    val canEdit: Boolean = false,
+    /** Item id to its photo's addresses, for the items that have one. */
+    val urls: Map<Long, ItemPhotoUrls> = emptyMap(),
+    /** Items whose photo is being added or removed right now. */
+    val busy: Set<Long> = emptySet(),
+)
 
 data class ItemsUiState(
     val listId: Long = 0,
@@ -71,6 +92,9 @@ class ItemsViewModel @Inject constructor(
     private val syncEngine: SyncEngine,
     private val displayPrefs: DisplayPrefs,
     private val guests: GuestRepository,
+    private val guestIds: GuestIdStore,
+    private val photoRepository: PhotoRepository,
+    listSettings: ListSettingsRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -137,6 +161,28 @@ class ItemsViewModel @Inject constructor(
             isGuest = isGuest,
         ),
     )
+
+    private val _photoBusy = MutableStateFlow<Set<Long>>(emptySet())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val photoUrls = combine(repository.observeItems(listId), guests.observeShareForList(listId)) { items, share -> items to share }
+        .mapLatest { (items, share) -> photoUrlsFor(items, share) }
+
+    val photos: StateFlow<PhotoUiState> = combine(
+        displayPrefs.showImages,
+        listSettings.itemImagesSupported,
+        state,
+        photoUrls,
+        _photoBusy,
+    ) { show, supported, st, urls, busy ->
+        PhotoUiState(
+            show = show,
+            // A share link can't add or remove photos, and a list on the phone has no server to keep them.
+            canEdit = show && supported && st.canWrite && !st.isGuest && !st.isLocal,
+            urls = if (show) urls else emptyMap(),
+            busy = busy,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PhotoUiState())
 
     init {
         refresh()
@@ -256,6 +302,84 @@ class ItemsViewModel @Inject constructor(
                 .onFailure { _error.value = UiText(R.string.error_move_failed) }
         }
     }
+
+    /** A file for the camera app to save a new photo into. */
+    fun newCameraTarget(): Uri = photoRepository.newCameraTarget()
+
+    /** The camera came back without a picture. */
+    fun cameraCancelled(target: Uri) = photoRepository.discard(target)
+
+    /**
+     * Attaches the picture at [source] to [item]. Online-direct like a move, so the offline and
+     * not-yet-synced cases are refused with an explanation; it carries on if the list is left.
+     */
+    fun attachPhoto(item: ItemModel, source: Uri) {
+        if (!photoChangeAllowed(item)) {
+            photoRepository.discard(source)
+            return
+        }
+        changePhoto(item, ::photoUploadErrorText) {
+            try {
+                photoRepository.attach(item, source)
+            } finally {
+                photoRepository.discard(source)
+            }
+        }
+    }
+
+    fun removePhoto(item: ItemModel) {
+        if (!photoChangeAllowed(item)) return
+        changePhoto(item, ::photoRemoveErrorText) { photoRepository.remove(item) }
+    }
+
+    private fun photoChangeAllowed(item: ItemModel): Boolean {
+        val refusal = when {
+            item.id < 0 -> R.string.error_item_not_synced
+            !connectivity.isOnline.value -> R.string.error_photo_offline
+            else -> return true
+        }
+        _error.value = UiText(refusal)
+        return false
+    }
+
+    private fun changePhoto(item: ItemModel, describe: (Throwable) -> UiText, change: suspend () -> Unit) {
+        if (item.id in _photoBusy.value) return
+        _photoBusy.update { it + item.id }
+        viewModelScope.launch {
+            withContext(NonCancellable) {
+                try {
+                    change()
+                } catch (e: Exception) {
+                    _error.value = describe(e)
+                    if (isItemGone(e)) runCatching { repository.refresh(listId) }
+                } finally {
+                    _photoBusy.update { it - item.id }
+                }
+            }
+        }
+    }
+
+    /** Where each item's photo is: the user's own server, or the share link's for a guest list. */
+    private suspend fun photoUrlsFor(items: List<ItemModel>, share: GuestShareEntity?): Map<Long, ItemPhotoUrls> =
+        items.mapNotNull { item ->
+            val key = item.imageKey ?: return@mapNotNull null
+            val urls = if (isGuest) {
+                val link = share ?: return@mapNotNull null
+                val remote = guestIds.remoteId(item.id) ?: return@mapNotNull null
+                ItemPhotoUrls(
+                    thumbnail = PhotoUrls.public(link.server, link.token, remote, key, PhotoSize.THUMBNAIL) ?: return@mapNotNull null,
+                    full = PhotoUrls.public(link.server, link.token, remote, key, PhotoSize.FULL) ?: return@mapNotNull null,
+                )
+            } else {
+                // A row not yet on the server has no address there.
+                if (item.id <= 0) return@mapNotNull null
+                ItemPhotoUrls(
+                    thumbnail = PhotoUrls.own(item.listId, item.id, key, PhotoSize.THUMBNAIL) ?: return@mapNotNull null,
+                    full = PhotoUrls.own(item.listId, item.id, key, PhotoSize.FULL) ?: return@mapNotNull null,
+                )
+            }
+            item.id to urls
+        }.toMap()
 
     /** Persists a new ordering of item ids (from drag-and-drop). */
     fun reorder(orderedIds: List<Long>) {

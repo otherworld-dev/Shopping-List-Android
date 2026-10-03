@@ -58,6 +58,10 @@ class DisplayPrefs @Inject constructor(
     private val _themeMode = MutableStateFlow(ThemeMode.fromStorage(prefs.getString(KEY_THEME, null)))
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    // Off until turned on, like the web app's switch; on the phone it's this device's own choice.
+    private val _showImages = MutableStateFlow(prefs.getBoolean(KEY_SHOW_IMAGES, false))
+    val showImages: StateFlow<Boolean> = _showImages.asStateFlow()
+
     private val collapsedFlows = mutableMapOf<Long, MutableStateFlow<Set<String>>>()
 
     fun setThemeMode(mode: ThemeMode) {
@@ -65,6 +69,11 @@ class DisplayPrefs @Inject constructor(
         prefs.edit().apply {
             if (mode == ThemeMode.SYSTEM) remove(KEY_THEME) else putString(KEY_THEME, mode.storageValue)
         }.apply()
+    }
+
+    fun setShowImages(show: Boolean) {
+        _showImages.value = show
+        prefs.edit().putBoolean(KEY_SHOW_IMAGES, show).apply()
     }
 
     fun toggleDensity() {
@@ -118,5 +127,6 @@ class DisplayPrefs @Inject constructor(
         const val KEY_OPEN_SORT = "open_sort"
         const val KEY_BOUGHT_SORT = "bought_sort"
         const val KEY_THEME = "theme"
+        const val KEY_SHOW_IMAGES = "show_images"
     }
 }
