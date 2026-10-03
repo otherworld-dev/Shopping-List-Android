@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GuestShareEntity::class,
         GuestIdEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -71,6 +71,11 @@ abstract class AppDatabase : RoomDatabase() {
             object : Migration(4, 5) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE lists ADD COLUMN isLocal INTEGER NOT NULL DEFAULT 0")
+                }
+            },
+            object : Migration(5, 6) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE items ADD COLUMN imageKey TEXT")
                 }
             },
         )

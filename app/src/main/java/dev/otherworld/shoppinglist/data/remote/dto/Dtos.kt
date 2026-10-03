@@ -28,6 +28,8 @@ data class ItemDto(
     val checked: Boolean = false,
     val checkedBy: String? = null,
     val sortOrder: Int = 0,
+    // Since server app 1.9.0: the key of the item's photo, null when it has none.
+    val imageKey: String? = null,
     val tags: List<TagDto> = emptyList(),
     val createdAt: String? = null,
     val updatedAt: String? = null,

@@ -220,16 +220,20 @@ class SyncEngine @Inject constructor(
                     CreateItemRequest(p.name, p.quantity, p.unit, areaId, p.areaExplicit, p.checked),
                 ).ocs.data
                 remapItemId(tempId = m.targetId, realId = created.id, updatedAt = created.updatedAt)
+                // The server gives a new item the photo it remembers for that name.
+                takeImageKey(created.id, created.imageKey)
                 // An explicit area assignment makes the server learn this name -> area; pull the
                 // updated keywords back so the next auto-detect picks them up immediately.
                 if (p.areaExplicit) refreshAreas(m.listId)
             }
             MutationTypes.UPDATE -> {
                 val p = json.decodeFromString<ItemUpdatePayload>(m.payload)
-                service.updateItem(
+                val updated = service.updateItem(
                     m.listId, m.targetId,
                     UpdateItemRequest(p.name, p.quantity, p.unit, p.shopAreaId, p.sortOrder, p.areaExplicit),
-                )
+                ).ocs.data
+                // A rename can bring the photo remembered for the new name.
+                if (p.name != null) takeImageKey(m.targetId, updated.imageKey)
                 if (p.areaExplicit == true) refreshAreas(m.listId)
             }
             MutationTypes.CHECK -> {
@@ -296,6 +300,12 @@ class SyncEngine @Inject constructor(
             areaDao.deleteByList(listId)
             areaDao.upsertAll(areas.map { it.toEntity(listId) })
         }
+    }
+
+    /** The photo the server chose for an item; only photo changes ever set it on the phone. */
+    private suspend fun takeImageKey(itemId: Long, imageKey: String?) {
+        val row = itemDao.getById(itemId) ?: return
+        if (row.imageKey != imageKey) itemDao.update(row.copy(imageKey = imageKey))
     }
 
     /** Swap a temp item id for the real server id across Room and the queue. */

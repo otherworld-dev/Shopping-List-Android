@@ -29,6 +29,16 @@ class GuestMappingTest {
     }
 
     @Test
+    fun `an item keeps its photo key`() = runTest {
+        val ids = FakeIds()
+        val items = mapGuestItems(
+            listOf(ItemDto(id = 12, listId = 99, imageKey = "abcdefabcdefabcd"), ItemDto(id = 13, listId = 99)),
+            4, 1, ids,
+        )
+        assertEquals(listOf("abcdefabcdefabcd", null), items.map { it.imageKey })
+    }
+
+    @Test
     fun `the same remote row always gets the same local id`() = runTest {
         val ids = FakeIds()
         val first = mapGuestItems(listOf(ItemDto(id = 12, listId = 99)), 4, 1, ids).single().id

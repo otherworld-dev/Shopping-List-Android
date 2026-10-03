@@ -49,6 +49,8 @@ data class ItemModel(
     val tags: List<TagModel> = emptyList(),
     /** Server timestamp of the last change; for a checked item, when it was ticked. */
     val updatedAt: String? = null,
+    /** The key of the item's photo on the server; null when it has none. */
+    val imageKey: String? = null,
 ) {
     /** Quantity worth displaying — hidden when absent or the implicit default of "1". */
     val displayQuantity: String?
