@@ -1,5 +1,6 @@
 package dev.otherworld.shoppinglist.domain.guest
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.URI
 
 /** What the Join a shared list screen was given. */
@@ -77,7 +78,11 @@ private fun normaliseServer(raw: String): ServerResult {
     if (uri.rawUserInfo != null || uri.rawQuery != null || uri.rawFragment != null) return ServerResult.Invalid
     val path = uri.rawPath.orEmpty().trimEnd('/').removeSuffix("/index.php").trimEnd('/')
     val port = if (uri.port == -1 || uri.port == 443) "" else ":${uri.port}"
-    return ServerResult.Ok("https://$host$port$path")
+    val server = "https://$host$port$path"
+    // URI is lenient (a port of 99999, say); the request itself goes through OkHttp's stricter
+    // HttpUrl, so anything it would refuse isn't a server address either.
+    if (server.toHttpUrlOrNull() == null) return ServerResult.Invalid
+    return ServerResult.Ok(server)
 }
 
 private fun ServerResult.toInput(code: String): JoinInput = when (this) {
@@ -136,10 +141,33 @@ fun parseJoinInput(input: String, server: String = ""): JoinInput {
         .toList()
     found.firstOrNull { it is JoinInput.Link || it is JoinInput.Code }?.let { return it }
     if (JoinInput.Insecure in found) return JoinInput.Insecure
-    val code = normaliseCode(trimPunctuation(input.trim())) ?: return JoinInput.Invalid
+    val code = findBareCode(input, words) ?: return JoinInput.Invalid
     if (server.isBlank()) return JoinInput.NeedsServer
     return normaliseServer(server).toInput(code)
 }
 
-/** Whether [input] is a code on its own, which is when the screen shows its Server field. */
+/** A code as the web app shows it, `K7QM-3XPD`, before it's normalised. */
+private val SHOWN_CODE = Regex("[0-9A-Za-z]{4}-[0-9A-Za-z]{4}")
+
+/**
+ * The one code in [input]: all of it (a code typed in pieces), or else the single word, or run of
+ * two or three words, that reads as one. When several do, only one shown as `XXXX-XXXX` counts,
+ * since an ordinary word can be made of code characters ("REMEMBER"); still more than one is no
+ * code at all, rather than a guess.
+ */
+private fun findBareCode(input: String, words: List<String>): String? {
+    normaliseCode(trimPunctuation(input.trim()))?.let { return it }
+    for (n in 1..3) {
+        val codes = words.windowed(n) { it.joinToString("") }
+            .mapNotNull { piece -> normaliseCode(piece)?.let { piece to it } }
+            .distinctBy { it.second }
+        when {
+            codes.size == 1 -> return codes.single().second
+            codes.size > 1 -> return codes.filter { SHOWN_CODE.matches(clean(it.first)) }.singleOrNull()?.second
+        }
+    }
+    return null
+}
+
+/** Whether [input] is a code without a server, which is when the screen shows its Server field. */
 fun isBareCode(input: String): Boolean = parseJoinInput(input) == JoinInput.NeedsServer

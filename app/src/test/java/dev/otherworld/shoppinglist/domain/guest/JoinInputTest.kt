@@ -201,4 +201,27 @@ class JoinInputTest {
         assertEquals(JoinInput.Insecure, parseJoinInput("Use http://192.168.0.11:8080/K7QM-3XPD please"))
         assertEquals(JoinInput.Invalid, parseJoinInput("see http://example.org for the app"))
     }
+
+    @Test
+    fun `a code inside a message asks for its server`() {
+        assertEquals(JoinInput.NeedsServer, parseJoinInput("Code: K7QM-3XPD"))
+        assertEquals(JoinInput.Code("https://cloud.example.com", "K7QM3XPD"), parseJoinInput("Code: K7QM-3XPD", "cloud.example.com"))
+        assertTrue(isBareCode("Here's the code K7QM-3XPD."))
+    }
+
+    // An ordinary word can be made of code characters ("REMEMBER"); the one shown as XXXX-XXXX wins.
+    @Test
+    fun `a code-like word doesn't hide the real code`() {
+        assertEquals(
+            JoinInput.Code("https://cloud.example.com", "K7QM3XPD"),
+            parseJoinInput("Remember: K7QM-3XPD", "cloud.example.com"),
+        )
+        assertEquals(JoinInput.Invalid, parseJoinInput("ABCD-EFGH or K7QM-3XPD"))
+    }
+
+    @Test
+    fun `a port out of range is not a server`() {
+        assertEquals(JoinInput.Invalid, parseJoinInput("cloud.example.com:99999/K7QM-3XPD"))
+        assertEquals(JoinInput.InvalidServer, parseJoinInput("K7QM-3XPD", "cloud.example.com:99999"))
+    }
 }
