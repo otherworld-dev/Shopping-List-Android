@@ -59,6 +59,9 @@ import dev.otherworld.shoppinglist.ui.login.LoginScreen
 import dev.otherworld.shoppinglist.ui.settings.SettingsScreen
 import dev.otherworld.shoppinglist.ui.share.SharingScreen
 import dev.otherworld.shoppinglist.ui.tags.ManageTagsScreen
+import coil.ImageLoader
+import coil.annotation.ExperimentalCoilApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -84,6 +87,7 @@ class AppViewModel @Inject constructor(
     private val pendingLinks: PendingLinks,
     private val lists: ListRepository,
     localMode: LocalMode,
+    private val imageLoader: ImageLoader,
 ) : ViewModel() {
     val account: StateFlow<Account?> = credentialStore.accountFlow
     val localMode: StateFlow<Boolean> = localMode.enabled
@@ -132,7 +136,10 @@ class AppViewModel @Inject constructor(
                 } else {
                     serverTheme.clear()
                     // Only on a real logout: at start-up with no account the sort is local mode's own.
-                    if (previous == true) listSettings.clear()
+                    if (previous == true) {
+                        listSettings.clear()
+                        forgetPhotos()
+                    }
                     certAlerts.onLoggedOut()
                 }
                 if (it == null) _uploadOffer.value = null
@@ -153,6 +160,13 @@ class AppViewModel @Inject constructor(
     fun onTrustCert() = certAlerts.trust()
     fun onDismissCert() = certAlerts.dismiss()
     fun reviewCert() = certAlerts.review()
+
+    /** The last account's photos stay out of the next one's sight (and storage). */
+    @OptIn(ExperimentalCoilApi::class)
+    private fun forgetPhotos() {
+        imageLoader.memoryCache?.clear()
+        viewModelScope.launch(Dispatchers.IO) { imageLoader.diskCache?.clear() }
+    }
 }
 
 @Composable
