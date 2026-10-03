@@ -6,6 +6,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.CreateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateShareRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
+import dev.otherworld.shoppinglist.domain.guest.inviteText
 import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.domain.model.toModel
 import dev.otherworld.shoppinglist.domain.share.ShareeOption
@@ -62,4 +63,8 @@ class ShareRepository @Inject constructor(
         val server = credentialStore.current()?.server?.trimEnd('/') ?: return ""
         return "$server/index.php/apps/shopping_list/s/$token"
     }
+
+    /** What Copy invite gives for a link's [code]: this account's server and the code. */
+    fun inviteFor(code: String): String? =
+        credentialStore.current()?.server?.let { inviteText(it, code) }
 }

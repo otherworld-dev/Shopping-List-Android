@@ -53,3 +53,35 @@ class LinkNotFoundException : RuntimeException()
 
 /** The password typed for a link was wrong. */
 class WrongPasswordException : RuntimeException()
+
+/** What a failed invite-code lookup means. */
+sealed interface CodeError {
+    /** The app's own "Not found": the code is wrong, expired, or its link was deleted. */
+    data object NotFound : CodeError
+
+    /** A 404 the app didn't send: Shopping List isn't on that server, or a proxy is in the way. */
+    data object AppMissing : CodeError
+
+    /** Rate limited, or the brute-force throttle has had enough. */
+    data object TooManyTries : CodeError
+
+    data class Other(val code: Int) : CodeError
+}
+
+fun classifyCodeError(code: Int, body: String?, json: Json): CodeError = when (code) {
+    429 -> CodeError.TooManyTries
+    404 -> if (classifyPublicError(code, body, json) == PublicError.NotFound) CodeError.NotFound else CodeError.AppMissing
+    else -> CodeError.Other(code)
+}
+
+/** The server is older than invite codes (before 1.10.0). */
+class CodesUnsupportedException : RuntimeException()
+
+/** The code is wrong, expired, or its link was deleted. */
+class CodeNotFoundException : RuntimeException()
+
+/** The server answered, but not as Shopping List: the app isn't there, or a proxy is in the way. */
+class ShoppingListMissingException : RuntimeException()
+
+/** The server wants the phone to wait before trying again. */
+class TooManyTriesException : RuntimeException()

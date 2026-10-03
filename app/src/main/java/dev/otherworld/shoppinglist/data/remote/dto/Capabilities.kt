@@ -60,3 +60,6 @@ fun CapabilitiesBlock.supportsListOrder(): Boolean = shoppingList?.features?.con
 
 /** Whether the server can keep a photo on an item (server app 1.9.0 and later). */
 fun CapabilitiesBlock.supportsItemImages(): Boolean = shoppingList?.features?.contains("item-images") == true
+
+/** Whether the server turns invite codes into share links (server app 1.10.0 and later). */
+fun CapabilitiesBlock.supportsInviteCodes(): Boolean = shoppingList?.features?.contains("invite-codes") == true

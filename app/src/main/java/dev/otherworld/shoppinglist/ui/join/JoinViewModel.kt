@@ -155,7 +155,12 @@ class JoinViewModel @Inject constructor(
             }
             return
         }
-        val message = if (e is LinkNotFoundException) UiText(R.string.guest_link_dead) else errorText(e)
+        val message = when {
+            e is LinkNotFoundException -> UiText(R.string.guest_link_dead)
+            // The server's limit on password tries (and on public calls generally): a wait, not a fault.
+            e is HttpException && e.code() == 429 -> UiText(R.string.join_too_many_tries)
+            else -> errorText(e)
+        }
         _state.update { it.copy(checking = false, error = message) }
     }
 

@@ -86,6 +86,7 @@ data class ShareModel(
     val token: String?,
     val hasPassword: Boolean,
     val expiresAt: String?,
+    val code: String? = null,
 ) {
     val isLink: Boolean get() = type == ShareType.LINK
     val canWrite: Boolean get() = permission >= Permission.WRITE
@@ -137,4 +138,5 @@ fun dev.otherworld.shoppinglist.data.remote.dto.ShareDto.toModel() = ShareModel(
     token = token,
     hasPassword = hasPassword,
     expiresAt = expiresAt,
+    code = code,
 )

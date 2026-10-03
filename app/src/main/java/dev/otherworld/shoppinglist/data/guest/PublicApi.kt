@@ -1,6 +1,7 @@
 package dev.otherworld.shoppinglist.data.guest
 
 import dev.otherworld.shoppinglist.data.remote.OcsResponse
+import dev.otherworld.shoppinglist.data.remote.dto.CapabilitiesResponse
 import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
@@ -47,6 +48,13 @@ interface PublicApi {
 
     @GET
     suspend fun areas(@Url url: String): OcsResponse<List<ShopAreaDto>>
+
+    /** The server's capabilities as anyone sees them, to learn whether it has invite codes. */
+    @GET
+    suspend fun capabilities(@Url url: String): OcsResponse<CapabilitiesResponse>
+
+    @GET
+    suspend fun resolveCode(@Url url: String): OcsResponse<CodeLookupDto>
 }
 
 @Serializable
@@ -59,6 +67,10 @@ data class PublicListDto(
 @Serializable
 data class PublicAuthRequest(val password: String)
 
+/** What an invite code stands for: the share link's token. */
+@Serializable
+data class CodeLookupDto(val token: String = "")
+
 object PublicUrls {
     private fun base(server: String, token: String) =
         "${server.trimEnd('/')}/ocs/v2.php/apps/shopping_list/api/v1/public/${URLEncoder.encode(token, "UTF-8")}"
@@ -70,4 +82,7 @@ object PublicUrls {
     fun check(server: String, token: String, id: Long) = "${base(server, token)}/items/$id/check"
     fun reorder(server: String, token: String) = "${base(server, token)}/items/reorder"
     fun areas(server: String, token: String) = "${base(server, token)}/areas"
+    fun capabilities(server: String) = "${server.trimEnd('/')}/ocs/v2.php/cloud/capabilities"
+    fun code(server: String, code: String) =
+        "${server.trimEnd('/')}/ocs/v2.php/apps/shopping_list/api/v1/public/code/${URLEncoder.encode(code, "UTF-8")}"
 }

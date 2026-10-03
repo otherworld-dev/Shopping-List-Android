@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,7 +40,7 @@ import dev.otherworld.shoppinglist.ui.common.asString
 import dev.otherworld.shoppinglist.ui.common.openCustomTab
 
 @Composable
-fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
+fun LoginScreen(onJoin: () -> Unit, viewModel: LoginViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val localMode by viewModel.localMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -118,13 +119,12 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                     }
                 }
                 Spacer(Modifier.height(24.dp))
-                Text(
-                    stringResource(R.string.login_shared_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.widthIn(max = 420.dp),
-                )
+                OutlinedButton(
+                    onClick = onJoin,
+                    modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.join_entry_title))
+                }
                 if (!localMode) {
                     Spacer(Modifier.height(16.dp))
                     TextButton(onClick = viewModel::useWithoutAccount) {
