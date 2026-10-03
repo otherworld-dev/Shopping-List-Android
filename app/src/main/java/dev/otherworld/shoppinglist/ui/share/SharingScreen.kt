@@ -247,6 +247,8 @@ private fun LinkSection(
         OutlinedButton(onClick = onCreate) { Text(stringResource(R.string.link_create)) }
         return
     }
+    // Null when there's no usable code: then neither the Code row nor Copy invite shows.
+    val code = formatInviteCode(link.code)
     Card {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
@@ -257,7 +259,7 @@ private fun LinkSection(
                 Text(stringResource(R.string.label_can_edit), modifier = Modifier.weight(1f))
                 Switch(checked = link.canWrite, onCheckedChange = onToggleWrite)
             }
-            formatInviteCode(link.code)?.let { code ->
+            if (code != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.link_code), modifier = Modifier.weight(1f))
                     SelectionContainer { Text(code, style = MaterialTheme.typography.titleMedium) }
@@ -265,7 +267,7 @@ private fun LinkSection(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 link.token?.let { token -> TextButton(onClick = { onCopy(token) }) { Text(stringResource(R.string.link_copy)) } }
-                link.code?.takeIf { formatInviteCode(it) != null }?.let { code ->
+                if (code != null) {
                     TextButton(onClick = { onCopyInvite(code) }) { Text(stringResource(R.string.link_copy_invite)) }
                 }
                 if (link.hasPassword) {

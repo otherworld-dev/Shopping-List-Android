@@ -1,15 +1,19 @@
 package dev.otherworld.shoppinglist.ui.join
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -67,8 +71,11 @@ fun JoinEntryScreen(
         if (showServer && server.isEmpty() && pasted) serverFocus.requestFocus()
     }
 
+    // Scrolls, so Continue stays reachable in landscape with the keyboard and Server field up;
+    // the Box keeps it centred while it fits.
+    Box(Modifier.fillMaxSize().imePadding(), contentAlignment = Alignment.Center) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -91,7 +98,7 @@ fun JoinEntryScreen(
             ),
             keyboardActions = KeyboardActions(onGo = { submit() }, onNext = { serverFocus.requestFocus() }),
             isError = state.error != null,
-            modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp),
+            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
         )
         if (showServer) {
             Spacer(Modifier.height(12.dp))
@@ -103,7 +110,7 @@ fun JoinEntryScreen(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { submit() }),
-                modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).focusRequester(serverFocus),
+                modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth().focusRequester(serverFocus),
             )
         }
         state.error?.let {
@@ -114,7 +121,7 @@ fun JoinEntryScreen(
         Button(
             onClick = submit,
             enabled = input.isNotBlank() && !state.busy,
-            modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp),
+            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
         ) {
             if (state.busy) {
                 CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp)
@@ -123,6 +130,7 @@ fun JoinEntryScreen(
             }
         }
         TextButton(onClick = onClose) { Text(stringResource(R.string.action_cancel)) }
+    }
     }
 
     state.pendingCert?.let { cert ->
