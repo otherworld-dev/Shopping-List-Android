@@ -65,7 +65,11 @@ class GuestRepository @Inject constructor(
         val url = PublicUrls.show(link.server, link.token)
         return try {
             val dto = (if (existing != null) guestApi.withUnlock(existing) { api.show(url) } else api.show(url)).ocs.data
-            LinkPreview(dto.title, dto.permission, passwordRequired = false, joined = existing != null, guestNames = keepsGuestNames(link.server))
+            // A link already held and open just opens (JoinViewModel), so the name field never shows.
+            LinkPreview(
+                dto.title, dto.permission, passwordRequired = false, joined = existing != null,
+                guestNames = existing == null && keepsGuestNames(link.server),
+            )
         } catch (e: GuestPasswordNeededException) {
             LinkPreview(existing?.title.orEmpty(), existing?.permission ?: Permission.READ, passwordRequired = true, joined = true, guestNames = keepsGuestNames(link.server))
         } catch (e: HttpException) {

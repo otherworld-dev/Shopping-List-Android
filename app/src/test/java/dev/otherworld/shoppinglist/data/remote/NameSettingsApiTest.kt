@@ -1,6 +1,8 @@
 package dev.otherworld.shoppinglist.data.remote
 
 import dev.otherworld.shoppinglist.data.remote.dto.CapabilitiesResponse
+import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
+import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CurrentUserDto
 import dev.otherworld.shoppinglist.data.remote.dto.SettingsDto
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
@@ -36,6 +38,17 @@ class NameSettingsApiTest {
     fun `changing the show-my-name setting sends only that`() {
         assertEquals("""{"showOwnName":true}""", json.encodeToString(UpdateSettingsRequest.serializer(), UpdateSettingsRequest(showOwnName = true)))
         assertEquals("""{"listSort":"alpha"}""", json.encodeToString(UpdateSettingsRequest.serializer(), UpdateSettingsRequest(listSort = "alpha")))
+    }
+
+    // Signed-in lists build these without a name: the key must not appear at all.
+    @Test
+    fun `requests without a guest name don't mention one`() {
+        assertEquals("""{"checked":true}""", json.encodeToString(CheckRequest.serializer(), CheckRequest(true)))
+        assertEquals("""{"name":"Milk","quantity":"2"}""", json.encodeToString(CreateItemRequest.serializer(), CreateItemRequest("Milk", "2")))
+        assertEquals(
+            """{"name":"Milk","guestName":"Anna"}""",
+            json.encodeToString(CreateItemRequest.serializer(), CreateItemRequest("Milk", guestName = "Anna")),
+        )
     }
 
     @Test
