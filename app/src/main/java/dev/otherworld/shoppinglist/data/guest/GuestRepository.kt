@@ -6,6 +6,7 @@ import dev.otherworld.shoppinglist.data.local.GuestIdKind
 import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.ListEntity
+import dev.otherworld.shoppinglist.data.remote.dto.supportsGuestNames
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.domain.guest.ShareLink
 import dev.otherworld.shoppinglist.domain.model.Permission
@@ -26,7 +27,14 @@ internal fun guestItemsGone(localIds: List<Long>, serverIds: Set<Long>, pending:
     localIds.filter { it !in serverIds && it !in pending }
 
 /** What a share link holds, before it's opened. */
-data class LinkPreview(val title: String, val permission: Int, val passwordRequired: Boolean, val joined: Boolean)
+data class LinkPreview(
+    val title: String,
+    val permission: Int,
+    val passwordRequired: Boolean,
+    val joined: Boolean,
+    /** The link's server keeps guests' names (1.10.0 or later), so asking for one is worth it. */
+    val guestNames: Boolean = false,
+)
 
 /** Lists opened from share links: opening, refreshing and leaving them. */
 @Singleton
@@ -57,17 +65,30 @@ class GuestRepository @Inject constructor(
         val url = PublicUrls.show(link.server, link.token)
         return try {
             val dto = (if (existing != null) guestApi.withUnlock(existing) { api.show(url) } else api.show(url)).ocs.data
-            LinkPreview(dto.title, dto.permission, passwordRequired = false, joined = existing != null)
+            LinkPreview(dto.title, dto.permission, passwordRequired = false, joined = existing != null, guestNames = keepsGuestNames(link.server))
         } catch (e: GuestPasswordNeededException) {
-            LinkPreview(existing?.title.orEmpty(), existing?.permission ?: Permission.READ, passwordRequired = true, joined = true)
+            LinkPreview(existing?.title.orEmpty(), existing?.permission ?: Permission.READ, passwordRequired = true, joined = true, guestNames = keepsGuestNames(link.server))
         } catch (e: HttpException) {
             when (val error = guestApi.errorOf(e)) {
-                PublicError.PasswordRequired -> LinkPreview("", Permission.READ, passwordRequired = true, joined = existing != null)
+                PublicError.PasswordRequired -> LinkPreview("", Permission.READ, passwordRequired = true, joined = existing != null, guestNames = keepsGuestNames(link.server))
                 PublicError.NotFound -> throw LinkNotFoundException()
                 is PublicError.Other -> if (error.code == 404) throw LinkNotFoundException() else throw e
                 else -> throw e
             }
         }
+    }
+
+    /**
+     * Whether [server] keeps guests' names, from its capabilities as anyone sees them. Asked only
+     * once the link itself has answered, so a certificate prompt is never this call's; any
+     * failure just means no name is asked for.
+     */
+    private suspend fun keepsGuestNames(server: String): Boolean = try {
+        api.capabilities(PublicUrls.capabilities(server)).ocs.data.capabilities.supportsGuestNames()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
     }
 
     /**

@@ -112,6 +112,8 @@
     <string name="join_password_label">Password</string>
     <string name="join_password_wrong">That password isn\'t right.</string>
     <string name="join_open">Open list</string>
+    <string name="join_guest_name_label">Your name (optional)</string>
+    <string name="join_guest_name_hint">Shown to others beside what you add and tick.</string>
     <string name="join_link_invalid">This isn\'t a Shopping List share link.</string>
     <!-- Beside a name on an item: the person isn't a Nextcloud user, just someone with the link -->
     <string name="item_by_guest">guest</string>
@@ -149,6 +151,10 @@
     <string name="settings_sort_lists">Sort lists</string>
     <string name="sort_recently_updated">Recently updated</string>
     <string name="sort_custom">Custom (drag to reorder)</string>
+    <string name="settings_names">Names on items</string>
+    <string name="settings_show_own_name">Show my name on items</string>
+    <string name="settings_guest_name">Your name on shared lists (optional)</string>
+    <string name="settings_guest_name_hint">Shown to others beside what you add and tick on lists you opened from a link.</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_item_images">Item images</string>
     <string name="settings_show_item_images">Show item images</string>
