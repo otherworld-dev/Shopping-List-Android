@@ -158,7 +158,15 @@ class ItemRepository @Inject constructor(
 
     suspend fun check(item: ItemModel, checked: Boolean) {
         itemDao.getById(item.id)?.let { cur ->
-            itemDao.update(cur.copy(checked = checked, checkedBy = if (checked) cur.checkedBy else null))
+            // Who ticked it is the server's to say: drop the old name now, the next refresh brings the new one.
+            itemDao.update(
+                cur.copy(
+                    checked = checked,
+                    checkedBy = if (checked) cur.checkedBy else null,
+                    checkedByName = null,
+                    checkedByGuest = false,
+                ),
+            )
         }
         enqueue(
             MutationTypes.CHECK, item.id, item.listId,

@@ -34,6 +34,11 @@ fun ItemEntity.toModel() = ItemModel(
     tags = emptyList(),
     updatedAt = updatedAt,
     imageKey = imageKey,
+    addedBy = addedBy,
+    addedByName = addedByName,
+    addedByGuest = addedByGuest,
+    checkedByName = checkedByName,
+    checkedByGuest = checkedByGuest,
 )
 
 fun AreaEntity.toModel() = ShopAreaModel(
@@ -70,6 +75,11 @@ fun ItemDto.toEntity() = ItemEntity(
     sortOrder = sortOrder,
     updatedAt = updatedAt,
     imageKey = imageKey,
+    addedBy = addedBy,
+    addedByName = addedByName,
+    addedByGuest = addedByGuest,
+    checkedByName = checkedByName,
+    checkedByGuest = checkedByGuest,
 )
 
 fun ShopAreaDto.toEntity(listId: Long) = AreaEntity(

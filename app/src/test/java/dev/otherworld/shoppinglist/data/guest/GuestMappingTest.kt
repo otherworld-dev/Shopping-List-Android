@@ -29,6 +29,19 @@ class GuestMappingTest {
     }
 
     @Test
+    fun `an item keeps who added and ticked it`() = runTest {
+        val items = mapGuestItems(
+            listOf(ItemDto(id = 12, listId = 99, addedByName = "Adam", checkedByName = "Anna", checkedByGuest = true)),
+            4, 1, FakeIds(),
+        )
+        val milk = items.single()
+        assertEquals("Adam", milk.addedByName)
+        assertEquals(false, milk.addedByGuest)
+        assertEquals("Anna", milk.checkedByName)
+        assertEquals(true, milk.checkedByGuest)
+    }
+
+    @Test
     fun `an item keeps its photo key`() = runTest {
         val ids = FakeIds()
         val items = mapGuestItems(

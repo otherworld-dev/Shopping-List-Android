@@ -30,6 +30,13 @@ data class ItemDto(
     val sortOrder: Int = 0,
     // Since server app 1.9.0: the key of the item's photo, null when it has none.
     val imageKey: String? = null,
+    // Since server app 1.10.0: who added and who ticked the item. A guest has a name and no user
+    // id; public responses never carry user ids, so the *ByGuest flags tell guests from members.
+    val addedBy: String? = null,
+    val addedByName: String? = null,
+    val addedByGuest: Boolean = false,
+    val checkedByName: String? = null,
+    val checkedByGuest: Boolean = false,
     val tags: List<TagDto> = emptyList(),
     val createdAt: String? = null,
     val updatedAt: String? = null,

@@ -32,5 +32,11 @@ internal suspend fun mapGuestItems(dtos: List<ItemDto>, shareId: Long, listId: L
             sortOrder = it.sortOrder,
             updatedAt = it.updatedAt,
             imageKey = it.imageKey,
+            // Public responses carry no user ids (addedBy is always null), only names and flags
+            addedBy = it.addedBy,
+            addedByName = it.addedByName,
+            addedByGuest = it.addedByGuest,
+            checkedByName = it.checkedByName,
+            checkedByGuest = it.checkedByGuest,
         )
     }
