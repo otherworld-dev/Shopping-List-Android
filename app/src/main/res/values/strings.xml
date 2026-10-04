@@ -113,6 +113,8 @@
     <string name="join_password_wrong">That password isn\'t right.</string>
     <string name="join_open">Open list</string>
     <string name="join_link_invalid">This isn\'t a Shopping List share link.</string>
+    <!-- Beside a name on an item: the person isn't a Nextcloud user, just someone with the link -->
+    <string name="item_by_guest">guest</string>
     <string name="join_too_many_tries">Too many tries. Wait a minute and try again.</string>
 
     <!-- Join a shared list: a link, an invite or a code typed into the app -->

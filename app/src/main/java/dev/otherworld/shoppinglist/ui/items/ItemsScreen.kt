@@ -89,6 +89,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.prefs.Density
+import dev.otherworld.shoppinglist.domain.guest.Byline
+import dev.otherworld.shoppinglist.domain.guest.bylineFor
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
@@ -383,6 +385,7 @@ fun ItemsScreen(
                                                 handleModifier = dragModifier,
                                                 photoUrl = photos.urls[row.item.id]?.thumbnail,
                                                 onPhotoClick = { viewing = photos.urls[row.item.id] },
+                                                byline = bylineFor(row.item.attributed, row.item.checked, state.me, state.showOwnName),
                                             )
                                             RowDivider()
                                         }
@@ -685,6 +688,7 @@ internal fun ItemRow(
     handleModifier: Modifier = Modifier,
     photoUrl: String? = null,
     onPhotoClick: () -> Unit = {},
+    byline: Byline? = null,
 ) {
     Row(
         modifier = Modifier
@@ -729,17 +733,49 @@ internal fun ItemRow(
             modifier = Modifier.widthIn(min = 18.dp),
         )
         Spacer(Modifier.width(12.dp))
-        Text(
-            item.name,
-            style = MaterialTheme.typography.bodyLarge,
-            textDecoration = if (item.checked) TextDecoration.LineThrough else null,
-            color = if (item.checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).then(handleModifier),
-        )
+        Column(Modifier.weight(1f).then(handleModifier)) {
+            Text(
+                item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                textDecoration = if (item.checked) TextDecoration.LineThrough else null,
+                color = if (item.checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            byline?.let { BylineText(it) }
+        }
         Spacer(Modifier.width(8.dp))
         AreaTag(area, showName = showAreaName)
+    }
+}
+
+/**
+ * Who added or ticked an item. Only the name is cut short: the guest mark is its own text that
+ * always stays in view, so a guest with a long name can't pass as a member (as on the web app).
+ */
+@Composable
+private fun BylineText(byline: Byline) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            byline.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (byline.guest) {
+            Spacer(Modifier.width(4.dp))
+            Text(
+                stringResource(R.string.item_by_guest),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp),
+            )
+        }
     }
 }
 
