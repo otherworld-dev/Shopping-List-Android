@@ -50,6 +50,7 @@ class GuestSender @Inject constructor(
     private val ids: GuestIdLookup,
     private val json: Json,
     private val smartInput: SmartInput,
+    private val guestName: GuestName,
 ) {
     suspend fun send(m: MutationEntity, share: GuestShareEntity, localAreas: List<ShopAreaModel>): GuestSendResult {
         if (m.entity != MutationEntities.ITEM) return GuestSendResult.Done
@@ -87,7 +88,7 @@ class GuestSender @Inject constructor(
                 val areaId = areaForQueuedCreate(p, if (p.detectArea) areasFor(m.listId, share, localAreas) else localAreas, smartInput)
                 val created = api.createItem(
                     PublicUrls.items(s, t),
-                    CreateItemRequest(p.name, p.quantity, p.unit, areaId?.let { ids.remoteId(it) }),
+                    CreateItemRequest(p.name, p.quantity, p.unit, areaId?.let { ids.remoteId(it) }, guestName = nameToSend()),
                 ).ocs.data
                 return GuestSendResult.Created(
                     localId = ids.localId(share.id, GuestIdKind.ITEM, created.id),
@@ -107,7 +108,8 @@ class GuestSender @Inject constructor(
             MutationTypes.CHECK -> {
                 val remote = ids.remoteId(m.targetId) ?: return GuestSendResult.Done
                 val p = json.decodeFromString<CheckPayload>(m.payload)
-                api.checkItem(PublicUrls.check(s, t, remote), CheckRequest(p.checked))
+                // Unticking clears who ticked it on the server, so only a tick carries the name.
+                api.checkItem(PublicUrls.check(s, t, remote), CheckRequest(p.checked, guestName = nameToSend().takeIf { p.checked }))
             }
             MutationTypes.DELETE -> {
                 val remote = ids.remoteId(m.targetId) ?: return GuestSendResult.Done
@@ -146,6 +148,9 @@ class GuestSender @Inject constructor(
     } catch (e: HttpException) {
         guestApi.errorOf(e) == PublicError.NotFound
     }
+
+    /** Read when the change goes out, not when it was queued: it only differs if renamed while offline. */
+    private fun nameToSend(): String? = guestName.get().ifBlank { null }
 
     private companion object {
         val ITEM_CHANGES = setOf(MutationTypes.UPDATE, MutationTypes.CHECK, MutationTypes.DELETE)

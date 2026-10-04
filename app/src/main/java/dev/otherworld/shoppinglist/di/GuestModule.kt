@@ -6,6 +6,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.otherworld.shoppinglist.data.guest.GuestIdLookup
 import dev.otherworld.shoppinglist.data.guest.GuestIdStore
+import dev.otherworld.shoppinglist.data.guest.GuestName
+import dev.otherworld.shoppinglist.data.guest.GuestNameStore
 import dev.otherworld.shoppinglist.data.guest.GuestPasswordStore
 import dev.otherworld.shoppinglist.data.guest.GuestPasswords
 
@@ -17,4 +19,7 @@ abstract class GuestModule {
 
     @Binds
     abstract fun bindGuestPasswords(impl: GuestPasswordStore): GuestPasswords
+
+    @Binds
+    abstract fun bindGuestName(impl: GuestNameStore): GuestName
 }

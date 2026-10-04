@@ -82,6 +82,8 @@ data class CreateItemRequest(
     val areaExplicit: Boolean = false,
     // Since server app 1.7.1; older servers simply ignore it (defaults are not encoded).
     val checked: Boolean = false,
+    // Public link API only, since server app 1.10.0: the guest's name, left out when null.
+    val guestName: String? = null,
 )
 
 @Serializable
@@ -95,7 +97,11 @@ data class UpdateItemRequest(
 )
 
 @Serializable
-data class CheckRequest(val checked: Boolean)
+data class CheckRequest(
+    val checked: Boolean,
+    // Public link API only, since server app 1.10.0: the guest's name, left out when null.
+    val guestName: String? = null,
+)
 
 @Serializable
 data class ReorderRequest(val sortedIds: List<Long>)
