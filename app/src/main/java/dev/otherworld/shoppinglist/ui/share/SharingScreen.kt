@@ -122,6 +122,7 @@ fun SharingScreen(
                 link = state.link,
                 onCreate = { viewModel.createLink(write = false) },
                 onToggleWrite = { viewModel.setLinkPermission(state.link!!, it) },
+                onToggleShowNames = { viewModel.setLinkShowNames(state.link!!, it) },
                 onCopy = { clipboard.setText(AnnotatedString(viewModel.linkUrl(it))) },
                 onCopyInvite = { clipboard.setText(AnnotatedString(viewModel.inviteText(it))) },
                 onPassword = { passwordTarget = state.link },
@@ -237,6 +238,7 @@ private fun LinkSection(
     link: ShareModel?,
     onCreate: () -> Unit,
     onToggleWrite: (Boolean) -> Unit,
+    onToggleShowNames: (Boolean) -> Unit,
     onCopy: (String) -> Unit,
     onCopyInvite: (String) -> Unit,
     onPassword: () -> Unit,
@@ -258,6 +260,13 @@ private fun LinkSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.label_can_edit), modifier = Modifier.weight(1f))
                 Switch(checked = link.canWrite, onCheckedChange = onToggleWrite)
+            }
+            // Only from servers that offer the choice (1.10.0 and later); guests' names always show.
+            link.showNames?.let { showNames ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.label_show_member_names), modifier = Modifier.weight(1f))
+                    Switch(checked = showNames, onCheckedChange = onToggleShowNames)
+                }
             }
             if (code != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

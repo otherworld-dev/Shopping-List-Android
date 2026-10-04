@@ -240,6 +240,7 @@
     <string name="label_user">User</string>
     <string name="label_group">Group</string>
     <string name="label_can_edit">Can edit</string>
+    <string name="label_show_member_names">Show members\' names</string>
     <string name="label_edit">Edit</string>
     <string name="link_create">Create public link</string>
     <string name="link_public">Public link</string>

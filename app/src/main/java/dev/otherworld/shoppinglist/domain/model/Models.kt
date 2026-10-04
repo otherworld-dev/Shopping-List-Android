@@ -97,6 +97,8 @@ data class ShareModel(
     val hasPassword: Boolean,
     val expiresAt: String?,
     val code: String? = null,
+    /** Null when the server has no such choice (before 1.10.0). */
+    val showNames: Boolean? = null,
 ) {
     val isLink: Boolean get() = type == ShareType.LINK
     val canWrite: Boolean get() = permission >= Permission.WRITE
@@ -154,4 +156,5 @@ fun dev.otherworld.shoppinglist.data.remote.dto.ShareDto.toModel() = ShareModel(
     hasPassword = hasPassword,
     expiresAt = expiresAt,
     code = code,
+    showNames = showNames,
 )

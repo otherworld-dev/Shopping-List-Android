@@ -100,6 +100,8 @@ class SharingViewModel @Inject constructor(
     fun setLinkPassword(share: ShareModel, password: String?) =
         mutate { repository.setLinkPassword(share.id, password) }
 
+    fun setLinkShowNames(share: ShareModel, show: Boolean) = mutate { repository.setLinkShowNames(share.id, show) }
+
     fun removeLink(share: ShareModel) = mutate { repository.removeLink(share.id) }
 
     fun linkUrl(token: String): String = repository.linkUrl(token)

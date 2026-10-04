@@ -141,6 +141,8 @@ data class ShareDto(
     val expiresAt: String? = null,
     /** A link share's invite code (server app 1.10.0 and later). */
     val code: String? = null,
+    /** A link share: whether guests see members' names on items (1.10.0 and later; null before). */
+    val showNames: Boolean? = null,
 )
 
 @Serializable
@@ -193,6 +195,7 @@ data class UpdateLinkRequest(
     val removePassword: Boolean? = null,
     val expiresAt: String? = null,
     val removeExpiry: Boolean? = null,
+    val showNames: Boolean? = null,
 )
 
 /** GET/PATCH …/settings: the user's own settings (since server app 1.9.0; listSort since 1.10.0). */

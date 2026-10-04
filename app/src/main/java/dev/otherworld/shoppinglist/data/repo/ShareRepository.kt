@@ -56,6 +56,11 @@ class ShareRepository @Inject constructor(
         )
     }
 
+    /** Whether guests on the link see members' names beside items (they always see guests'). */
+    suspend fun setLinkShowNames(id: Long, show: Boolean) {
+        service.updateLink(id, UpdateLinkRequest(showNames = show))
+    }
+
     suspend fun removeLink(id: Long) = service.deleteLink(id)
 
     /** Builds the public-share URL for a link token against the connected server. */
