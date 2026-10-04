@@ -200,11 +200,20 @@ data class UpdateLinkRequest(
 data class SettingsDto(
     val showImages: Boolean = false,
     val listSort: String? = null,
+    /** Since server app 1.10.0: show your own name on items you added or ticked. */
+    val showOwnName: Boolean = false,
 )
 
 /** Only the fields set are sent; the server leaves the rest alone. */
 @Serializable
-data class UpdateSettingsRequest(val listSort: String? = null)
+data class UpdateSettingsRequest(
+    val listSort: String? = null,
+    val showOwnName: Boolean? = null,
+)
+
+/** The signed-in user (GET ocs/v2.php/cloud/user): their user id, which may differ from the login. */
+@Serializable
+data class CurrentUserDto(val id: String = "")
 
 /** POST …/lists/reorder: one section's lists in the order wanted. */
 @Serializable

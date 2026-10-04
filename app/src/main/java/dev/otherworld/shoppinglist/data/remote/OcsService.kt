@@ -1,6 +1,7 @@
 package dev.otherworld.shoppinglist.data.remote
 
 import dev.otherworld.shoppinglist.data.remote.dto.CapabilitiesResponse
+import dev.otherworld.shoppinglist.data.remote.dto.CurrentUserDto
 import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CopyAreasRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateAreaRequest
@@ -215,4 +216,7 @@ interface OcsService {
 
     @GET("ocs/v2.php/cloud/capabilities")
     suspend fun capabilities(): OcsResponse<CapabilitiesResponse>
+
+    @GET("ocs/v2.php/cloud/user")
+    suspend fun currentUser(): OcsResponse<CurrentUserDto>
 }

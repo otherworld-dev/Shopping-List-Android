@@ -7,6 +7,8 @@ import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.remote.dto.ItemImagesCaps
+import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
+import dev.otherworld.shoppinglist.data.remote.dto.supportsGuestNames
 import dev.otherworld.shoppinglist.data.remote.dto.supportsItemImages
 import dev.otherworld.shoppinglist.data.remote.dto.supportsListOrder
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
@@ -56,6 +58,24 @@ class ListSettingsRepository @Inject constructor(
     /** Whether the server can keep a photo on an item (server app 1.9.0 and later). */
     val itemImagesSupported: StateFlow<Boolean> = _imagesSupported.asStateFlow()
 
+    private val _guestNamesSupported = MutableStateFlow(prefs.getBoolean(KEY_NAMES, false))
+
+    /** Whether the server keeps who added and ticked items (server app 1.10.0 and later). */
+    val guestNamesSupported: StateFlow<Boolean> = _guestNamesSupported.asStateFlow()
+
+    private val _showOwnName = MutableStateFlow(prefs.getBoolean(KEY_SHOW_OWN_NAME, false))
+
+    /** Show this user's own name on items they added or ticked; off by default, as on the web. */
+    val showOwnName: StateFlow<Boolean> = _showOwnName.asStateFlow()
+
+    /**
+     * This user's Nextcloud user id, which items record as who added or ticked them. It can
+     * differ from the login (an email address, say), so until the server has said, the login
+     * stands in.
+     */
+    val ownUserId: String?
+        get() = prefs.getString(KEY_USER_ID, null) ?: credentialStore.current()?.loginName
+
     /** The largest photo the server takes, from its capabilities. */
     val maxUploadBytes: Long
         get() = prefs.getLong(KEY_MAX_UPLOAD, ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES)
@@ -65,17 +85,49 @@ class ListSettingsRepository @Inject constructor(
         val caps = service.capabilities().ocs.data.capabilities
         val supported = caps.supportsListOrder()
         val images = caps.supportsItemImages()
+        val names = caps.supportsGuestNames()
         _supported.value = supported
         _imagesSupported.value = images
+        _guestNamesSupported.value = names
         prefs.edit()
             .putBoolean(KEY_SUPPORTED, supported)
             .putBoolean(KEY_IMAGES, images)
+            .putBoolean(KEY_NAMES, names)
             .putLong(
                 KEY_MAX_UPLOAD,
                 caps.shoppingList?.itemImages?.maxUploadBytes ?: ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES,
             )
             .apply()
         refreshSort()
+        refreshNames()
+    }
+
+    /** Who this user is, and whether they show their own name, when the server keeps names. */
+    private suspend fun refreshNames() {
+        if (!_guestNamesSupported.value) return
+        val id = service.currentUser().ocs.data.id
+        val showOwn = service.getSettings().ocs.data.showOwnName
+        _showOwnName.value = showOwn
+        prefs.edit()
+            .putString(KEY_USER_ID, id.ifBlank { null })
+            .putBoolean(KEY_SHOW_OWN_NAME, showOwn)
+            .apply()
+    }
+
+    /**
+     * Straight to the server, like the web app's switch: it's only how items look, so it isn't
+     * queued. Shown at once, and put back if the server can't be told.
+     */
+    suspend fun setShowOwnName(enabled: Boolean) {
+        val before = _showOwnName.value
+        _showOwnName.value = enabled
+        try {
+            service.updateSettings(UpdateSettingsRequest(showOwnName = enabled))
+            prefs.edit().putBoolean(KEY_SHOW_OWN_NAME, enabled).apply()
+        } catch (e: Exception) {
+            _showOwnName.value = before
+            throw e
+        }
     }
 
     /**
@@ -117,6 +169,8 @@ class ListSettingsRepository @Inject constructor(
         _listSort.value = ListSortMode.UPDATED
         _supported.value = false
         _imagesSupported.value = false
+        _guestNamesSupported.value = false
+        _showOwnName.value = false
     }
 
     private suspend fun settingsQueued() = mutationDao.countByType(MutationTypes.UPDATE_SETTINGS) > 0
@@ -131,5 +185,8 @@ class ListSettingsRepository @Inject constructor(
         const val KEY_SUPPORTED = "list_order_supported"
         const val KEY_IMAGES = "item_images_supported"
         const val KEY_MAX_UPLOAD = "item_images_max_upload"
+        const val KEY_NAMES = "guest_names_supported"
+        const val KEY_SHOW_OWN_NAME = "show_own_name"
+        const val KEY_USER_ID = "user_id"
     }
 }
