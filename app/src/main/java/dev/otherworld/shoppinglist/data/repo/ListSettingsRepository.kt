@@ -7,6 +7,8 @@ import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.remote.dto.ItemImagesCaps
+import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
+import dev.otherworld.shoppinglist.data.remote.dto.supportsGuestNames
 import dev.otherworld.shoppinglist.data.remote.dto.supportsItemImages
 import dev.otherworld.shoppinglist.data.remote.dto.supportsListOrder
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
@@ -56,6 +58,29 @@ class ListSettingsRepository @Inject constructor(
     /** Whether the server can keep a photo on an item (server app 1.9.0 and later). */
     val itemImagesSupported: StateFlow<Boolean> = _imagesSupported.asStateFlow()
 
+    private val _guestNamesSupported = MutableStateFlow(prefs.getBoolean(KEY_NAMES, false))
+
+    /** Whether the server keeps who added and ticked items (server app 1.10.0 and later). */
+    val guestNamesSupported: StateFlow<Boolean> = _guestNamesSupported.asStateFlow()
+
+    private val ownName = OptimisticSetting(prefs.getBoolean(KEY_SHOW_OWN_NAME, false)) {
+        prefs.edit().putBoolean(KEY_SHOW_OWN_NAME, it).apply()
+    }
+
+    /** Show this user's own name on items they added or ticked; off by default, as on the web. */
+    val showOwnName: StateFlow<Boolean> = ownName.value
+
+    private val _ownUserId = MutableStateFlow(prefs.getString(KEY_USER_ID, null))
+
+    /**
+     * This user's Nextcloud user id, which items record as who added or ticked them; null until
+     * the server has said. It can differ from the login (an email address, say), which is what
+     * [ownUserIdOrLogin] falls back to meanwhile.
+     */
+    val ownUserId: StateFlow<String?> = _ownUserId.asStateFlow()
+
+    fun ownUserIdOrLogin(id: String?): String? = id ?: credentialStore.current()?.loginName
+
     /** The largest photo the server takes, from its capabilities. */
     val maxUploadBytes: Long
         get() = prefs.getLong(KEY_MAX_UPLOAD, ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES)
@@ -65,17 +90,40 @@ class ListSettingsRepository @Inject constructor(
         val caps = service.capabilities().ocs.data.capabilities
         val supported = caps.supportsListOrder()
         val images = caps.supportsItemImages()
+        val names = caps.supportsGuestNames()
         _supported.value = supported
         _imagesSupported.value = images
+        _guestNamesSupported.value = names
         prefs.edit()
             .putBoolean(KEY_SUPPORTED, supported)
             .putBoolean(KEY_IMAGES, images)
+            .putBoolean(KEY_NAMES, names)
             .putLong(
                 KEY_MAX_UPLOAD,
                 caps.shoppingList?.itemImages?.maxUploadBytes ?: ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES,
             )
             .apply()
-        refreshSort()
+        if (!supported && !names) return
+        // One settings fetch for the sort and the name switch, each guarded against a change the
+        // user made while it was out.
+        val (editsBefore, queuedBefore) = sortLock.withLock { sortEdits.get() to settingsQueued() }
+        val nameToken = ownName.beginRefresh()
+        val settings = service.getSettings().ocs.data
+        if (supported) applySort(settings.listSort, editsBefore, queuedBefore)
+        if (names) {
+            ownName.applyRefresh(settings.showOwnName, nameToken)
+            val id = service.currentUser().ocs.data.id.ifBlank { null }
+            _ownUserId.value = id
+            prefs.edit().putString(KEY_USER_ID, id).apply()
+        }
+    }
+
+    /**
+     * Straight to the server, like the web app's switch: it's only how items look, so it isn't
+     * queued. Shown at once; if the server can't be told it goes back and the failure is thrown.
+     */
+    suspend fun setShowOwnName(enabled: Boolean) {
+        ownName.set(enabled) { service.updateSettings(UpdateSettingsRequest(showOwnName = it)) }
     }
 
     /**
@@ -86,9 +134,14 @@ class ListSettingsRepository @Inject constructor(
         if (!_supported.value) return
         // Under the lock, so neither read lands between setListSort's local write and its queueing.
         val (editsBefore, queuedBefore) = sortLock.withLock { sortEdits.get() to settingsQueued() }
-        val server = ListSortMode.fromStorage(service.getSettings().ocs.data.listSort)
+        applySort(service.getSettings().ocs.data.listSort, editsBefore, queuedBefore)
+    }
+
+    private suspend fun applySort(listSort: String?, editsBefore: Long, queuedBefore: Boolean) {
         sortLock.withLock {
-            if (!localChangeWins(queuedBefore, editsBefore, sortEdits.get(), settingsQueued())) remember(server)
+            if (!localChangeWins(queuedBefore, editsBefore, sortEdits.get(), settingsQueued())) {
+                remember(ListSortMode.fromStorage(listSort))
+            }
         }
     }
 
@@ -117,6 +170,9 @@ class ListSettingsRepository @Inject constructor(
         _listSort.value = ListSortMode.UPDATED
         _supported.value = false
         _imagesSupported.value = false
+        _guestNamesSupported.value = false
+        ownName.reset()
+        _ownUserId.value = null
     }
 
     private suspend fun settingsQueued() = mutationDao.countByType(MutationTypes.UPDATE_SETTINGS) > 0
@@ -131,5 +187,8 @@ class ListSettingsRepository @Inject constructor(
         const val KEY_SUPPORTED = "list_order_supported"
         const val KEY_IMAGES = "item_images_supported"
         const val KEY_MAX_UPLOAD = "item_images_max_upload"
+        const val KEY_NAMES = "guest_names_supported"
+        const val KEY_SHOW_OWN_NAME = "show_own_name"
+        const val KEY_USER_ID = "user_id"
     }
 }

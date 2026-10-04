@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.guest.GuestNameStore
 import dev.otherworld.shoppinglist.data.guest.GuestPasswordNeededException
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.guest.LinkNotFoundException
@@ -51,8 +52,12 @@ class JoinViewModel @Inject constructor(
     private val guests: GuestRepository,
     private val acceptedCerts: AcceptedCertStore,
     private val certHolder: UntrustedCertHolder,
+    private val guestNameStore: GuestNameStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
+
+    /** The name this phone already goes by on links, to start the field with. */
+    val guestName: String get() = guestNameStore.get()
 
     private val link = parseShareLink(savedStateHandle.get<String>("url").orEmpty())
     /** The link's port, 443 when its URL has none, or -1 for no valid link. */
@@ -91,7 +96,9 @@ class JoinViewModel @Inject constructor(
         }
     }
 
-    fun open(password: String?) {
+    /** [name] is the guest's name when the screen asked for one; it's kept for every link. */
+    fun open(password: String?, name: String? = null) {
+        name?.let(guestNameStore::set)
         val link = link ?: return
         if (_state.value.opening) return
         // Same as checkLink(): a background guest refresh against another server can leave a

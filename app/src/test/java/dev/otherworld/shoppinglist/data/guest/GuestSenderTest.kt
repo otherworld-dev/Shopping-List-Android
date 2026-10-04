@@ -4,6 +4,7 @@ import dev.otherworld.shoppinglist.data.local.GuestIdKind
 import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.MutationEntity
+import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
@@ -36,7 +37,8 @@ class GuestSenderTest {
     )
     private val api = FakePublicApi()
     private val ids = FakeIds()
-    private val sender = GuestSender(api, GuestApi(api, FakePasswords(), json), ids, json, SmartInput())
+    private var guestName = ""
+    private val sender = GuestSender(api, GuestApi(api, FakePasswords(), json), ids, json, SmartInput(), GuestName { guestName })
     private val listId = 1_099_511_627_777L
 
     private fun mutation(type: String, targetId: Long, payload: String) = MutationEntity(
@@ -106,6 +108,34 @@ class GuestSenderTest {
         )
         assertEquals(UpdateItemRequest(name = "Oat milk", shopAreaId = 30), api.bodies[0])
         assertEquals(ReorderRequest(listOf(12)), api.bodies[2])
+    }
+
+    @Test
+    fun `a guest's name goes with what they add and tick`() = runTest {
+        guestName = "Anna"
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        sender.send(mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Milk"))), share, emptyList())
+        sender.send(mutation(MutationTypes.CHECK, item, json.encodeToString(CheckPayload.serializer(), CheckPayload(true))), share, emptyList())
+        assertEquals(CreateItemRequest("Milk", guestName = "Anna"), api.bodies[0])
+        assertEquals(CheckRequest(true, guestName = "Anna"), api.bodies[1])
+    }
+
+    // Unticking clears who ticked it on the server, so there's no name to give.
+    @Test
+    fun `an untick carries no name`() = runTest {
+        guestName = "Anna"
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        sender.send(mutation(MutationTypes.CHECK, item, json.encodeToString(CheckPayload.serializer(), CheckPayload(false))), share, emptyList())
+        assertEquals(CheckRequest(false), api.bodies.single())
+    }
+
+    @Test
+    fun `without a name nothing extra is sent`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        sender.send(mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Milk"))), share, emptyList())
+        sender.send(mutation(MutationTypes.CHECK, item, json.encodeToString(CheckPayload.serializer(), CheckPayload(true))), share, emptyList())
+        assertEquals(CreateItemRequest("Milk"), api.bodies[0])
+        assertEquals(CheckRequest(true), api.bodies[1])
     }
 
     @Test

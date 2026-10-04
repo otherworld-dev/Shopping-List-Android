@@ -23,4 +23,19 @@ class ShareDtoCodeTest {
         assertNull(json.decodeFromString(ShareDto.serializer(), """{"id":7,"sharedWithType":3,"token":"abc"}""").toModel().code)
         assertNull(json.decodeFromString(ShareDto.serializer(), """{"id":7,"sharedWithType":3,"code":null}""").toModel().code)
     }
+
+    // Since server app 1.10.0; null means the server has no such switch, so none is shown.
+    @Test
+    fun `a link share says whether it shows members' names`() {
+        assertEquals(false, json.decodeFromString(ShareDto.serializer(), """{"id":7,"sharedWithType":3,"showNames":false}""").toModel().showNames)
+        assertNull(json.decodeFromString(ShareDto.serializer(), """{"id":7,"sharedWithType":3}""").toModel().showNames)
+    }
+
+    @Test
+    fun `turning members' names off sends only that`() {
+        assertEquals(
+            """{"showNames":false}""",
+            json.encodeToString(dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest.serializer(), dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest(showNames = false)),
+        )
+    }
 }

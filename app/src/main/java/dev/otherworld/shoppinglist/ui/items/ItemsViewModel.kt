@@ -79,6 +79,9 @@ data class ItemsUiState(
     /** GuestShareState of the link a guest list came from; null for the user's own lists. */
     val guestState: String? = null,
     val droppedChanges: Int = 0,
+    /** This user's Nextcloud id, to tell their own items apart; null on a guest list (no ids there). */
+    val me: String? = null,
+    val showOwnName: Boolean = false,
 )
 
 @HiltViewModel
@@ -94,7 +97,7 @@ class ItemsViewModel @Inject constructor(
     private val guests: GuestRepository,
     private val guestIds: GuestIdStore,
     private val photoRepository: PhotoRepository,
-    listSettings: ListSettingsRepository,
+    private val listSettings: ListSettingsRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -119,6 +122,8 @@ class ItemsViewModel @Inject constructor(
         displayPrefs.boughtSort,
         displayPrefs.collapsedAreas(listId),
         guests.observeShareForList(listId),
+        listSettings.showOwnName,
+        listSettings.ownUserId,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val share = values[10] as GuestShareEntity?
@@ -148,6 +153,8 @@ class ItemsViewModel @Inject constructor(
             isLocal = isLocal,
             guestState = share?.state,
             droppedChanges = share?.droppedChanges ?: 0,
+            me = if (isGuest) null else listSettings.ownUserIdOrLogin(values[12] as String?),
+            showOwnName = values[11] as Boolean,
         )
     }.stateIn(
         viewModelScope,

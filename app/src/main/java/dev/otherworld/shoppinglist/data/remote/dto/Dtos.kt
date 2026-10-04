@@ -30,6 +30,13 @@ data class ItemDto(
     val sortOrder: Int = 0,
     // Since server app 1.9.0: the key of the item's photo, null when it has none.
     val imageKey: String? = null,
+    // Since server app 1.10.0: who added and who ticked the item. A guest has a name and no user
+    // id; public responses never carry user ids, so the *ByGuest flags tell guests from members.
+    val addedBy: String? = null,
+    val addedByName: String? = null,
+    val addedByGuest: Boolean = false,
+    val checkedByName: String? = null,
+    val checkedByGuest: Boolean = false,
     val tags: List<TagDto> = emptyList(),
     val createdAt: String? = null,
     val updatedAt: String? = null,
@@ -75,6 +82,8 @@ data class CreateItemRequest(
     val areaExplicit: Boolean = false,
     // Since server app 1.7.1; older servers simply ignore it (defaults are not encoded).
     val checked: Boolean = false,
+    // Public link API only, since server app 1.10.0: the guest's name, left out when null.
+    val guestName: String? = null,
 )
 
 @Serializable
@@ -88,7 +97,11 @@ data class UpdateItemRequest(
 )
 
 @Serializable
-data class CheckRequest(val checked: Boolean)
+data class CheckRequest(
+    val checked: Boolean,
+    // Public link API only, since server app 1.10.0: the guest's name, left out when null.
+    val guestName: String? = null,
+)
 
 @Serializable
 data class ReorderRequest(val sortedIds: List<Long>)
@@ -128,6 +141,8 @@ data class ShareDto(
     val expiresAt: String? = null,
     /** A link share's invite code (server app 1.10.0 and later). */
     val code: String? = null,
+    /** A link share: whether guests see members' names on items (1.10.0 and later; null before). */
+    val showNames: Boolean? = null,
 )
 
 @Serializable
@@ -180,6 +195,7 @@ data class UpdateLinkRequest(
     val removePassword: Boolean? = null,
     val expiresAt: String? = null,
     val removeExpiry: Boolean? = null,
+    val showNames: Boolean? = null,
 )
 
 /** GET/PATCH …/settings: the user's own settings (since server app 1.9.0; listSort since 1.10.0). */
@@ -187,11 +203,20 @@ data class UpdateLinkRequest(
 data class SettingsDto(
     val showImages: Boolean = false,
     val listSort: String? = null,
+    /** Since server app 1.10.0: show your own name on items you added or ticked. */
+    val showOwnName: Boolean = false,
 )
 
 /** Only the fields set are sent; the server leaves the rest alone. */
 @Serializable
-data class UpdateSettingsRequest(val listSort: String? = null)
+data class UpdateSettingsRequest(
+    val listSort: String? = null,
+    val showOwnName: Boolean? = null,
+)
+
+/** The signed-in user (GET ocs/v2.php/cloud/user): their user id, which may differ from the login. */
+@Serializable
+data class CurrentUserDto(val id: String = "")
 
 /** POST …/lists/reorder: one section's lists in the order wanted. */
 @Serializable

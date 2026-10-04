@@ -48,6 +48,12 @@ data class ItemEntity(
     val updatedAt: String?,
     /** The key of the item's photo on the server (it changes with every new photo); null for none. */
     val imageKey: String? = null,
+    /** Who added and who ticked the item, as the server recorded it (see ItemDto). */
+    val addedBy: String? = null,
+    val addedByName: String? = null,
+    val addedByGuest: Boolean = false,
+    val checkedByName: String? = null,
+    val checkedByGuest: Boolean = false,
 )
 
 @Entity(

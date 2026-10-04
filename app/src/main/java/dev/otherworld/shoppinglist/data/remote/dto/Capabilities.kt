@@ -63,3 +63,6 @@ fun CapabilitiesBlock.supportsItemImages(): Boolean = shoppingList?.features?.co
 
 /** Whether the server turns invite codes into share links (server app 1.10.0 and later). */
 fun CapabilitiesBlock.supportsInviteCodes(): Boolean = shoppingList?.features?.contains("invite-codes") == true
+
+/** Whether the server keeps who added and ticked items, guests' names too (server app 1.10.0 and later). */
+fun CapabilitiesBlock.supportsGuestNames(): Boolean = shoppingList?.features?.contains("guest-names") == true

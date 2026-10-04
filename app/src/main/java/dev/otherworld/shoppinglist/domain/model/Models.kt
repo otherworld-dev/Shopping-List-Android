@@ -4,6 +4,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ListDto
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
 import dev.otherworld.shoppinglist.data.remote.dto.TagDto
+import dev.otherworld.shoppinglist.domain.guest.Attributed
 
 /** Permission levels mirroring the server (0 = read-only, 1 = read/write). */
 object Permission {
@@ -51,7 +52,16 @@ data class ItemModel(
     val updatedAt: String? = null,
     /** The key of the item's photo on the server; null when it has none. */
     val imageKey: String? = null,
+    val addedBy: String? = null,
+    val addedByName: String? = null,
+    val addedByGuest: Boolean = false,
+    val checkedByName: String? = null,
+    val checkedByGuest: Boolean = false,
 ) {
+    /** Who added and who ticked it, for working out the name its row shows. */
+    val attributed: Attributed
+        get() = Attributed(addedBy, addedByName, addedByGuest, checkedBy, checkedByName, checkedByGuest)
+
     /** Quantity worth displaying — hidden when absent or the implicit default of "1". */
     val displayQuantity: String?
         get() {
@@ -87,6 +97,8 @@ data class ShareModel(
     val hasPassword: Boolean,
     val expiresAt: String?,
     val code: String? = null,
+    /** Null when the server has no such choice (before 1.10.0). */
+    val showNames: Boolean? = null,
 ) {
     val isLink: Boolean get() = type == ShareType.LINK
     val canWrite: Boolean get() = permission >= Permission.WRITE
@@ -118,6 +130,11 @@ fun ItemDto.toModel() = ItemModel(
     sortOrder = sortOrder,
     tags = tags.map { it.toModel() },
     updatedAt = updatedAt,
+    addedBy = addedBy,
+    addedByName = addedByName,
+    addedByGuest = addedByGuest,
+    checkedByName = checkedByName,
+    checkedByGuest = checkedByGuest,
 )
 
 fun ShopAreaDto.toModel() = ShopAreaModel(
@@ -139,4 +156,5 @@ fun dev.otherworld.shoppinglist.data.remote.dto.ShareDto.toModel() = ShareModel(
     hasPassword = hasPassword,
     expiresAt = expiresAt,
     code = code,
+    showNames = showNames,
 )

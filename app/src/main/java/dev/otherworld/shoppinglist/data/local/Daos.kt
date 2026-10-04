@@ -84,7 +84,7 @@ interface ItemDao {
     @Query("DELETE FROM items WHERE listId = :listId AND checked = 1")
     suspend fun deleteCheckedByList(listId: Long)
 
-    @Query("UPDATE items SET checked = 0, checkedBy = NULL WHERE listId = :listId")
+    @Query("UPDATE items SET checked = 0, checkedBy = NULL, checkedByName = NULL, checkedByGuest = 0 WHERE listId = :listId")
     suspend fun uncheckAllByList(listId: Long)
 
     @Query("UPDATE items SET listId = :newId WHERE listId = :oldId")

@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +44,7 @@ fun JoinScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var password by rememberSaveable { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf(viewModel.guestName) }
 
     LaunchedEffect(state.opened) { state.opened?.let(onOpened) }
 
@@ -101,13 +103,28 @@ fun JoinScreen(
                         Text(stringResource(R.string.join_password_wrong), color = MaterialTheme.colorScheme.error)
                     }
                 }
+                // Only where it can be used: an editable link (or one still locked) on a server that
+                // keeps guests' names. Optional, and kept for every link, like the web app's field.
+                val asksName = preview.guestNames && (preview.passwordRequired || preview.permission >= Permission.WRITE)
+                if (asksName) {
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it.take(40) },
+                        label = { Text(stringResource(R.string.join_guest_name_label)) },
+                        supportingText = { Text(stringResource(R.string.join_guest_name_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                        modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp),
+                    )
+                }
                 state.error?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it.asString(), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(24.dp))
                 Button(
-                    onClick = { viewModel.open(password.takeIf { preview.passwordRequired }) },
+                    onClick = { viewModel.open(password.takeIf { preview.passwordRequired }, name.takeIf { asksName }) },
                     enabled = !state.opening && (!preview.passwordRequired || password.isNotBlank()),
                     modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp),
                 ) {
