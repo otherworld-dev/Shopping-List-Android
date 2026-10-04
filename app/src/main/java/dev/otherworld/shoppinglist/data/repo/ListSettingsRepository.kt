@@ -63,18 +63,23 @@ class ListSettingsRepository @Inject constructor(
     /** Whether the server keeps who added and ticked items (server app 1.10.0 and later). */
     val guestNamesSupported: StateFlow<Boolean> = _guestNamesSupported.asStateFlow()
 
-    private val _showOwnName = MutableStateFlow(prefs.getBoolean(KEY_SHOW_OWN_NAME, false))
+    private val ownName = OptimisticSetting(prefs.getBoolean(KEY_SHOW_OWN_NAME, false)) {
+        prefs.edit().putBoolean(KEY_SHOW_OWN_NAME, it).apply()
+    }
 
     /** Show this user's own name on items they added or ticked; off by default, as on the web. */
-    val showOwnName: StateFlow<Boolean> = _showOwnName.asStateFlow()
+    val showOwnName: StateFlow<Boolean> = ownName.value
+
+    private val _ownUserId = MutableStateFlow(prefs.getString(KEY_USER_ID, null))
 
     /**
-     * This user's Nextcloud user id, which items record as who added or ticked them. It can
-     * differ from the login (an email address, say), so until the server has said, the login
-     * stands in.
+     * This user's Nextcloud user id, which items record as who added or ticked them; null until
+     * the server has said. It can differ from the login (an email address, say), which is what
+     * [ownUserIdOrLogin] falls back to meanwhile.
      */
-    val ownUserId: String?
-        get() = prefs.getString(KEY_USER_ID, null) ?: credentialStore.current()?.loginName
+    val ownUserId: StateFlow<String?> = _ownUserId.asStateFlow()
+
+    fun ownUserIdOrLogin(id: String?): String? = id ?: credentialStore.current()?.loginName
 
     /** The largest photo the server takes, from its capabilities. */
     val maxUploadBytes: Long
@@ -98,36 +103,27 @@ class ListSettingsRepository @Inject constructor(
                 caps.shoppingList?.itemImages?.maxUploadBytes ?: ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES,
             )
             .apply()
-        refreshSort()
-        refreshNames()
-    }
-
-    /** Who this user is, and whether they show their own name, when the server keeps names. */
-    private suspend fun refreshNames() {
-        if (!_guestNamesSupported.value) return
-        val id = service.currentUser().ocs.data.id
-        val showOwn = service.getSettings().ocs.data.showOwnName
-        _showOwnName.value = showOwn
-        prefs.edit()
-            .putString(KEY_USER_ID, id.ifBlank { null })
-            .putBoolean(KEY_SHOW_OWN_NAME, showOwn)
-            .apply()
+        if (!supported && !names) return
+        // One settings fetch for the sort and the name switch, each guarded against a change the
+        // user made while it was out.
+        val (editsBefore, queuedBefore) = sortLock.withLock { sortEdits.get() to settingsQueued() }
+        val nameToken = ownName.beginRefresh()
+        val settings = service.getSettings().ocs.data
+        if (supported) applySort(settings.listSort, editsBefore, queuedBefore)
+        if (names) {
+            ownName.applyRefresh(settings.showOwnName, nameToken)
+            val id = service.currentUser().ocs.data.id.ifBlank { null }
+            _ownUserId.value = id
+            prefs.edit().putString(KEY_USER_ID, id).apply()
+        }
     }
 
     /**
      * Straight to the server, like the web app's switch: it's only how items look, so it isn't
-     * queued. Shown at once, and put back if the server can't be told.
+     * queued. Shown at once; if the server can't be told it goes back and the failure is thrown.
      */
     suspend fun setShowOwnName(enabled: Boolean) {
-        val before = _showOwnName.value
-        _showOwnName.value = enabled
-        try {
-            service.updateSettings(UpdateSettingsRequest(showOwnName = enabled))
-            prefs.edit().putBoolean(KEY_SHOW_OWN_NAME, enabled).apply()
-        } catch (e: Exception) {
-            _showOwnName.value = before
-            throw e
-        }
+        ownName.set(enabled) { service.updateSettings(UpdateSettingsRequest(showOwnName = it)) }
     }
 
     /**
@@ -138,9 +134,14 @@ class ListSettingsRepository @Inject constructor(
         if (!_supported.value) return
         // Under the lock, so neither read lands between setListSort's local write and its queueing.
         val (editsBefore, queuedBefore) = sortLock.withLock { sortEdits.get() to settingsQueued() }
-        val server = ListSortMode.fromStorage(service.getSettings().ocs.data.listSort)
+        applySort(service.getSettings().ocs.data.listSort, editsBefore, queuedBefore)
+    }
+
+    private suspend fun applySort(listSort: String?, editsBefore: Long, queuedBefore: Boolean) {
         sortLock.withLock {
-            if (!localChangeWins(queuedBefore, editsBefore, sortEdits.get(), settingsQueued())) remember(server)
+            if (!localChangeWins(queuedBefore, editsBefore, sortEdits.get(), settingsQueued())) {
+                remember(ListSortMode.fromStorage(listSort))
+            }
         }
     }
 
@@ -170,7 +171,8 @@ class ListSettingsRepository @Inject constructor(
         _supported.value = false
         _imagesSupported.value = false
         _guestNamesSupported.value = false
-        _showOwnName.value = false
+        ownName.reset()
+        _ownUserId.value = null
     }
 
     private suspend fun settingsQueued() = mutationDao.countByType(MutationTypes.UPDATE_SETTINGS) > 0

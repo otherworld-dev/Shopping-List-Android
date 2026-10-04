@@ -123,6 +123,7 @@ class ItemsViewModel @Inject constructor(
         displayPrefs.collapsedAreas(listId),
         guests.observeShareForList(listId),
         listSettings.showOwnName,
+        listSettings.ownUserId,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val share = values[10] as GuestShareEntity?
@@ -152,7 +153,7 @@ class ItemsViewModel @Inject constructor(
             isLocal = isLocal,
             guestState = share?.state,
             droppedChanges = share?.droppedChanges ?: 0,
-            me = if (isGuest) null else listSettings.ownUserId,
+            me = if (isGuest) null else listSettings.ownUserIdOrLogin(values[12] as String?),
             showOwnName = values[11] as Boolean,
         )
     }.stateIn(

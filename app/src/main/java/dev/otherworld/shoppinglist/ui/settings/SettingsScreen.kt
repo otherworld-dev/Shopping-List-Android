@@ -54,8 +54,14 @@ import dev.otherworld.shoppinglist.data.prefs.ThemeMode
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.domain.sort.ListSortMode
+import dev.otherworld.shoppinglist.ui.common.UiText
+import dev.otherworld.shoppinglist.ui.common.asString
+import dev.otherworld.shoppinglist.ui.common.errorText
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -99,9 +105,23 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val guestName = guestNameStore.name
 
+    private val _ownNameError = MutableStateFlow<UiText?>(null)
+
+    /** Why the switch went back (offline, say), until it's next used. */
+    val ownNameError: StateFlow<UiText?> = _ownNameError.asStateFlow()
+
     fun setShowOwnName(show: Boolean) {
-        // The switch goes back by itself if the server can't be told; nothing else to undo.
-        viewModelScope.launch { runCatching { listSettings.setShowOwnName(show) } }
+        _ownNameError.value = null
+        viewModelScope.launch {
+            // The switch goes back by itself if the server can't be told; this says why.
+            try {
+                listSettings.setShowOwnName(show)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _ownNameError.value = errorText(e)
+            }
+        }
     }
 
     fun setGuestName(name: String) = guestNameStore.set(name)
@@ -125,6 +145,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     val imagesUnsupported by viewModel.imagesUnsupported.collectAsStateWithLifecycle()
     val canShowOwnName by viewModel.canShowOwnName.collectAsStateWithLifecycle()
     val showOwnName by viewModel.showOwnName.collectAsStateWithLifecycle()
+    val ownNameError by viewModel.ownNameError.collectAsStateWithLifecycle()
     val hasGuestLists by viewModel.hasGuestLists.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -175,6 +196,9 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 Section(stringResource(R.string.settings_names)) {
                     if (canShowOwnName) {
                         Toggle(stringResource(R.string.settings_show_own_name), showOwnName, viewModel::setShowOwnName)
+                        ownNameError?.let {
+                            Text(it.asString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                        }
                     }
                     if (hasGuestLists) {
                         GuestNameField(viewModel)
