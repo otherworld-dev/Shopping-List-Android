@@ -20,6 +20,20 @@ stores never drift apart.
 - `keystore.properties` + `upload-keystore.jks` at the repo root (both
   gitignored) for signing. Without them the release build is unsigned — fine for
   F-Droid (they sign with their own key) but not for a Play upload.
+- For the automatic Play upload, four secrets on the GitHub repo, read by
+  `.github/workflows/play-release.yml`:
+
+  | Secret | Holds |
+  |---|---|
+  | `UPLOAD_KEYSTORE_BASE64` | `upload-keystore.jks`, base64 encoded |
+  | `UPLOAD_KEYSTORE_PASSWORD` | the keystore's `storePassword` |
+  | `UPLOAD_KEY_PASSWORD` | the `upload` key's `keyPassword` |
+  | `PLAY_SERVICE_ACCOUNT_JSON` | the JSON key of a Google Cloud service account |
+
+  The service account needs the Google Play Android Developer API enabled in its
+  Cloud project, and an invite in Play Console → *Users and permissions* with
+  release rights on this app. The upload key is only the upload key (Google holds
+  the app signing key), so it can be reset in Play Console if it ever leaks.
 
 ## Translations
 
@@ -66,20 +80,28 @@ A partly translated language is fine to ship, anything missing shows in English.
    git push github vX.Y.Z
    ```
 
-6. **Build the Play bundle** (Play needs the AAB, not the APK):
+6. **Play**: pushing the tag to GitHub runs the *Play release* workflow. It
+   checks the tag matches `versionName`, runs the tests, builds and signs the
+   bundle, and uploads it with the changelog as "What's new". The track it
+   releases to is `TRACK` at the top of the workflow. Watch it with
+   `gh run watch` or on the repo's Actions tab, and check the signing
+   certificate it prints starts `4C:ED:9F:40`.
+
+   To check the secrets without releasing anything, run the workflow by hand
+   (Actions → *Play release* → *Run workflow*) with *dry run* ticked. It builds
+   and signs the bundle and checks the Play credentials, from any branch.
+
+7. **If the workflow can't be used**, build and upload by hand. Play needs the
+   AAB, not the APK:
    ```
    ./gradlew :app:bundleRelease
    # -> app/build/outputs/bundle/release/app-release.aab
-   ```
-   Confirm it's the right version and signing key before uploading:
-   ```
    "$JAVA_HOME/bin/keytool.exe" -printcert -jarfile \
        app/build/outputs/bundle/release/app-release.aab | grep SHA256
    # expect the upload cert fingerprint 4C:ED:9F:40:...
    ```
-
-7. **Upload to Play**: Play Console → the app → Production (or a test track) →
-   *Create new release* → upload the AAB. Manual step; can't be automated here.
+   Then Play Console → the app → the track → *Create new release* → upload the
+   AAB.
 
 8. **F-Droid**: nothing to do. `metadata/dev.otherworld.shoppinglist.yml` on
    [fdroiddata](https://gitlab.com/fdroid/fdroiddata) uses `UpdateCheckMode: Tags`

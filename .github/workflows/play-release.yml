@@ -1,0 +1,123 @@
+# Builds the signed bundle for a version tag and uploads it to Google Play, with the
+# changelog from fastlane/metadata as "What's new". The same tag push is what F-Droid
+# builds from, so one tag releases to both stores at the same versionCode (RELEASING.md).
+#
+# Run it by hand with "dry run" ticked to check the signing key and Play credentials
+# from any branch without uploading anything.
+
+name: Play release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      track:
+        description: Play track to release to
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      dry_run:
+        description: Build and check the Play credentials, without uploading
+        type: boolean
+        default: true
+
+concurrency: play-release
+
+# The job only reads the repo; the Play upload uses its own service account.
+permissions:
+  contents: read
+
+env:
+  # The track a tag push releases to. Switch to production once internal is proven.
+  TRACK: ${{ inputs.track || 'internal' }}
+  DRY_RUN: ${{ inputs.dry_run || false }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Actions are pinned to commit SHAs, as this job holds the upload key and Play
+    # credentials and a moved tag could otherwise run new code with them.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag matches versionName
+        run: |
+          name=$(sed -n 's/^ *versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          code=$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
+          echo "VERSION_NAME=$name" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
+          echo "versionName $name, versionCode $code, track $TRACK, dry run $DRY_RUN"
+          if [ "$DRY_RUN" != true ] && { [ "$GITHUB_REF_TYPE" != tag ] || [ "$GITHUB_REF_NAME" != "v$name" ]; }; then
+            echo "::error::Only a tag matching versionName (v$name) can be uploaded, so Play and F-Droid stay on the same versionCode."
+            exit 1
+          fi
+          if [ ! -f "fastlane/metadata/android/en-US/changelogs/$code.txt" ]; then
+            echo "::error::Missing fastlane/metadata/android/en-US/changelogs/$code.txt"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      # Installed before the secrets are on disk, so their setup never runs alongside them.
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: '3.3'
+
+      - name: Install fastlane
+        run: gem install fastlane -v 2.240.1 --no-document
+
+      - name: Restore the upload key and Play credentials
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$UPLOAD_KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
+          cat > keystore.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$UPLOAD_KEYSTORE_PASSWORD
+          keyAlias=upload
+          keyPassword=$UPLOAD_KEY_PASSWORD
+          EOF
+          printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > play-service-account.json
+
+      - name: Test and build the bundle
+        run: ./gradlew :app:testDebugUnitTest :app:bundleRelease
+
+      - name: Show the signing certificate
+        run: keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | grep SHA256
+
+      - name: Check the Play credentials
+        if: env.DRY_RUN == 'true'
+        run: fastlane run validate_play_store_json_key json_key:play-service-account.json
+
+      - name: Upload to Play
+        if: env.DRY_RUN != 'true'
+        run: |
+          fastlane supply \
+            --package_name dev.otherworld.shoppinglist \
+            --json_key play-service-account.json \
+            --aab app/build/outputs/bundle/release/app-release.aab \
+            --mapping app/build/outputs/mapping/release/mapping.txt \
+            --version_name "$VERSION_NAME" \
+            --track "$TRACK" \
+            --release_status completed \
+            --metadata_path fastlane/metadata/android \
+            --skip_upload_metadata true \
+            --skip_upload_images true \
+            --skip_upload_screenshots true \
+            --skip_upload_apk true
+
+      - name: Remove the upload key and Play credentials
+        if: always()
+        run: rm -f upload-keystore.jks keystore.properties play-service-account.json

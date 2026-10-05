@@ -14,6 +14,7 @@ local.properties
 *.jks
 !debug.keystore
 keystore.properties
+play-service-account.json
 /app/release/
 /.scratch/
 
