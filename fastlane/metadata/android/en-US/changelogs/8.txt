@@ -1,3 +1,3 @@
-Open a list someone shared with you, no Nextcloud account needed. When a list's owner sends you its share link, tap Open in the app on the page it opens. Add, tick off and change items like any other list, even offline, if the link lets you edit. Password-protected links work too, and you can leave a list from its menu.
+Use the app without an account, with your lists kept on the phone and uploaded later if you sign in. Join a list shared with you from its link or invite code, no Nextcloud account needed, and see who added and ticked each item. Add photos to items, and paste a whole list to add one item per line. Also a light theme, pinned lists, sorting for lists and items, and moving items between lists.
 
-The Open in the app button needs version 1.10 of the Shopping List server app.
+Some of this needs version 1.10 of the Shopping List server app.
