@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The top of AppBackground's dark gradient: lerp(DefaultBrand #0082C9, #0A0D15, 0.8). Any
+      brand lands on a dark navy, so this stays close whatever the server's colour.
+    -->
+    <color name="splash_background">#08243A</color>
+</resources>

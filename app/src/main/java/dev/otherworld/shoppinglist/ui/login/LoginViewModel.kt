@@ -3,12 +3,15 @@ package dev.otherworld.shoppinglist.ui.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.auth.LoginFlowV2Client
 import dev.otherworld.shoppinglist.data.tls.AcceptedCertStore
 import dev.otherworld.shoppinglist.data.tls.CertInfo
 import dev.otherworld.shoppinglist.data.tls.UntrustedCertHolder
 import dev.otherworld.shoppinglist.data.tls.describeCert
+import dev.otherworld.shoppinglist.ui.common.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -25,7 +28,7 @@ data class LoginUiState(
     val connecting: Boolean = false,
     val awaiting: Boolean = false,
     val launchUrl: String? = null,
-    val error: String? = null,
+    val error: UiText? = null,
     val pendingCert: CertInfo? = null,
 )
 
@@ -35,10 +38,16 @@ class LoginViewModel @Inject constructor(
     private val credentialStore: CredentialStore,
     private val acceptedCerts: AcceptedCertStore,
     private val certHolder: UntrustedCertHolder,
+    private val localModeStore: LocalMode,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
+
+    /** Already chosen, so the login screen was opened to add an account and needn't offer it again. */
+    val localMode: StateFlow<Boolean> = localModeStore.enabled
+
+    fun useWithoutAccount() = localModeStore.enable()
 
     private var pollJob: Job? = null
     private var lastServer: String = ""
@@ -80,7 +89,7 @@ class LoginViewModel @Inject constructor(
                     }
                 }
                 _state.update {
-                    it.copy(awaiting = false, error = "Timed out waiting for authorization.")
+                    it.copy(awaiting = false, error = UiText(R.string.login_error_timeout))
                 }
             } catch (e: CancellationException) {
                 // A newer login() cancelled this job — leave shared state and the cert holder
@@ -91,14 +100,15 @@ class LoginViewModel @Inject constructor(
                 if (untrusted != null && e is javax.net.ssl.SSLException) {
                     // The server presented a certificate the device doesn't trust (or one
                     // that doesn't cover this hostname): offer the accept prompt instead of
-                    // a dead-end error. The record carries the host that actually presented
-                    // the cert, so what we display and pin are always self-consistent.
+                    // a dead-end error. The record carries the host and port that actually
+                    // presented the cert, so what we display and pin are always self-consistent.
                     pendingRaw = untrusted.certificate
                     val host = untrusted.host ?: hostOf(server)
+                    val port = if (untrusted.host != null) untrusted.port else portOf(server)
                     _state.update {
                         it.copy(
                             connecting = false, awaiting = false, error = null,
-                            pendingCert = describeCert(host, untrusted.certificate, untrusted.hostnameMismatch),
+                            pendingCert = describeCert(host, port, untrusted.certificate, untrusted.hostnameMismatch),
                         )
                     }
                 } else {
@@ -110,11 +120,11 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    /** User tapped "Trust" in the prompt: pin the certificate for this host and retry. */
+    /** User tapped "Trust" in the prompt: pin the certificate for this host and port and retry. */
     fun trustPendingCert() {
         val cert = pendingRaw ?: return
-        val host = _state.value.pendingCert?.host ?: return
-        acceptedCerts.accept(host, cert)
+        val pending = _state.value.pendingCert ?: return
+        acceptedCerts.accept(pending.host, pending.port, cert)
         pendingRaw = null
         _state.update { it.copy(pendingCert = null) }
         login(lastServer)
@@ -147,25 +157,23 @@ class LoginViewModel @Inject constructor(
         return dev.otherworld.shoppinglist.data.tls.isCertFailure(e)
     }
 
-    private fun friendlyError(e: Exception): String = when (e) {
-        is java.net.UnknownHostException ->
-            "Couldn't reach the server. Check the address and your connection, then try again."
+    private fun friendlyError(e: Exception): UiText = when (e) {
+        is java.net.UnknownHostException -> UiText(R.string.login_error_unreachable)
         // These SSL branches are now fallbacks: a certificate failure normally surfaces the
         // accept prompt (above), so they fire only when no leaf was captured — a non-cert TLS
         // failure (protocol/cipher error, reset mid-handshake) or an empty chain.
-        is javax.net.ssl.SSLPeerUnverifiedException ->
-            "The server's certificate doesn't match the address you entered."
-        is javax.net.ssl.SSLException ->
-            "Couldn't establish a secure connection. Check the server's TLS configuration and " +
-                "try again."
-        else -> e.message ?: "Login failed"
+        is javax.net.ssl.SSLPeerUnverifiedException -> UiText(R.string.login_error_cert_mismatch)
+        is javax.net.ssl.SSLException -> UiText(R.string.login_error_tls)
+        else -> UiText(R.string.login_error_failed)
     }
 
-    private fun hostOf(server: String): String {
-        val s = server.trim().trimEnd('/')
-        val url = if (s.startsWith("http://") || s.startsWith("https://")) s else "https://$s"
-        return url.toHttpUrlOrNull()?.host ?: s
-    }
+    private fun hostOf(server: String): String = urlOf(server)?.host ?: server.trim().trimEnd('/')
+
+    private fun portOf(server: String): Int = urlOf(server)?.port ?: -1
+
+    private fun urlOf(server: String) = server.trim().trimEnd('/').let { s ->
+        if (s.startsWith("http://") || s.startsWith("https://")) s else "https://$s"
+    }.toHttpUrlOrNull()
 
     fun onUrlLaunched() = _state.update { it.copy(launchUrl = null) }
 

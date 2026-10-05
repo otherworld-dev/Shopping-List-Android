@@ -1,5 +1,6 @@
 package dev.otherworld.shoppinglist.ui.share
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,13 +10,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,8 +47,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.domain.guest.formatInviteCode
 import dev.otherworld.shoppinglist.domain.model.ShareModel
+import dev.otherworld.shoppinglist.domain.model.ShareType
+import dev.otherworld.shoppinglist.domain.share.ShareeOption
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
+import dev.otherworld.shoppinglist.ui.common.asString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,11 +91,18 @@ fun SharingScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             state.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
+                Text(it.asString(), color = MaterialTheme.colorScheme.error)
             }
 
             SectionTitle(stringResource(R.string.section_people_groups))
-            AddShareRow(onAdd = viewModel::addShare)
+            ShareSearch(
+                query = state.query,
+                results = state.results,
+                searching = state.searching,
+                failed = state.searchFailed,
+                onQueryChange = viewModel::onQueryChange,
+                onPick = viewModel::shareWith,
+            )
             if (state.people.isEmpty()) {
                 Text(stringResource(R.string.share_none_yet), style = MaterialTheme.typography.bodyMedium)
             } else {
@@ -107,7 +122,9 @@ fun SharingScreen(
                 link = state.link,
                 onCreate = { viewModel.createLink(write = false) },
                 onToggleWrite = { viewModel.setLinkPermission(state.link!!, it) },
+                onToggleShowNames = { viewModel.setLinkShowNames(state.link!!, it) },
                 onCopy = { clipboard.setText(AnnotatedString(viewModel.linkUrl(it))) },
+                onCopyInvite = { clipboard.setText(AnnotatedString(viewModel.inviteText(it))) },
                 onPassword = { passwordTarget = state.link },
                 onClearPassword = { viewModel.setLinkPassword(state.link!!, null) },
                 onRemove = { viewModel.removeLink(state.link!!) },
@@ -131,37 +148,62 @@ private fun SectionTitle(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddShareRow(onAdd: (String, Int, Boolean) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var isGroup by remember { mutableStateOf(false) }
-    var canEdit by remember { mutableStateOf(true) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun ShareSearch(
+    query: String,
+    results: List<ShareeOption>,
+    searching: Boolean,
+    failed: Boolean,
+    onQueryChange: (String) -> Unit,
+    onPick: (ShareeOption) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text(if (isGroup) stringResource(R.string.field_group_name) else stringResource(R.string.field_username)) },
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = { Text(stringResource(R.string.share_search_placeholder)) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            trailingIcon = if (searching) {
+                { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+            } else null,
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !isGroup, onClick = { isGroup = false }, label = { Text(stringResource(R.string.label_user)) })
-            FilterChip(selected = isGroup, onClick = { isGroup = true }, label = { Text(stringResource(R.string.label_group)) })
-            Spacer(Modifier.size(8.dp))
-            Text(stringResource(R.string.label_can_edit))
-            Switch(checked = canEdit, onCheckedChange = { canEdit = it })
-        }
-        Button(
-            onClick = {
-                if (name.isNotBlank()) {
-                    onAdd(name.trim(), if (isGroup) SharingViewModel.TYPE_GROUP else SharingViewModel.TYPE_USER, canEdit)
-                    name = ""
+        when {
+            query.isBlank() || searching -> Unit
+            failed -> Text(
+                stringResource(R.string.share_search_failed),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            results.isEmpty() -> Text(
+                stringResource(R.string.share_search_none),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            else -> results.forEach { option ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(option) }
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (option.type == ShareType.GROUP) Icons.Filled.Group else Icons.Filled.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.size(12.dp))
+                    Text(
+                        if (option.type == ShareType.GROUP) stringResource(R.string.share_search_group, option.label) else option.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-            },
-            enabled = name.isNotBlank(),
-        ) { Text(stringResource(R.string.action_add)) }
+            }
+        }
     }
 }
 
@@ -196,7 +238,9 @@ private fun LinkSection(
     link: ShareModel?,
     onCreate: () -> Unit,
     onToggleWrite: (Boolean) -> Unit,
+    onToggleShowNames: (Boolean) -> Unit,
     onCopy: (String) -> Unit,
+    onCopyInvite: (String) -> Unit,
     onPassword: () -> Unit,
     onClearPassword: () -> Unit,
     onRemove: () -> Unit,
@@ -205,6 +249,8 @@ private fun LinkSection(
         OutlinedButton(onClick = onCreate) { Text(stringResource(R.string.link_create)) }
         return
     }
+    // Null when there's no usable code: then neither the Code row nor Copy invite shows.
+    val code = formatInviteCode(link.code)
     Card {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
@@ -215,8 +261,24 @@ private fun LinkSection(
                 Text(stringResource(R.string.label_can_edit), modifier = Modifier.weight(1f))
                 Switch(checked = link.canWrite, onCheckedChange = onToggleWrite)
             }
+            // Only from servers that offer the choice (1.10.0 and later); guests' names always show.
+            link.showNames?.let { showNames ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.label_show_member_names), modifier = Modifier.weight(1f))
+                    Switch(checked = showNames, onCheckedChange = onToggleShowNames)
+                }
+            }
+            if (code != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.link_code), modifier = Modifier.weight(1f))
+                    SelectionContainer { Text(code, style = MaterialTheme.typography.titleMedium) }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 link.token?.let { token -> TextButton(onClick = { onCopy(token) }) { Text(stringResource(R.string.link_copy)) } }
+                if (code != null) {
+                    TextButton(onClick = { onCopyInvite(code) }) { Text(stringResource(R.string.link_copy_invite)) }
+                }
                 if (link.hasPassword) {
                     TextButton(onClick = onClearPassword) { Text(stringResource(R.string.link_remove_password)) }
                 } else {

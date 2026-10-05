@@ -11,6 +11,9 @@ data class ItemCreatePayload(
     val unit: String? = null,
     val shopAreaId: Long? = null,
     val areaExplicit: Boolean = false,
+    val checked: Boolean = false,
+    /** Added before the list's areas reached the phone, so detect the area when sending. */
+    val detectArea: Boolean = false,
 )
 
 @Serializable
@@ -32,6 +35,15 @@ data class ReorderPayload(val sortedIds: List<Long>)
 @Serializable
 data class TitlePayload(val title: String)
 
+@Serializable
+data class PinPayload(val isPinned: Boolean)
+
+@Serializable
+data class ListOrderPayload(val listIds: List<Long>)
+
+@Serializable
+data class SettingsPayload(val listSort: String)
+
 object MutationEntities {
     const val ITEM = "item"
     const val LIST = "list"
@@ -47,4 +59,9 @@ object MutationTypes {
     const val CLEAR_CHECKED = "clearChecked"
     const val UNCHECK_ALL = "uncheckAll"
     const val RENAME = "rename"
+    const val UPDATE_PREFERENCES = "updatePreferences"
+
+    // Not "reorder": MutationDao.reorderMutations() treats every 'reorder' row as an item reorder.
+    const val REORDER_LISTS = "reorderLists"
+    const val UPDATE_SETTINGS = "updateSettings"
 }

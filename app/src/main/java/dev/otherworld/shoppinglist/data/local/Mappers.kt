@@ -14,6 +14,11 @@ fun ListEntity.toModel() = ShoppingListModel(
     title = title,
     permission = permission,
     isOwner = isOwner,
+    isPinned = isPinned,
+    position = position,
+    updatedAt = updatedAt,
+    guestShareId = guestShareId,
+    isLocal = isLocal,
 )
 
 fun ItemEntity.toModel() = ItemModel(
@@ -27,6 +32,13 @@ fun ItemEntity.toModel() = ItemModel(
     checkedBy = checkedBy,
     sortOrder = sortOrder,
     tags = emptyList(),
+    updatedAt = updatedAt,
+    imageKey = imageKey,
+    addedBy = addedBy,
+    addedByName = addedByName,
+    addedByGuest = addedByGuest,
+    checkedByName = checkedByName,
+    checkedByGuest = checkedByGuest,
 )
 
 fun AreaEntity.toModel() = ShopAreaModel(
@@ -47,6 +59,8 @@ fun ListDto.toEntity(sortOrder: Int) = ListEntity(
     isOwner = isOwner,
     sortOrder = sortOrder,
     updatedAt = updatedAt,
+    isPinned = isPinned == true,
+    position = position,
 )
 
 fun ItemDto.toEntity() = ItemEntity(
@@ -60,6 +74,12 @@ fun ItemDto.toEntity() = ItemEntity(
     checkedBy = checkedBy,
     sortOrder = sortOrder,
     updatedAt = updatedAt,
+    imageKey = imageKey,
+    addedBy = addedBy,
+    addedByName = addedByName,
+    addedByGuest = addedByGuest,
+    checkedByName = checkedByName,
+    checkedByGuest = checkedByGuest,
 )
 
 fun ShopAreaDto.toEntity(listId: Long) = AreaEntity(

@@ -85,6 +85,29 @@ class AreaRepository @Inject constructor(
     }
 
     /**
+     * Merges the user's language keyword pack into the list's default areas (server-side,
+     * keyed to the account's Nextcloud language; existing keywords are kept) and caches the
+     * returned areas. Only keywords change, so a queued reorder keeps owning the local order.
+     */
+    suspend fun applyLanguageKeywords(listId: Long) {
+        val updated = service.applyKeywords(listId).ocs.data
+        db.withTransaction {
+            if (mutationDao.pendingAreaCount(listId) > 0) {
+                val localOrder = areaDao.getByList(listId).associate { it.id to it.sortOrder }
+                areaDao.upsertAll(
+                    updated.map { dto ->
+                        val entity = dto.toEntity(listId)
+                        localOrder[entity.id]?.let { entity.copy(sortOrder = it) } ?: entity
+                    },
+                )
+            } else {
+                areaDao.deleteByList(listId)
+                areaDao.upsertAll(updated.map { it.toEntity(listId) })
+            }
+        }
+    }
+
+    /**
      * Persists a new ordering of shop areas (drag-and-drop) so the item grouping follows the
      * user's store layout. Unlike other area edits this is offline-capable — reordering happens
      * while shopping, so it goes through the mutation queue: the new order is written to Room at

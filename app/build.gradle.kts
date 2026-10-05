@@ -14,6 +14,19 @@ android {
     namespace = "dev.otherworld.shoppinglist"
     compileSdk = 36
 
+    androidResources {
+        // Lists every values-xx folder Crowdin adds, so Android 13+ offers the app's language
+        // in its own settings without a hand-kept list.
+        generateLocaleConfig = true
+    }
+
+    lint {
+        // Crowdin translations arrive partial, and a missing string falls back to English, so
+        // these mustn't fail the build. ExtraTranslation covers text removed here before the
+        // next Crowdin sync drops it from the translations.
+        warning += setOf("MissingTranslation", "ExtraTranslation")
+    }
+
     val keystorePropertiesFile = rootProject.file("keystore.properties")
     val keystoreProperties = Properties()
     if (keystorePropertiesFile.exists()) {
@@ -35,8 +48,8 @@ android {
         applicationId = "dev.otherworld.shoppinglist"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 8
+        versionName = "0.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -116,6 +129,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.browser)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.reorderable)
 
     // Test

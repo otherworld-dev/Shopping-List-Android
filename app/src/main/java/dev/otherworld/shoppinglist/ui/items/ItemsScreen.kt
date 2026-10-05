@@ -1,5 +1,6 @@
 package dev.otherworld.shoppinglist.ui.items
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,8 +31,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -39,11 +42,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -56,15 +61,19 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -78,81 +87,124 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.prefs.Density
+import dev.otherworld.shoppinglist.domain.guest.Byline
+import dev.otherworld.shoppinglist.domain.guest.bylineFor
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
+import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
+import dev.otherworld.shoppinglist.domain.sort.BoughtSort
+import dev.otherworld.shoppinglist.domain.sort.CollapsedAreas
+import dev.otherworld.shoppinglist.domain.sort.OpenSort
+import dev.otherworld.shoppinglist.domain.sort.groupOpenItems
+import dev.otherworld.shoppinglist.domain.sort.sortBought
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import dev.otherworld.shoppinglist.data.photo.ItemPhotoUrls
+import dev.otherworld.shoppinglist.domain.text.SmartInput
+import dev.otherworld.shoppinglist.domain.text.formatListAsText
 import dev.otherworld.shoppinglist.ui.common.PollEffect
 import dev.otherworld.shoppinglist.ui.common.parseHexColor
-import dev.otherworld.shoppinglist.ui.theme.NcRowAlt
+import dev.otherworld.shoppinglist.ui.theme.LocalRowShade
+import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-
-// ---- Flattened display rows (headers + items) so the list can be drag-reordered ----
-
-internal sealed interface Row {
-    val key: String
-
-    data class AreaHeaderRow(val area: ShopAreaModel?, val count: Int) : Row {
-        override val key get() = "h-${area?.id ?: -1L}"
-    }
-
-    data class ItemRowData(val item: ItemModel, val draggable: Boolean, val alt: Boolean) : Row {
-        override val key get() = if (draggable) "i-${item.id}" else "c-${item.id}"
-    }
-
-    data class CheckedHeaderRow(val count: Int) : Row {
-        override val key get() = "checked-header"
-    }
-}
-
-private fun buildRows(items: List<ItemModel>, areas: List<ShopAreaModel>): List<Row> {
-    val unchecked = items.filterNot { it.checked }
-    val byArea = unchecked.groupBy { it.shopAreaId }
-    val known = areas.map { it.id }.toSet()
-    val rows = mutableListOf<Row>()
-    areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
-        val list = byArea[area.id]?.sortedBy { it.sortOrder } ?: return@forEach
-        rows += Row.AreaHeaderRow(area, list.size)
-        list.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = true, alt = i % 2 == 1) }
-    }
-    val uncategorized = unchecked.filter { it.shopAreaId == null || it.shopAreaId !in known }.sortedBy { it.sortOrder }
-    if (uncategorized.isNotEmpty()) {
-        rows += Row.AreaHeaderRow(null, uncategorized.size)
-        uncategorized.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = true, alt = i % 2 == 1) }
-    }
-    val checked = items.filter { it.checked }.sortedBy { it.name.lowercase() }
-    if (checked.isNotEmpty()) {
-        rows += Row.CheckedHeaderRow(checked.size)
-        checked.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = false, alt = i % 2 == 1) }
-    }
-    return rows
-}
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemsScreen(
     onBack: () -> Unit,
     onManageAreas: () -> Unit,
+    onEnterPassword: (String) -> Unit = {},
+    onLeft: () -> Unit = {},
     viewModel: ItemsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val photos by viewModel.photos.collectAsStateWithLifecycle()
     PollEffect { viewModel.poll() }
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
     var showReorderAreas by rememberSaveable { mutableStateOf(false) }
+    var confirmLeave by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    val copiedMessage = stringResource(R.string.list_copied)
+    val context = LocalContext.current
+
+    // The item a photo is being taken or picked for, and the camera's file; saved, since the
+    // camera app can outlive this process.
+    var photoItemId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var cameraTarget by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var viewing by remember { mutableStateOf<ItemPhotoUrls?>(null) }
+    var confirmRemovePhoto by remember { mutableStateOf<ItemModel?>(null) }
+    fun photoItem() = photoItemId?.let { id -> state.items.firstOrNull { it.id == id } }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val target = cameraTarget
+        val item = photoItem()
+        if (target != null) {
+            if (taken && item != null) viewModel.attachPhoto(item, target) else viewModel.cameraCancelled(target)
+        }
+        cameraTarget = null
+        photoItemId = null
+    }
+    val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+        val item = photoItem()
+        if (picked != null && item != null) viewModel.attachPhoto(item, picked)
+        photoItemId = null
+    }
+    val noCamera = stringResource(R.string.error_no_camera)
+    fun takePhotoFor(item: ItemModel) {
+        val target = viewModel.newCameraTarget()
+        photoItemId = item.id
+        cameraTarget = target
+        try {
+            takePicture.launch(target)
+        } catch (e: ActivityNotFoundException) {
+            viewModel.cameraCancelled(target)
+            cameraTarget = null
+            photoItemId = null
+            scope.launch { snackbarHostState.showSnackbar(noCamera) }
+        }
+    }
+    fun choosePhotoFor(item: ItemModel) {
+        photoItemId = item.id
+        pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
     LaunchedEffect(state.error) {
         state.error?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.asString(context))
             viewModel.consumeError()
+        }
+    }
+    LaunchedEffect(state.notice) {
+        state.notice?.let {
+            snackbarHostState.showSnackbar(it.asString(context))
+            viewModel.consumeNotice()
+        }
+    }
+    LaunchedEffect(state.droppedChanges) {
+        val dropped = state.droppedChanges
+        if (dropped > 0) {
+            snackbarHostState.showSnackbar(context.resources.getQuantityString(R.plurals.guest_changes_dropped, dropped, dropped))
+            viewModel.clearDropped()
         }
     }
 
     val areaById = remember(state.areas) { state.areas.associateBy { it.id } }
-    var rows by remember { mutableStateOf(buildRows(state.items, state.areas)) }
+    val locale = Locale.getDefault()
+    var rows by remember {
+        mutableStateOf(buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale))
+    }
     var dragging by remember { mutableStateOf(false) }
-    LaunchedEffect(state.items, state.areas) {
-        if (!dragging) rows = buildRows(state.items, state.areas)
+    LaunchedEffect(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas) {
+        if (!dragging) rows = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale)
     }
 
     val lazyListState = rememberLazyListState()
@@ -162,19 +214,9 @@ fun ItemsScreen(
 
     fun commitReorder() {
         dragging = false
-        val orderedIds = mutableListOf<Long>()
-        var currentAreaId: Long? = null
-        rows.forEach { row ->
-            when (row) {
-                is Row.AreaHeaderRow -> currentAreaId = row.area?.id
-                is Row.ItemRowData -> if (row.draggable) {
-                    orderedIds += row.item.id
-                    if (row.item.shopAreaId != currentAreaId) viewModel.moveToArea(row.item, currentAreaId)
-                }
-                is Row.CheckedHeaderRow -> currentAreaId = null
-            }
-        }
-        viewModel.reorder(orderedIds)
+        val plan = planReorder(rows)
+        plan.areaMoves.forEach { (item, areaId) -> viewModel.moveToArea(item, areaId) }
+        viewModel.reorder(plan.orderedIds)
     }
 
     Box(Modifier.fillMaxSize().systemBarsPadding(), contentAlignment = Alignment.TopCenter) {
@@ -217,15 +259,62 @@ fun ItemsScreen(
                         },
                         onClick = { overflow = false; viewModel.toggleDensity() },
                     )
+                    // Read-only, so offered on shared read-only lists too. Writes the outstanding
+                    // items in the same shape the add box parses, so a list round-trips through
+                    // a chat message (mirrors the web app's "Copy list as text").
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.menu_copy_as_text)) },
+                        enabled = state.items.any { !it.checked },
+                        onClick = {
+                            overflow = false
+                            clipboard.setText(AnnotatedString(formatListAsText(state.items)))
+                            // Android 13+ shows its own system "Copied" confirmation.
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
+                            }
+                        },
+                    )
+                    // Display-only, like density, so offered on read-only lists too. One
+                    // choice for all lists, remembered on this device (mirrors the web app).
+                    HorizontalDivider()
+                    MenuCaption(stringResource(R.string.menu_sort_items))
+                    SortRadioItem(stringResource(R.string.sort_by_area), state.openSort == OpenSort.AREA) {
+                        overflow = false; viewModel.setOpenSort(OpenSort.AREA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_by_area_a_to_z), state.openSort == OpenSort.AREA_ALPHA) {
+                        overflow = false; viewModel.setOpenSort(OpenSort.AREA_ALPHA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_a_to_z), state.openSort == OpenSort.ALPHA) {
+                        overflow = false; viewModel.setOpenSort(OpenSort.ALPHA)
+                    }
+                    HorizontalDivider()
+                    MenuCaption(stringResource(R.string.menu_sort_checked))
+                    SortRadioItem(stringResource(R.string.sort_by_area), state.boughtSort == BoughtSort.AREA) {
+                        overflow = false; viewModel.setBoughtSort(BoughtSort.AREA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_a_to_z), state.boughtSort == BoughtSort.ALPHA) {
+                        overflow = false; viewModel.setBoughtSort(BoughtSort.ALPHA)
+                    }
+                    SortRadioItem(stringResource(R.string.sort_most_recent), state.boughtSort == BoughtSort.RECENT) {
+                        overflow = false; viewModel.setBoughtSort(BoughtSort.RECENT)
+                    }
                     if (state.canWrite) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_reorder_areas)) },
-                            enabled = state.areas.size >= 2,
-                            onClick = { overflow = false; showReorderAreas = true },
-                        )
+                        HorizontalDivider()
+                        // Areas live on the server: not for a guest list or one kept on the phone.
+                        if (!state.isGuest && !state.isLocal) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_manage_areas)) }, onClick = { overflow = false; onManageAreas() })
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_reorder_areas)) },
+                                enabled = state.areas.size >= 2,
+                                onClick = { overflow = false; showReorderAreas = true },
+                            )
+                        }
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; viewModel.uncheckAll() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; viewModel.clearChecked() })
+                    }
+                    if (state.isGuest) {
+                        HorizontalDivider()
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_leave_list)) }, onClick = { overflow = false; confirmLeave = true })
                     }
                 }
             }
@@ -238,6 +327,13 @@ fun ItemsScreen(
             modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp).imePadding(),
         ) {
             Column(Modifier.fillMaxSize()) {
+                if (state.isGuest) {
+                    GuestBanner(
+                        state = state,
+                        onEnterPassword = { viewModel.passwordLink(onEnterPassword) },
+                        onLeave = { confirmLeave = true },
+                    )
+                }
                 if (state.canWrite) {
                     AddItemRow(onAdd = { name -> viewModel.addItem(name, null) })
                     RowDivider()
@@ -260,7 +356,13 @@ fun ItemsScreen(
                             items(rows, key = { it.key }) { row ->
                                 ReorderableItem(reorderState, key = row.key) { _ ->
                                     when (row) {
-                                        is Row.AreaHeaderRow -> SectionHeader(row.area?.name ?: stringResource(R.string.section_other), parseHexColor(row.area?.color), row.count)
+                                        is Row.AreaHeaderRow -> SectionHeader(
+                                            name = row.area?.name ?: stringResource(R.string.section_other),
+                                            color = parseHexColor(row.area?.color),
+                                            count = row.count,
+                                            collapsed = row.collapsed,
+                                            onToggle = { viewModel.toggleCollapsed(row.area?.id) },
+                                        )
                                         is Row.CheckedHeaderRow -> SectionHeader(stringResource(R.string.section_checked), null, row.count)
                                         is Row.ItemRowData -> {
                                             val dragModifier = if (row.draggable && state.canWrite) {
@@ -274,16 +376,16 @@ fun ItemsScreen(
                                             ItemRow(
                                                 item = row.item,
                                                 area = row.item.shopAreaId?.let { areaById[it] },
-                                                // Grouped rows sit under their area's header, so repeating
-                                                // the name on each one is noise. Checked items are listed
-                                                // together across areas, so there it still carries meaning.
-                                                showAreaName = row.item.checked,
+                                                showAreaName = row.showAreaName,
                                                 enabled = state.canWrite,
                                                 alt = row.alt,
                                                 onToggle = { viewModel.toggleCheck(row.item) },
                                                 onClick = { if (state.canWrite) editTarget = row.item },
                                                 compact = state.density == Density.COMPACT,
                                                 handleModifier = dragModifier,
+                                                photoUrl = photos.urls[row.item.id]?.thumbnail,
+                                                onPhotoClick = { viewing = photos.urls[row.item.id] },
+                                                byline = bylineFor(row.item.attributed, row.item.checked, state.me, state.showOwnName),
                                             )
                                             RowDivider()
                                         }
@@ -291,7 +393,7 @@ fun ItemsScreen(
                                 }
                             }
                         }
-                        PinnedSectionHeader(rows, lazyListState)
+                        PinnedSectionHeader(rows, lazyListState, onToggleArea = { viewModel.toggleCollapsed(it) })
                     }
                 }
             }
@@ -301,12 +403,43 @@ fun ItemsScreen(
     }
 
     editTarget?.let { item ->
+        // The photo changes under the open dialog, so it follows the live row, not the snapshot.
+        val live = state.items.firstOrNull { it.id == item.id } ?: item
         ItemEditDialog(
             item = item,
             areas = state.areas,
+            moveTargets = state.otherLists,
             onSave = { name, qty, areaId -> editTarget = null; viewModel.editItem(item, name, qty, areaId) },
+            onMove = { target -> editTarget = null; viewModel.moveItem(item, target) },
             onDelete = { editTarget = null; viewModel.deleteItem(item) },
             onDismiss = { editTarget = null },
+            photo = if (photos.canEdit) {
+                {
+                    PhotoSection(
+                        urls = photos.urls[live.id],
+                        hasPhoto = live.imageKey != null,
+                        busy = live.id in photos.busy,
+                        onView = { viewing = photos.urls[live.id] },
+                        onTake = { takePhotoFor(live) },
+                        onChoose = { choosePhotoFor(live) },
+                        onRemove = { confirmRemovePhoto = live },
+                    )
+                }
+            } else {
+                null
+            },
+        )
+    }
+
+    viewing?.let { urls -> PhotoViewer(urls, onDismiss = { viewing = null }) }
+
+    confirmRemovePhoto?.let { item ->
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.dialog_remove_photo_title),
+            message = stringResource(R.string.dialog_remove_photo_message, item.name.trim()),
+            confirmLabel = stringResource(R.string.photo_remove),
+            onConfirm = { confirmRemovePhoto = null; viewModel.removePhoto(item) },
+            onDismiss = { confirmRemovePhoto = null },
         )
     }
 
@@ -315,6 +448,16 @@ fun ItemsScreen(
             areas = state.areas,
             onReorder = viewModel::reorderAreas,
             onDismiss = { showReorderAreas = false },
+        )
+    }
+
+    if (confirmLeave) {
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.dialog_leave_list_title),
+            message = stringResource(R.string.dialog_leave_list_message, state.title),
+            confirmLabel = stringResource(R.string.action_leave),
+            onConfirm = { confirmLeave = false; viewModel.leave(onLeft) },
+            onDismiss = { confirmLeave = false },
         )
     }
 }
@@ -425,6 +568,25 @@ private fun RowDivider() {
     Box(Modifier.fillMaxWidth().size(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)))
 }
 
+@Composable
+private fun MenuCaption(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun SortRadioItem(label: String, selected: Boolean, onSelect: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        leadingIcon = { RadioButton(selected = selected, onClick = null) },
+        onClick = onSelect,
+    )
+}
+
 /**
  * A copy of the section the list is currently scrolled into, drawn over the top of the list.
  * Item rows no longer repeat the area name, so this keeps it on screen for groups that run
@@ -433,7 +595,7 @@ private fun RowDivider() {
  * header it was dropped under, so pulling them out of the list would break drag-to-recategorise.
  */
 @Composable
-internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState) {
+internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState, onToggleArea: (Long?) -> Unit) {
     val pinned by remember(rows) {
         derivedStateOf {
             rows.take(lazyListState.firstVisibleItemIndex + 1)
@@ -442,7 +604,13 @@ internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState) 
     }
     when (val header = pinned) {
         is Row.AreaHeaderRow ->
-            SectionHeader(header.area?.name ?: stringResource(R.string.section_other), parseHexColor(header.area?.color), header.count)
+            SectionHeader(
+                name = header.area?.name ?: stringResource(R.string.section_other),
+                color = parseHexColor(header.area?.color),
+                count = header.count,
+                collapsed = header.collapsed,
+                onToggle = { onToggleArea(header.area?.id) },
+            )
         is Row.CheckedHeaderRow ->
             SectionHeader(stringResource(R.string.section_checked), null, header.count)
         else -> Unit
@@ -450,7 +618,13 @@ internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState) 
 }
 
 @Composable
-internal fun SectionHeader(name: String, color: Color?, count: Int) {
+internal fun SectionHeader(
+    name: String,
+    color: Color?,
+    count: Int,
+    collapsed: Boolean = false,
+    onToggle: (() -> Unit)? = null,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -459,13 +633,31 @@ internal fun SectionHeader(name: String, color: Color?, count: Int) {
             // sit over scrolling rows.
             .background(MaterialTheme.colorScheme.surface)
             .heightIn(min = 44.dp)
+            .let { modifier ->
+                if (onToggle == null) modifier
+                else modifier.clickable(
+                    onClickLabel = stringResource(if (collapsed) R.string.a11y_expand_area else R.string.a11y_collapse_area),
+                    onClick = onToggle,
+                )
+            }
             .padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Fixed height, not fillMaxHeight: this is also drawn as the pinned copy inside a
         // fillMaxSize Box, where filling the height would blow the header up to cover the list.
         Box(Modifier.width(4.dp).height(28.dp).background(color ?: MaterialTheme.colorScheme.onSurfaceVariant))
-        Spacer(Modifier.width(12.dp))
+        if (onToggle != null) {
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                if (collapsed) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        } else {
+            Spacer(Modifier.width(12.dp))
+        }
         Text(
             name.uppercase(),
             style = MaterialTheme.typography.labelMedium,
@@ -494,11 +686,14 @@ internal fun ItemRow(
     onClick: () -> Unit,
     compact: Boolean = false,
     handleModifier: Modifier = Modifier,
+    photoUrl: String? = null,
+    onPhotoClick: () -> Unit = {},
+    byline: Byline? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (alt) NcRowAlt else Color.Transparent)
+            .background(if (alt) LocalRowShade.current else Color.Transparent)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = if (compact) 4.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -525,6 +720,11 @@ internal fun ItemRow(
         } else {
             checkbox()
         }
+        // Smaller in compact rows, so the photo never makes the row taller than the checkbox.
+        if (photoUrl != null) {
+            Spacer(Modifier.width(4.dp))
+            PhotoThumb(photoUrl, if (compact) 28.dp else 32.dp, onClick = onPhotoClick)
+        }
         Spacer(Modifier.width(8.dp))
         Text(
             (item.quantity?.takeIf { it.isNotBlank() } ?: "1"),
@@ -533,17 +733,49 @@ internal fun ItemRow(
             modifier = Modifier.widthIn(min = 18.dp),
         )
         Spacer(Modifier.width(12.dp))
-        Text(
-            item.name,
-            style = MaterialTheme.typography.bodyLarge,
-            textDecoration = if (item.checked) TextDecoration.LineThrough else null,
-            color = if (item.checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).then(handleModifier),
-        )
+        Column(Modifier.weight(1f).then(handleModifier)) {
+            Text(
+                item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                textDecoration = if (item.checked) TextDecoration.LineThrough else null,
+                color = if (item.checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            byline?.let { BylineText(it) }
+        }
         Spacer(Modifier.width(8.dp))
         AreaTag(area, showName = showAreaName)
+    }
+}
+
+/**
+ * Who added or ticked an item. Only the name is cut short: the guest mark is its own text that
+ * always stays in view, so a guest with a long name can't pass as a member (as on the web app).
+ */
+@Composable
+private fun BylineText(byline: Byline) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            byline.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (byline.guest) {
+            Spacer(Modifier.width(4.dp))
+            Text(
+                stringResource(R.string.item_by_guest),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp),
+            )
+        }
     }
 }
 
@@ -577,13 +809,14 @@ private fun AreaTag(area: ShopAreaModel?, showName: Boolean) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddItemRow(onAdd: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+    var text by rememberSaveable { mutableStateOf("") }
     val submit = {
         if (text.isNotBlank()) {
             onAdd(text)
             text = ""
         }
     }
+
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -592,7 +825,23 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
         Spacer(Modifier.width(8.dp))
         androidx.compose.foundation.text.BasicTextField(
             value = text,
-            onValueChange = { text = it },
+            onValueChange = { new ->
+                // A multi-line paste is a whole list: add one item per line straight away, like
+                // the web app's paste handler. A single (possibly newline-padded) line just lands
+                // in the field for editing. singleLine only shapes the IME/layout — pasted
+                // newlines do arrive here.
+                if (new.contains('\n')) {
+                    val lines = SmartInput.splitLines(new)
+                    if (lines.size > 1) {
+                        onAdd(new)
+                        text = ""
+                    } else {
+                        text = lines.firstOrNull().orEmpty()
+                    }
+                } else {
+                    text = new
+                }
+            },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.merge(TextStyle(color = MaterialTheme.colorScheme.onSurface)),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
@@ -621,14 +870,18 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
 private fun ItemEditDialog(
     item: ItemModel,
     areas: List<ShopAreaModel>,
+    moveTargets: List<ShoppingListModel>,
     onSave: (String, String?, Long?) -> Unit,
+    onMove: (ShoppingListModel) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
+    photo: (@Composable () -> Unit)? = null,
 ) {
-    var name by remember { mutableStateOf(item.name) }
-    var quantity by remember { mutableStateOf(item.quantity.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(item.name) }
+    var quantity by rememberSaveable { mutableStateOf(item.quantity.orEmpty()) }
     var areaId by remember { mutableStateOf(item.shopAreaId) }
     var areaMenu by remember { mutableStateOf(false) }
+    var moveMenu by remember { mutableStateOf(false) }
     val areaName = areas.firstOrNull { it.id == areaId }?.name ?: stringResource(R.string.item_no_area)
 
     androidx.compose.material3.AlertDialog(
@@ -652,15 +905,31 @@ private fun ItemEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.size(8.dp))
-                Box {
-                    TextButton(onClick = { areaMenu = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
-                    DropdownMenu(expanded = areaMenu, onDismissRequest = { areaMenu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
-                        areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
-                            DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
+                // A list with no areas (always so for one kept on the phone) has nothing to pick.
+                if (areas.isNotEmpty()) {
+                    Box {
+                        TextButton(onClick = { areaMenu = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
+                        DropdownMenu(expanded = areaMenu, onDismissRequest = { areaMenu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
+                            areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
+                                DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
+                            }
                         }
                     }
                 }
+                // Moves right away when a target is picked (online-only), like the web app's
+                // per-row "Move to list" menu — it isn't part of Save.
+                if (moveTargets.isNotEmpty()) {
+                    Box {
+                        TextButton(onClick = { moveMenu = true }) { Text(stringResource(R.string.item_move_to_list)) }
+                        DropdownMenu(expanded = moveMenu, onDismissRequest = { moveMenu = false }) {
+                            moveTargets.forEach { list ->
+                                DropdownMenuItem(text = { Text(list.title) }, onClick = { moveMenu = false; onMove(list) })
+                            }
+                        }
+                    }
+                }
+                photo?.invoke()
             }
         },
         confirmButton = {
@@ -675,4 +944,21 @@ private fun ItemEditDialog(
             }
         },
     )
+}
+
+@Composable
+private fun GuestBanner(state: ItemsUiState, onEnterPassword: () -> Unit, onLeave: () -> Unit) {
+    val (message, action) = when {
+        state.guestState == GuestShareState.DEAD ->
+            stringResource(R.string.guest_link_dead) to (stringResource(R.string.menu_leave_list) to onLeave)
+        state.guestState == GuestShareState.PASSWORD_NEEDED ->
+            stringResource(R.string.guest_password_changed) to (stringResource(R.string.guest_enter_password) to onEnterPassword)
+        !state.canWrite -> stringResource(R.string.guest_view_only) to null
+        else -> return
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        action?.let { (label, onClick) -> TextButton(onClick = onClick) { Text(label) } }
+    }
+    RowDivider()
 }

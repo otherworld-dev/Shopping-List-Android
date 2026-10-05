@@ -1,0 +1,5 @@
+Paste a whole list into the add box: bullets, checkboxes, numbered lines and counts like "2x Milk" all come in as proper items, and a ticked line ("[x] Milk") arrives already checked off. Copy a list back out as text from the list menu, in the same format.
+
+New: move an item to another list from its editor, and load your language's keyword pack so items sort into the right areas.
+
+Also, a restarting server no longer costs you queued offline changes.

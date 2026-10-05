@@ -10,10 +10,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -21,7 +22,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -30,21 +30,30 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.ui.common.ConfirmDialog
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
+import dev.otherworld.shoppinglist.ui.common.asString
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,14 +61,19 @@ fun ListsScreen(
     onOpenList: (ShoppingListModel) -> Unit,
     onShareList: (ShoppingListModel) -> Unit,
     onManageTags: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onLogIn: () -> Unit,
+    onJoinList: () -> Unit,
     viewModel: ListsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val accountLabel by viewModel.accountLabel.collectAsStateWithLifecycle()
     dev.otherworld.shoppinglist.ui.common.PollEffect { viewModel.poll() }
     var menuOpen by remember { mutableStateOf(false) }
-    var showCreate by remember { mutableStateOf(false) }
+    var showCreate by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<ShoppingListModel?>(null) }
     var deleteTarget by remember { mutableStateOf<ShoppingListModel?>(null) }
+    var leaveTarget by remember { mutableStateOf<GuestListEntry?>(null) }
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -71,9 +85,9 @@ fun ListsScreen(
                 title = {
                     Column {
                         Text(stringResource(R.string.header_shopping_list), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        if (viewModel.accountLabel.isNotEmpty()) {
+                        if (accountLabel.isNotEmpty()) {
                             Text(
-                                viewModel.accountLabel,
+                                accountLabel,
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -87,24 +101,43 @@ fun ListsScreen(
                         Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        if (state.loggedIn) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_manage_tags)) },
+                                onClick = { menuOpen = false; onManageTags() },
+                            )
+                        }
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_manage_tags)) },
-                            onClick = { menuOpen = false; onManageTags() },
+                            text = { Text(stringResource(R.string.join_entry_title)) },
+                            onClick = { menuOpen = false; onJoinList() },
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_log_out)) },
-                            onClick = { menuOpen = false; viewModel.logout() },
+                            text = { Text(stringResource(R.string.menu_settings)) },
+                            onClick = { menuOpen = false; onOpenSettings() },
                         )
+                        if (state.loggedIn) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_log_out)) },
+                                onClick = { menuOpen = false; viewModel.logout() },
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_log_in)) },
+                                onClick = { menuOpen = false; onLogIn() },
+                            )
+                        }
                     }
                 },
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showCreate = true },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.fab_new_list)) },
-            )
+            if (state.canCreate) {
+                ExtendedFloatingActionButton(
+                    onClick = { showCreate = true },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.fab_new_list)) },
+                )
+            }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -117,7 +150,7 @@ fun ListsScreen(
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text(state.error!!, textAlign = TextAlign.Center)
+                        Text(state.error!!.asString(), textAlign = TextAlign.Center)
                     }
                 }
                 state.lists.isEmpty() -> {
@@ -138,19 +171,71 @@ fun ListsScreen(
                             .fillMaxHeight()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        LazyColumn(Modifier.fillMaxSize()) {
-                            itemsIndexed(
-                                state.lists,
-                                key = { _, item -> item.id },
-                            ) { index, list ->
-                                ListRow(
-                                    list = list,
-                                    alt = index % 2 == 1,
-                                    onClick = { onOpenList(list) },
-                                    onRename = { renameTarget = list },
-                                    onDelete = { deleteTarget = list },
-                                    onShare = { onShareList(list) },
-                                )
+                        var rows by remember { mutableStateOf(buildListRows(state.sections, state.guestLists)) }
+                        var dragging by remember { mutableStateOf(false) }
+                        LaunchedEffect(state.sections, state.guestLists, dragging) {
+                            if (!dragging) rows = buildListRows(state.sections, state.guestLists)
+                        }
+                        val lazyListState = rememberLazyListState()
+                        val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+                            moveWithinSection(rows, from.index, to.index)?.let { rows = it }
+                        }
+                        val moveUpLabel = stringResource(R.string.a11y_move_up)
+                        val moveDownLabel = stringResource(R.string.a11y_move_down)
+                        LazyColumn(state = lazyListState, modifier = Modifier.fillMaxSize()) {
+                            items(rows, key = { it.key }) { row ->
+                                ReorderableItem(reorderState, key = row.key, enabled = row is ListsRow.Entry && state.canReorder) { _ ->
+                                    when (row) {
+                                        is ListsRow.Caption -> ListsCaption(stringResource(row.textRes))
+                                        is ListsRow.Entry -> {
+                                            val order = sectionOrder(rows, row.section)
+                                            val index = order.indexOf(row.list.id)
+                                            fun move(delta: Int) {
+                                                val moved = order.toMutableList().apply { add(index + delta, removeAt(index)) }
+                                                viewModel.reorderSection(row.section, moved)
+                                            }
+                                            ListRow(
+                                                list = row.list,
+                                                alt = row.alt,
+                                                onClick = { onOpenList(row.list) },
+                                                onPin = { viewModel.setPinned(row.list, !row.list.isPinned) },
+                                                onRename = { renameTarget = row.list },
+                                                onDelete = { deleteTarget = row.list },
+                                                onShare = { onShareList(row.list) },
+                                                // A phone-only list can go to the account once there is one.
+                                                onUpload = if (state.loggedIn && row.list.isLocal) {
+                                                    { viewModel.uploadList(row.list.id) }
+                                                } else null,
+                                                handleModifier = if (state.canReorder) {
+                                                    Modifier.longPressDraggableHandle(
+                                                        onDragStarted = { dragging = true },
+                                                        onDragStopped = {
+                                                            // Held until the save completes so the row can't flash
+                                                            // back to the pre-drop order while a sort switch to
+                                                            // Custom is still in flight.
+                                                            viewModel.reorderSection(row.section, sectionOrder(rows, row.section)) {
+                                                                dragging = false
+                                                            }
+                                                        },
+                                                    )
+                                                } else {
+                                                    Modifier
+                                                },
+                                                // Screen readers can't drag, so moving is also offered as actions.
+                                                moveActions = if (state.canReorder) buildList {
+                                                    if (index > 0) add(CustomAccessibilityAction(moveUpLabel) { move(-1); true })
+                                                    if (index < order.size - 1) add(CustomAccessibilityAction(moveDownLabel) { move(1); true })
+                                                } else emptyList(),
+                                            )
+                                        }
+                                        is ListsRow.Guest -> GuestListRow(
+                                            entry = row.entry,
+                                            alt = row.alt,
+                                            onClick = { onOpenList(row.entry.list) },
+                                            onLeave = { leaveTarget = row.entry },
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -185,6 +270,26 @@ fun ListsScreen(
             onDismiss = { deleteTarget = null },
         )
     }
+    leaveTarget?.let { target ->
+        ConfirmDialog(
+            title = stringResource(R.string.dialog_leave_list_title),
+            message = stringResource(R.string.dialog_leave_list_message, target.list.title),
+            confirmLabel = stringResource(R.string.action_leave),
+            onConfirm = { leaveTarget = null; target.list.guestShareId?.let(viewModel::leave) },
+            onDismiss = { leaveTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun ListsCaption(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 4.dp),
+    )
 }
 
 @Composable
@@ -192,16 +297,22 @@ private fun ListRow(
     list: ShoppingListModel,
     alt: Boolean,
     onClick: () -> Unit,
+    onPin: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onShare: () -> Unit,
+    onUpload: (() -> Unit)? = null,
+    handleModifier: Modifier = Modifier,
+    moveActions: List<CustomAccessibilityAction> = emptyList(),
 ) {
     var menu by remember { mutableStateOf(false) }
     ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .semantics { if (moveActions.isNotEmpty()) customActions = moveActions },
         colors = androidx.compose.material3.ListItemDefaults.colors(
             containerColor = if (alt) {
-                dev.otherworld.shoppinglist.ui.theme.NcRowAlt
+                dev.otherworld.shoppinglist.ui.theme.LocalRowShade.current
             } else {
                 androidx.compose.ui.graphics.Color.Transparent
             },
@@ -209,21 +320,37 @@ private fun ListRow(
         leadingContent = {
             Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
         },
-        headlineContent = { Text(list.title) },
-        supportingContent = if (!list.isOwner) {
-            { Text(if (list.canWrite) stringResource(R.string.list_shared_with_you) else stringResource(R.string.list_shared_readonly)) }
-        } else null,
+        headlineContent = { Text(list.title, modifier = Modifier.fillMaxWidth().then(handleModifier)) },
+        supportingContent = when {
+            list.isLocal -> { { Text(stringResource(R.string.list_on_this_phone)) } }
+            !list.isOwner -> { { Text(if (list.canWrite) stringResource(R.string.list_shared_with_you) else stringResource(R.string.list_shared_readonly)) } }
+            else -> null
+        },
         trailingContent = {
             Box {
                 IconButton(onClick = { menu = true }) {
                     Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    if (list.isOwner) {
+                    // Pinning works on shared lists too — the pin is this user's own.
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (list.isPinned) R.string.menu_unpin_list else R.string.menu_pin_list)) },
+                        onClick = { menu = false; onPin() },
+                    )
+                    onUpload?.let { upload ->
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_share)) },
-                            onClick = { menu = false; onShare() },
+                            text = { Text(stringResource(R.string.action_upload_to_account)) },
+                            onClick = { menu = false; upload() },
                         )
+                    }
+                    if (list.isOwner) {
+                        // Sharing lives on the server, which a phone-only list isn't on.
+                        if (!list.isLocal) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_share)) },
+                                onClick = { menu = false; onShare() },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_rename)) },
                             onClick = { menu = false; onRename() },
@@ -233,6 +360,38 @@ private fun ListRow(
                             onClick = { menu = false; onDelete() },
                         )
                     }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun GuestListRow(entry: GuestListEntry, alt: Boolean, onClick: () -> Unit, onLeave: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val status = when (entry.state) {
+        GuestShareState.DEAD -> stringResource(R.string.guest_link_dead_short)
+        GuestShareState.PASSWORD_NEEDED -> stringResource(R.string.guest_password_needed_short)
+        else -> null
+    }
+    ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = androidx.compose.material3.ListItemDefaults.colors(
+            containerColor = if (alt) dev.otherworld.shoppinglist.ui.theme.LocalRowShade.current else androidx.compose.ui.graphics.Color.Transparent,
+        ),
+        leadingContent = { Icon(Icons.Filled.Link, contentDescription = null) },
+        headlineContent = { Text(entry.list.title) },
+        supportingContent = { Text(listOfNotNull(entry.host, status).joinToString(" · ")) },
+        trailingContent = {
+            Box {
+                IconButton(onClick = { menu = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.menu_leave_list)) },
+                        onClick = { menu = false; onLeave() },
+                    )
                 }
             }
         },

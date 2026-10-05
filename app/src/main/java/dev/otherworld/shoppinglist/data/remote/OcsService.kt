@@ -1,6 +1,7 @@
 package dev.otherworld.shoppinglist.data.remote
 
 import dev.otherworld.shoppinglist.data.remote.dto.CapabilitiesResponse
+import dev.otherworld.shoppinglist.data.remote.dto.CurrentUserDto
 import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CopyAreasRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateAreaRequest
@@ -11,21 +12,32 @@ import dev.otherworld.shoppinglist.data.remote.dto.CreateShareRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateTagRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ListDto
+import dev.otherworld.shoppinglist.data.remote.dto.ListPreferencesRequest
+import dev.otherworld.shoppinglist.data.remote.dto.MoveItemRequest
+import dev.otherworld.shoppinglist.data.remote.dto.ReorderListsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
+import dev.otherworld.shoppinglist.data.remote.dto.SettingsDto
 import dev.otherworld.shoppinglist.data.remote.dto.ShareDto
+import dev.otherworld.shoppinglist.data.remote.dto.ShareesResponse
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
 import dev.otherworld.shoppinglist.data.remote.dto.TagDto
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
+import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.PATCH
+import retrofit2.http.Part
 import retrofit2.http.PUT
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Retrofit interface for the Shopping List OCS API. Paths are relative to a placeholder base
@@ -48,6 +60,20 @@ interface OcsService {
 
     @DELETE("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}")
     suspend fun deleteList(@Path("id") id: Long)
+
+    /** Per-user preference (since server 1.8.0), so pinning never changes the list for others. */
+    @PATCH("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}/preferences")
+    suspend fun updateListPreferences(@Path("id") id: Long, @Body body: ListPreferencesRequest)
+
+    /** This user's own order for one section of their lists (since server 1.10.0). */
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/reorder")
+    suspend fun reorderLists(@Body body: ReorderListsRequest)
+
+    @GET("ocs/v2.php/apps/shopping_list/api/v1/settings")
+    suspend fun getSettings(): OcsResponse<SettingsDto>
+
+    @PATCH("ocs/v2.php/apps/shopping_list/api/v1/settings")
+    suspend fun updateSettings(@Body body: UpdateSettingsRequest): OcsResponse<SettingsDto>
 
     // ---- Items ----
 
@@ -86,6 +112,28 @@ interface OcsService {
     @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/reorder")
     suspend fun reorder(@Path("listId") listId: Long, @Body body: ReorderRequest)
 
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/move")
+    suspend fun moveItem(
+        @Path("listId") listId: Long,
+        @Path("id") id: Long,
+        @Body body: MoveItemRequest,
+    )
+
+    /** Attaches a photo, replacing any earlier one (since server 1.9.0); one file in "image". */
+    @Multipart
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/image")
+    suspend fun uploadItemImage(
+        @Path("listId") listId: Long,
+        @Path("id") id: Long,
+        @Part image: MultipartBody.Part,
+    ): OcsResponse<ItemDto>
+
+    @DELETE("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/image")
+    suspend fun removeItemImage(
+        @Path("listId") listId: Long,
+        @Path("id") id: Long,
+    ): OcsResponse<ItemDto>
+
     // ---- Shop areas ----
 
     @GET("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/areas")
@@ -112,6 +160,9 @@ interface OcsService {
         @Path("listId") listId: Long,
         @Body body: CopyAreasRequest,
     ): OcsResponse<List<ShopAreaDto>>
+
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/areas/apply-keywords")
+    suspend fun applyKeywords(@Path("listId") listId: Long): OcsResponse<List<ShopAreaDto>>
 
     // ---- Shares ----
 
@@ -142,6 +193,14 @@ interface OcsService {
     @DELETE("ocs/v2.php/apps/shopping_list/api/v1/shares/{id}/link")
     suspend fun deleteLink(@Path("id") id: Long)
 
+    /** Nextcloud's own user/group search for sharing, the one the web app's share dialog uses. */
+    @GET("ocs/v2.php/apps/files_sharing/api/v1/sharees")
+    suspend fun searchSharees(
+        @Query("search") search: String,
+        @Query("itemType") itemType: String = "file",
+        @Query("perPage") perPage: Int = 10,
+    ): OcsResponse<ShareesResponse>
+
     // ---- Tags (global per-user; backend has no item-tag assignment endpoint) ----
 
     @GET("ocs/v2.php/apps/shopping_list/api/v1/tags")
@@ -157,4 +216,7 @@ interface OcsService {
 
     @GET("ocs/v2.php/cloud/capabilities")
     suspend fun capabilities(): OcsResponse<CapabilitiesResponse>
+
+    @GET("ocs/v2.php/cloud/user")
+    suspend fun currentUser(): OcsResponse<CurrentUserDto>
 }

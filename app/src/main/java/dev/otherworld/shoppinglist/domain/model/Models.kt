@@ -4,6 +4,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ListDto
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
 import dev.otherworld.shoppinglist.data.remote.dto.TagDto
+import dev.otherworld.shoppinglist.domain.guest.Attributed
 
 /** Permission levels mirroring the server (0 = read-only, 1 = read/write). */
 object Permission {
@@ -16,8 +17,19 @@ data class ShoppingListModel(
     val title: String,
     val permission: Int,
     val isOwner: Boolean,
+    /** This user's own pin (yours and shared lists alike); others keep their own order. */
+    val isPinned: Boolean = false,
+    /** This user's own place for the list in the Custom order; null until they place it. */
+    val position: Int? = null,
+    /** Server timestamp of the last change; null for a list created on this phone and not yet synced. */
+    val updatedAt: String? = null,
+    /** Set for a list opened from someone's share link (see GuestIds). */
+    val guestShareId: Long? = null,
+    /** Kept on this phone only, never synced (see ListEntity.isLocal). */
+    val isLocal: Boolean = false,
 ) {
     val canWrite: Boolean get() = permission >= Permission.WRITE
+    val isGuest: Boolean get() = guestShareId != null
 }
 
 data class TagModel(
@@ -36,7 +48,20 @@ data class ItemModel(
     val checkedBy: String?,
     val sortOrder: Int,
     val tags: List<TagModel> = emptyList(),
+    /** Server timestamp of the last change; for a checked item, when it was ticked. */
+    val updatedAt: String? = null,
+    /** The key of the item's photo on the server; null when it has none. */
+    val imageKey: String? = null,
+    val addedBy: String? = null,
+    val addedByName: String? = null,
+    val addedByGuest: Boolean = false,
+    val checkedByName: String? = null,
+    val checkedByGuest: Boolean = false,
 ) {
+    /** Who added and who ticked it, for working out the name its row shows. */
+    val attributed: Attributed
+        get() = Attributed(addedBy, addedByName, addedByGuest, checkedBy, checkedByName, checkedByGuest)
+
     /** Quantity worth displaying — hidden when absent or the implicit default of "1". */
     val displayQuantity: String?
         get() {
@@ -71,6 +96,9 @@ data class ShareModel(
     val token: String?,
     val hasPassword: Boolean,
     val expiresAt: String?,
+    val code: String? = null,
+    /** Null when the server has no such choice (before 1.10.0). */
+    val showNames: Boolean? = null,
 ) {
     val isLink: Boolean get() = type == ShareType.LINK
     val canWrite: Boolean get() = permission >= Permission.WRITE
@@ -83,6 +111,9 @@ fun ListDto.toModel() = ShoppingListModel(
     title = title,
     permission = permission,
     isOwner = isOwner,
+    isPinned = isPinned == true,
+    position = position,
+    updatedAt = updatedAt,
 )
 
 fun TagDto.toModel() = TagModel(id = id, name = name)
@@ -98,6 +129,12 @@ fun ItemDto.toModel() = ItemModel(
     checkedBy = checkedBy,
     sortOrder = sortOrder,
     tags = tags.map { it.toModel() },
+    updatedAt = updatedAt,
+    addedBy = addedBy,
+    addedByName = addedByName,
+    addedByGuest = addedByGuest,
+    checkedByName = checkedByName,
+    checkedByGuest = checkedByGuest,
 )
 
 fun ShopAreaDto.toModel() = ShopAreaModel(
@@ -118,4 +155,6 @@ fun dev.otherworld.shoppinglist.data.remote.dto.ShareDto.toModel() = ShareModel(
     token = token,
     hasPassword = hasPassword,
     expiresAt = expiresAt,
+    code = code,
+    showNames = showNames,
 )

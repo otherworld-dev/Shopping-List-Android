@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,13 +36,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.ui.common.CertTrustDialog
+import dev.otherworld.shoppinglist.ui.common.asString
 import dev.otherworld.shoppinglist.ui.common.openCustomTab
 
 @Composable
-fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
+fun LoginScreen(onJoin: () -> Unit, viewModel: LoginViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val localMode by viewModel.localMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var server by remember { mutableStateOf("") }
+    var server by rememberSaveable { mutableStateOf("") }
 
     // Open the Custom Tab once the login URL is issued.
     LaunchedEffect(state.launchUrl) {
@@ -97,7 +101,7 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                 )
                 state.error?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                    Text(it.asString(), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(
@@ -112,6 +116,19 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
                         )
                     } else {
                         Text(stringResource(R.string.login_button))
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+                OutlinedButton(
+                    onClick = onJoin,
+                    modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.join_entry_title))
+                }
+                if (!localMode) {
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick = viewModel::useWithoutAccount) {
+                        Text(stringResource(R.string.login_use_without_account))
                     }
                 }
             }

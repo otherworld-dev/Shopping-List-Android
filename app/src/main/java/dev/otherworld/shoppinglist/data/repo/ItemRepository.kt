@@ -1,12 +1,14 @@
 package dev.otherworld.shoppinglist.data.repo
 
 import androidx.room.withTransaction
+import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.local.AppDatabase
 import dev.otherworld.shoppinglist.data.local.ItemEntity
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
 import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
+import dev.otherworld.shoppinglist.data.remote.dto.MoveItemRequest
 import dev.otherworld.shoppinglist.data.sync.CheckPayload
 import dev.otherworld.shoppinglist.data.sync.ItemCreatePayload
 import dev.otherworld.shoppinglist.data.sync.ItemUpdatePayload
@@ -15,6 +17,7 @@ import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.ReorderPayload
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import kotlinx.coroutines.NonCancellable
@@ -34,7 +37,9 @@ class ItemRepository @Inject constructor(
     private val sync: SyncEngine,
     private val tempIds: TempIds,
     private val json: Json,
+    private val guests: GuestRepository,
 ) {
+    private val listDao = db.listDao()
     private val itemDao = db.itemDao()
     private val areaDao = db.areaDao()
     private val mutationDao = db.mutationDao()
@@ -52,6 +57,10 @@ class ItemRepository @Inject constructor(
      * mid-fetch still populates the cache for next time.
      */
     suspend fun refresh(listId: Long) {
+        if (GuestIds.isGuest(listId)) {
+            guests.refreshItems(listId)
+            return
+        }
         if (listId <= 0) return // temp list never reached the server
         withContext(NonCancellable) {
             coroutineScope {
@@ -89,6 +98,9 @@ class ItemRepository @Inject constructor(
         unit: String? = null,
         shopAreaId: Long? = null,
         areaExplicit: Boolean = false,
+        checked: Boolean = false,
+        /** The list's areas weren't on the phone yet, so detect the area when the create syncs. */
+        detectAreaOnSync: Boolean = false,
     ): ItemModel {
         val id = tempIds.next()
         val entity = ItemEntity(
@@ -98,16 +110,25 @@ class ItemRepository @Inject constructor(
             quantity = quantity,
             unit = unit,
             shopAreaId = shopAreaId,
-            checked = false,
+            checked = checked,
             checkedBy = null,
             sortOrder = itemDao.maxSortOrder(listId) + 1,
             updatedAt = null,
         )
-        itemDao.upsert(entity)
-        enqueue(
-            MutationTypes.CREATE, id, listId,
-            json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload(name, quantity, unit, shopAreaId, areaExplicit)),
-        )
+        // One transaction, so a refresh never sees the row without its queued create and drops it.
+        db.withTransaction {
+            itemDao.upsert(entity)
+            enqueue(
+                MutationTypes.CREATE, id, listId,
+                json.encodeToString(
+                    ItemCreatePayload.serializer(),
+                    ItemCreatePayload(
+                        name, quantity, unit, shopAreaId, areaExplicit, checked,
+                        detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
+                    ),
+                ),
+            )
+        }
         sync.requestSync()
         return entity.toModel()
     }
@@ -137,7 +158,15 @@ class ItemRepository @Inject constructor(
 
     suspend fun check(item: ItemModel, checked: Boolean) {
         itemDao.getById(item.id)?.let { cur ->
-            itemDao.update(cur.copy(checked = checked, checkedBy = if (checked) cur.checkedBy else null))
+            // Who ticked it is the server's to say: drop the old name now, the next refresh brings the new one.
+            itemDao.update(
+                cur.copy(
+                    checked = checked,
+                    checkedBy = if (checked) cur.checkedBy else null,
+                    checkedByName = null,
+                    checkedByGuest = false,
+                ),
+            )
         }
         enqueue(
             MutationTypes.CHECK, item.id, item.listId,
@@ -158,13 +187,33 @@ class ItemRepository @Inject constructor(
         sync.requestSync()
     }
 
+    /**
+     * Moves an item to another list. Online-direct, matching the web app: a cross-list move
+     * isn't offline-queueable (the target list's state is unknown offline), so callers check
+     * connectivity first. The item leaves the source list at once; the target list picks it up
+     * on its next refresh.
+     */
+    suspend fun moveItem(item: ItemModel, targetListId: Long) {
+        service.moveItem(item.listId, item.id, MoveItemRequest(targetListId))
+        itemDao.deleteById(item.id)
+    }
+
     suspend fun clearChecked(listId: Long) {
+        // The public link API has no bulk endpoints; each item is deleted on its own.
+        if (GuestIds.isGuest(listId)) {
+            itemDao.getByList(listId).filter { it.checked }.forEach { deleteItem(it.toModel()) }
+            return
+        }
         itemDao.deleteCheckedByList(listId)
         enqueue(MutationTypes.CLEAR_CHECKED, listId, listId, "{}")
         sync.requestSync()
     }
 
     suspend fun uncheckAll(listId: Long) {
+        if (GuestIds.isGuest(listId)) {
+            itemDao.getByList(listId).filter { it.checked }.forEach { check(it.toModel(), false) }
+            return
+        }
         itemDao.uncheckAllByList(listId)
         enqueue(MutationTypes.UNCHECK_ALL, listId, listId, "{}")
         sync.requestSync()
@@ -184,8 +233,11 @@ class ItemRepository @Inject constructor(
         sync.requestSync()
     }
 
-    private suspend fun enqueue(type: String, targetId: Long, listId: Long, payload: String) =
+    /** Queues a change for the server, unless its list is kept on this phone only. */
+    private suspend fun enqueue(type: String, targetId: Long, listId: Long, payload: String) {
+        if (listDao.isLocal(listId)) return
         insertMutation(type, targetId, listId, payload)
+    }
 
     private suspend fun insertMutation(type: String, targetId: Long, listId: Long, payload: String) {
         mutationDao.insert(

@@ -6,8 +6,11 @@ import dev.otherworld.shoppinglist.data.remote.dto.CreateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateShareRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
+import dev.otherworld.shoppinglist.domain.guest.inviteText
 import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.domain.model.toModel
+import dev.otherworld.shoppinglist.domain.share.ShareeOption
+import dev.otherworld.shoppinglist.domain.share.shareeOptions
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +33,13 @@ class ShareRepository @Inject constructor(
 
     suspend fun removeShare(id: Long) = service.deleteShare(id)
 
+    /** Users and groups matching [query], for the share screen's search box. */
+    suspend fun searchSharees(query: String): List<ShareeOption> =
+        shareeOptions(
+            service.searchSharees(query.trim()).ocs.data,
+            selfId = credentialStore.current()?.loginName.orEmpty(),
+        )
+
     suspend fun createLink(listId: Long, permission: Int, password: String?) {
         service.createLink(listId, CreateLinkRequest(permission, password?.ifBlank { null }))
     }
@@ -46,6 +56,11 @@ class ShareRepository @Inject constructor(
         )
     }
 
+    /** Whether guests on the link see members' names beside items (they always see guests'). */
+    suspend fun setLinkShowNames(id: Long, show: Boolean) {
+        service.updateLink(id, UpdateLinkRequest(showNames = show))
+    }
+
     suspend fun removeLink(id: Long) = service.deleteLink(id)
 
     /** Builds the public-share URL for a link token against the connected server. */
@@ -53,4 +68,8 @@ class ShareRepository @Inject constructor(
         val server = credentialStore.current()?.server?.trimEnd('/') ?: return ""
         return "$server/index.php/apps/shopping_list/s/$token"
     }
+
+    /** What Copy invite gives for a link's [code]: this account's server and the code. */
+    fun inviteFor(code: String): String? =
+        credentialStore.current()?.server?.let { inviteText(it, code) }
 }

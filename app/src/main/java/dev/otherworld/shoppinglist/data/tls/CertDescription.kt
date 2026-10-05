@@ -9,7 +9,10 @@ enum class CertReason { UNTRUSTED, NAME_MISMATCH, UNTRUSTED_AND_MISMATCH }
 
 /** Human-readable summary of a certificate the platform couldn't validate, for the prompt. */
 data class CertInfo(
+    /** The bare host, for comparing against a server's host. */
     val host: String,
+    /** The connection's port, or -1 when it isn't known. */
+    val port: Int,
     val subject: String,
     val issuer: String,
     val validity: String,
@@ -17,18 +20,27 @@ data class CertInfo(
     val reason: CertReason,
     val expired: Boolean,
     val selfSigned: Boolean,
-)
+) {
+    /** The server as shown in the prompt: the host, plus the port when it isn't the default. */
+    val serverLabel: String
+        get() {
+            if (port == -1 || port == 443) return host
+            val shownHost = if (':' in host && !host.startsWith("[")) "[$host]" else host
+            return "$shownHost:$port"
+        }
+}
 
 /**
- * Builds the display summary for [cert] as presented by [host]. [mismatch] true means the
- * chain validated but the name didn't (recorded by the hostname verifier); otherwise the
- * chain itself wasn't validated, and we additionally check whether the certificate covers the
- * host so one that is both unvalidated and doesn't match the address is labelled as such.
+ * Builds the display summary for [cert] as presented by [host] on [port]. [mismatch] true
+ * means the chain validated but the name didn't (recorded by the hostname verifier); otherwise
+ * the chain itself wasn't validated, and we additionally check whether the certificate covers
+ * the host so one that is both unvalidated and doesn't match the address is labelled as such.
  */
-fun describeCert(host: String, cert: X509Certificate, mismatch: Boolean): CertInfo {
+fun describeCert(host: String, port: Int, cert: X509Certificate, mismatch: Boolean): CertInfo {
     val df = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
     return CertInfo(
         host = host,
+        port = port,
         subject = friendlyName(cert.subjectX500Principal),
         issuer = friendlyName(cert.issuerX500Principal),
         validity = "${df.format(cert.notBefore)} – ${df.format(cert.notAfter)}",

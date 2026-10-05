@@ -20,12 +20,39 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.ShoppingList">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Share links from the web app's "Open in the app" button. Not autoVerify: every
+                 Nextcloud is a different self-hosted domain, so the app only opens a link it's
+                 handed explicitly. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="*" />
+                <data android:pathPattern="/apps/shopping_list/s/.*" />
+                <data android:pathPattern="/.*/apps/shopping_list/s/.*" />
+                <data android:pathPattern="/.*/.*/apps/shopping_list/s/.*" />
+                <data android:pathPattern="/.*/.*/.*/apps/shopping_list/s/.*" />
+            </intent-filter>
         </activity>
+
+        <!-- Hands the camera app a file to save an item's photo into (cache/photos only). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/photo_paths" />
+        </provider>
 
         <!-- Disable default WorkManager initializer; Hilt provides the configuration. -->
         <provider

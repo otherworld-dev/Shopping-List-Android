@@ -1,17 +1,28 @@
 package dev.otherworld.shoppinglist.data.sync
 
+import android.os.SystemClock
 import androidx.room.withTransaction
+import dev.otherworld.shoppinglist.data.auth.CredentialStore
+import dev.otherworld.shoppinglist.data.guest.GuestSendResult
+import dev.otherworld.shoppinglist.data.guest.GuestSender
+import dev.otherworld.shoppinglist.data.guest.GuestShareMarks
 import dev.otherworld.shoppinglist.data.local.AppDatabase
+import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
+import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.ListPreferencesRequest
+import dev.otherworld.shoppinglist.data.remote.dto.ReorderListsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
+import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
+import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,7 +37,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import retrofit2.HttpException
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,8 +45,16 @@ import javax.inject.Singleton
  * server id is resolved at drain time. Creates run first (FIFO), so by the time a dependent
  * op runs the temp id has been remapped to the server id (in Room and in the queue).
  *
- * Error policy mirrors the web app: network errors stop the drain (retry on reconnect),
- * 404s are discarded (deleted elsewhere), other errors retry up to [MAX_ATTEMPTS] then discard.
+ * Each change goes to a [Destination]: the user's own server, or the server behind one share
+ * link. Changes keep their order within a destination, and a failure pauses only its own
+ * destination for the rest of the drain, so one server being down never holds up another.
+ *
+ * Error policy (see [SyncErrorPolicy]): network errors pause the destination (retry on
+ * reconnect); 404s are discarded (deleted elsewhere); server errors (5xx, 429) are transient and
+ * retry WITHOUT burning an attempt, so a restarting server never costs queued changes; only
+ * genuine rejections count toward [MAX_ATTEMPTS] before being discarded. A [SyncBackoff]
+ * cooldown per destination spaces failed drains out, so a burst of requestSync calls (a
+ * multi-line paste) can't exhaust a mutation's attempts inside a second.
  */
 @Singleton
 class SyncEngine @Inject constructor(
@@ -44,14 +62,21 @@ class SyncEngine @Inject constructor(
     private val db: AppDatabase,
     private val connectivity: ConnectivityObserver,
     private val json: Json,
+    private val smartInput: SmartInput,
+    private val guestSender: GuestSender,
+    private val shareMarks: GuestShareMarks,
+    private val credentialStore: CredentialStore,
 ) {
     private val itemDao = db.itemDao()
     private val listDao = db.listDao()
     private val areaDao = db.areaDao()
     private val mutationDao = db.mutationDao()
+    private val shareDao = db.guestShareDao()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
+    private val backoffs = mutableMapOf<Destination, SyncBackoff>()
+    private fun backoff(d: Destination) = backoffs.getOrPut(d) { SyncBackoff() }
 
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing.asStateFlow()
@@ -68,48 +93,97 @@ class SyncEngine @Inject constructor(
         scope.launch { drain() }
     }
 
-    /** Drains the queue once. Returns when the queue is empty or a network error halts it. */
+    /**
+     * Drains the queue once. A destination that fails (offline, down, rate limited, waiting for a
+     * password) is skipped for the rest of this drain while the others carry on. Returns true only
+     * when the queue fully drained; [SyncWorker] schedules a retry otherwise.
+     */
     suspend fun drain(): Boolean = mutex.withLock {
         if (!connectivity.isOnline.value) return false
         _syncing.value = true
         try {
+            val now = SystemClock.elapsedRealtime()
+            val blocked = mutableSetOf<Destination>()
+            if (credentialStore.current() == null) blocked += Destination.Own
+            shareDao.all().filter { it.state != GuestShareState.OK }.forEach { blocked += Destination.Guest(it.id) }
+            backoffs.forEach { (d, b) -> if (!b.isReady(now)) blocked += d }
             while (true) {
-                val m = mutationDao.oldest() ?: break
-                val outcome = runCatching { execute(m) }
-                if (outcome.isSuccess) {
-                    mutationDao.deleteBySeq(m.seq)
-                    continue
-                }
-                when (val e = outcome.exceptionOrNull()) {
-                    is IOException -> return true // network down — retry on reconnect
-                    is HttpException -> {
-                        if (e.code() == 404) {
-                            mutationDao.deleteBySeq(m.seq) // gone on server — discard (benign)
-                        } else {
-                            val attempts = m.attempts + 1
-                            if (attempts >= MAX_ATTEMPTS) {
-                                mutationDao.deleteBySeq(m.seq)
-                                _failures.tryEmit(Unit) // gave up — surface it
-                            } else {
-                                mutationDao.update(m.copy(attempts = attempts))
-                                return true // back off; retry later
-                            }
-                        }
-                    }
-                    else -> {
-                        val attempts = m.attempts + 1
-                        if (attempts >= MAX_ATTEMPTS) {
-                            mutationDao.deleteBySeq(m.seq)
-                            _failures.tryEmit(Unit) // gave up — surface it
-                        } else {
-                            mutationDao.update(m.copy(attempts = attempts)); return true
-                        }
-                    }
+                val guestListShares = listDao.guestLists().associate { it.id to it.guestShareId }
+                val m = firstRunnable(mutationDao.all(), { destinationOf(it, guestListShares) }, blocked) ?: break
+                when (val d = destinationOf(m, guestListShares)) {
+                    Destination.Orphan -> mutationDao.deleteBySeq(m.seq)
+                    else -> if (!sendOne(m, d)) blocked += d
                 }
             }
-            true
+            mutationDao.oldest() == null
         } finally {
             _syncing.value = false
+        }
+    }
+
+    /** Sends one change; false when its destination must wait for the rest of this drain. */
+    private suspend fun sendOne(m: MutationEntity, d: Destination): Boolean {
+        val outcome = runCatching {
+            if (d is Destination.Guest) executeGuest(m, d.shareId) else { execute(m); false }
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (outcome.isSuccess) {
+            backoff(d).recordSuccess()
+            if (!outcome.getOrThrow()) mutationDao.deleteBySeq(m.seq)
+            return true
+        }
+        return when (val action = failureAction(outcome.exceptionOrNull(), d)) {
+            is FailureAction.MarkDead -> { shareMarks.dead(action.shareId); false }
+            is FailureAction.MarkReadOnly -> { shareMarks.readOnly(action.shareId); false }
+            is FailureAction.MarkPasswordNeeded -> { shareMarks.passwordNeeded(action.shareId); false }
+            // Network down: retry on reconnect.
+            is FailureAction.Halt -> {
+                if (action.backoff) backoff(d).recordFailure(now)
+                false
+            }
+            FailureAction.Discard -> { mutationDao.deleteBySeq(m.seq); true } // gone on server — benign
+            // Server trouble, not this mutation's fault: cool down with the attempt count untouched.
+            FailureAction.Transient -> { backoff(d).recordFailure(now); false }
+            FailureAction.CountAttempt -> {
+                backoff(d).recordFailure(now)
+                val attempts = m.attempts + 1
+                if (attempts >= MAX_ATTEMPTS) {
+                    mutationDao.deleteBySeq(m.seq)
+                    _failures.tryEmit(Unit) // gave up — surface it
+                    true
+                } else {
+                    mutationDao.update(m.copy(attempts = attempts))
+                    false
+                }
+            }
+        }
+    }
+
+    /**
+     * Sends one guest change. True when its queue row was kept: a ticked create's row becomes the
+     * tick (same seq, so it goes next), which then retries alone and never re-creates the item.
+     */
+    private suspend fun executeGuest(m: MutationEntity, shareId: Long): Boolean {
+        val share = shareDao.getById(shareId) ?: return false
+        val localAreas = areaDao.getByList(m.listId).map { it.toModel() }
+        val result = guestSender.send(m, share, localAreas) as? GuestSendResult.Created ?: return false
+        result.detectedAreaId?.let { area ->
+            itemDao.getById(m.targetId)?.let { row -> if (row.shopAreaId == null) itemDao.upsert(row.copy(shopAreaId = area)) }
+        }
+        return db.withTransaction {
+            remapItemId(tempId = m.targetId, realId = result.localId, updatedAt = result.updatedAt)
+            if (!result.tickPending) return@withTransaction false
+            // Re-read: the remap has already rewritten this row's targetId.
+            val row = mutationDao.getBySeq(m.seq) ?: return@withTransaction false
+            mutationDao.update(
+                row.copy(
+                    type = MutationTypes.CHECK,
+                    targetId = result.localId,
+                    payload = json.encodeToString(CheckPayload.serializer(), CheckPayload(true)),
+                    attempts = 0,
+                ),
+            )
+            true
         }
     }
 
@@ -140,21 +214,26 @@ class SyncEngine @Inject constructor(
         when (m.type) {
             MutationTypes.CREATE -> {
                 val p = json.decodeFromString<ItemCreatePayload>(m.payload)
+                val areaId = if (p.detectArea) detectQueuedArea(m, p) else p.shopAreaId
                 val created = service.createItem(
                     m.listId,
-                    CreateItemRequest(p.name, p.quantity, p.unit, p.shopAreaId, p.areaExplicit),
+                    CreateItemRequest(p.name, p.quantity, p.unit, areaId, p.areaExplicit, p.checked),
                 ).ocs.data
                 remapItemId(tempId = m.targetId, realId = created.id, updatedAt = created.updatedAt)
+                // The server gives a new item the photo it remembers for that name.
+                takeImageKey(created.id, created.imageKey)
                 // An explicit area assignment makes the server learn this name -> area; pull the
                 // updated keywords back so the next auto-detect picks them up immediately.
                 if (p.areaExplicit) refreshAreas(m.listId)
             }
             MutationTypes.UPDATE -> {
                 val p = json.decodeFromString<ItemUpdatePayload>(m.payload)
-                service.updateItem(
+                val updated = service.updateItem(
                     m.listId, m.targetId,
                     UpdateItemRequest(p.name, p.quantity, p.unit, p.shopAreaId, p.sortOrder, p.areaExplicit),
-                )
+                ).ocs.data
+                // A rename can bring the photo remembered for the new name.
+                if (p.name != null) takeImageKey(m.targetId, updated.imageKey)
                 if (p.areaExplicit == true) refreshAreas(m.listId)
             }
             MutationTypes.CHECK -> {
@@ -182,8 +261,35 @@ class SyncEngine @Inject constructor(
                 val p = json.decodeFromString<TitlePayload>(m.payload)
                 service.updateList(m.targetId, UpdateListRequest(p.title))
             }
+            MutationTypes.UPDATE_PREFERENCES -> {
+                val p = json.decodeFromString<PinPayload>(m.payload)
+                service.updateListPreferences(m.targetId, ListPreferencesRequest(p.isPinned))
+            }
+            MutationTypes.REORDER_LISTS -> {
+                val ids = json.decodeFromString<ListOrderPayload>(m.payload).idsToSend()
+                if (ids.isNotEmpty()) service.reorderLists(ReorderListsRequest(ids))
+            }
+            MutationTypes.UPDATE_SETTINGS -> {
+                val p = json.decodeFromString<SettingsPayload>(m.payload)
+                service.updateSettings(UpdateSettingsRequest(listSort = p.listSort))
+            }
             MutationTypes.DELETE -> service.deleteList(m.targetId)
         }
+    }
+
+    /**
+     * Detects the area for an item that was added before its list's areas reached the phone,
+     * fetching them first if they still haven't. The local row takes the area too, unless the
+     * user has already given it one.
+     */
+    private suspend fun detectQueuedArea(m: MutationEntity, p: ItemCreatePayload): Long? {
+        if (areaDao.getByList(m.listId).isEmpty()) refreshAreas(m.listId)
+        val areas = areaDao.getByList(m.listId).map { it.toModel() }
+        val areaId = areaForQueuedCreate(p, areas, smartInput) ?: return null
+        itemDao.getById(m.targetId)?.let { row ->
+            if (row.shopAreaId == null) itemDao.upsert(row.copy(shopAreaId = areaId))
+        }
+        return areaId
     }
 
     /** Re-fetches a list's shop areas (e.g. after the server learned a new keyword). */
@@ -194,6 +300,12 @@ class SyncEngine @Inject constructor(
             areaDao.deleteByList(listId)
             areaDao.upsertAll(areas.map { it.toEntity(listId) })
         }
+    }
+
+    /** The photo the server chose for an item; only photo changes ever set it on the phone. */
+    private suspend fun takeImageKey(itemId: Long, imageKey: String?) {
+        val row = itemDao.getById(itemId) ?: return
+        if (row.imageKey != imageKey) itemDao.update(row.copy(imageKey = imageKey))
     }
 
     /** Swap a temp item id for the real server id across Room and the queue. */
@@ -219,6 +331,7 @@ class SyncEngine @Inject constructor(
             areaDao.remapListId(tempId, realId)
             mutationDao.remapTarget(MutationEntities.LIST, tempId, realId)
             mutationDao.remapListId(tempId, realId)
+            remapListOrderIds(tempId, realId)
         }
     }
 
@@ -230,6 +343,14 @@ class SyncEngine @Inject constructor(
                 val updated = p.copy(sortedIds = p.sortedIds.map { if (it == oldId) newId else it })
                 mutationDao.update(mutation.copy(payload = json.encodeToString(ReorderPayload.serializer(), updated)))
             }
+        }
+    }
+
+    /** Rewrite queued list orders that still hold a list's temp id. */
+    private suspend fun remapListOrderIds(oldId: Long, newId: Long) {
+        for (mutation in mutationDao.byType(MutationTypes.REORDER_LISTS)) {
+            val updated = json.decodeFromString<ListOrderPayload>(mutation.payload).remapped(oldId, newId) ?: continue
+            mutationDao.update(mutation.copy(payload = json.encodeToString(ListOrderPayload.serializer(), updated)))
         }
     }
 

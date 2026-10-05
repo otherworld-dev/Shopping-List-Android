@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Dark parent, not Light: the UI is always a dark navy gradient, so a light window theme
-      meant a near-white flash before Compose drew, and dark system-bar icons on a dark ground.
+      Light parent here and a dark one in values-night, so the window drawn before Compose
+      matches the phone's setting: no white flash in dark mode, no navy flash in light mode.
+      Compose then applies the app's own Theme choice, which can differ from the phone's.
     -->
-    <style name="Theme.ShoppingList" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.ShoppingList" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/splash_background</item>
     </style>
 </resources>
