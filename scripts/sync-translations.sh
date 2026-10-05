@@ -26,6 +26,12 @@ case "${1:-}" in
     for dir in "$mirror"/values-*/; do
       [ -f "$dir/strings.xml" ] || continue
       name="$(basename "$dir")"
+      # Crowdin leaves untranslated strings out, so a language nobody has started comes back
+      # empty. Copying it would still list the language in Android's per-app language setting.
+      if ! grep -qE '<(string|plurals|string-array)[ >]' "$dir/strings.xml"; then
+        echo "  $name skipped, nothing translated yet"
+        continue
+      fi
       mkdir -p "$res/$name"
       cp "$dir/strings.xml" "$res/$name/strings.xml"
       echo "  $name"
