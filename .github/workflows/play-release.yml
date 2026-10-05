@@ -15,8 +15,8 @@ on:
       track:
         description: Play track to release to
         type: choice
-        options: [internal, alpha, beta, production]
-        default: internal
+        options: [production, internal, alpha, beta]
+        default: production
       dry_run:
         description: Build and check the Play credentials, without uploading
         type: boolean
@@ -29,8 +29,8 @@ permissions:
   contents: read
 
 env:
-  # The track a tag push releases to. Switch to production once internal is proven.
-  TRACK: ${{ inputs.track || 'internal' }}
+  # The track a tag push releases to.
+  TRACK: ${{ inputs.track || 'production' }}
   DRY_RUN: ${{ inputs.dry_run || false }}
 
 jobs:
