@@ -358,9 +358,18 @@ class SmartInput(
     }
 
     companion object {
+        // Uncountable / already-singular nouns, so merging "Milk" up to 2 never renames it
+        // "Milks" (mirrors the web app's itemMerge.ts). Anything added here that ends in "s"
+        // also changes duplicate matching, through singularize.
         private val SINGULAR_EXCEPTIONS = setOf(
             "asparagus", "hummus", "couscous", "cheese", "rice", "juice",
             "lettuce", "sauce", "produce", "grease", "mousse",
+            "milk", "bread", "butter", "flour", "sugar", "salt", "water", "cream",
+            "honey", "coffee", "tea", "cocoa", "pasta", "spaghetti", "meat", "beef",
+            "pork", "lamb", "mince", "bacon", "ham", "fish", "salmon", "tuna", "oil",
+            "vinegar", "ketchup", "mayonnaise", "mustard", "garlic", "ginger",
+            "spinach", "broccoli", "celery", "sweetcorn", "tofu", "gravy", "custard",
+            "granola", "muesli", "foil", "bleach", "toothpaste",
         )
 
         /** English enables morphology; everything else uses the English pack without it. */

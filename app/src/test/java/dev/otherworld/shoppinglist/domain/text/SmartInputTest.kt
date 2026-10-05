@@ -116,6 +116,25 @@ class SmartInputTest {
         assertEquals("Red apples", smart.pluralizeName("Red apple"))
     }
 
+    @Test
+    fun `pluralize leaves uncountable groceries alone`() {
+        for (name in listOf("Milk", "Bread", "Butter", "Flour", "Sugar", "Coffee", "Fish", "Pasta", "Cheese")) {
+            assertEquals(name, smart.pluralizeName(name))
+        }
+    }
+
+    @Test
+    fun `pluralize reads the last word, so a qualified mass noun stays singular`() {
+        assertEquals("Oat milk", smart.pluralizeName("Oat milk"))
+        assertEquals("Olive oil", smart.pluralizeName("Olive oil"))
+        assertEquals("Ice cream", smart.pluralizeName("Ice cream"))
+    }
+
+    @Test
+    fun `typed plural of an uncountable noun still matches`() {
+        assertEquals(smart.normalizeName("Milk"), smart.normalizeName("Milks"))
+    }
+
     // ---- Quantity merge ----
 
     @Test
@@ -202,6 +221,14 @@ class SmartInputTest {
         val plan = smart.planAdd("apple", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Merge
         assertEquals("2", plan.quantity)
         assertEquals("Apples", plan.newName) // casing of the existing item name is preserved
+    }
+
+    @Test
+    fun `plan keeps an uncountable name when crossing from one to many`() {
+        val existing = listOf(item(5, "Milk", quantity = "1"))
+        val plan = smart.planAdd("milk", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Merge
+        assertEquals("2", plan.quantity)
+        assertEquals("Milk", plan.newName ?: existing.single().name)
     }
 
     @Test
