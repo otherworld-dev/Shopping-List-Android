@@ -226,6 +226,9 @@ class ItemsViewModel @Inject constructor(
         }
     }
 
+    /** What the add box's [text] filters the list by; see [SmartInput.searchKey]. */
+    fun searchKey(text: String): String = smartInput.searchKey(text)
+
     /**
      * Adds [rawInput] with the web app's smart behaviour: parse quantity out of the text,
      * auto-detect a shop area (unless [explicitAreaId] is set), and merge into an existing
