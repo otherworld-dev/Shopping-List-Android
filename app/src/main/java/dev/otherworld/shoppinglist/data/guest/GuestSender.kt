@@ -108,7 +108,10 @@ class GuestSender @Inject constructor(
                 val p = json.decodeFromString<ItemUpdatePayload>(m.payload)
                 api.updateItem(
                     PublicUrls.item(s, t, remote),
-                    UpdateItemRequest(name = p.name, quantity = p.quantity, unit = p.unit, shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }),
+                    UpdateItemRequest(
+                        name = p.name, quantity = p.quantity, unit = p.unit,
+                        shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }, quantityExplicit = p.quantityExplicit,
+                    ),
                 )
             }
             MutationTypes.CHECK -> {

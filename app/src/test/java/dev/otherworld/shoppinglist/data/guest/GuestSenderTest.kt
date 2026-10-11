@@ -73,6 +73,22 @@ class GuestSenderTest {
     }
 
     @Test
+    fun `an amount changed on a guest list is sent for the server to remember (#15)`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        val payload = ItemUpdatePayload(quantity = "500 g", quantityExplicit = true)
+        sender.send(mutation(MutationTypes.UPDATE, item, json.encodeToString(ItemUpdatePayload.serializer(), payload)), share, emptyList())
+        assertEquals(UpdateItemRequest(quantity = "500 g", quantityExplicit = true), api.bodies.single())
+    }
+
+    @Test
+    fun `a merged total on a guest list is not sent to be remembered (#15)`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        val payload = ItemUpdatePayload(quantity = "500 g + 1")
+        sender.send(mutation(MutationTypes.UPDATE, item, json.encodeToString(ItemUpdatePayload.serializer(), payload)), share, emptyList())
+        assertEquals(UpdateItemRequest(quantity = "500 g + 1"), api.bodies.single())
+    }
+
+    @Test
     fun `a ticked paste is created, and its tick is left to send next`() = runTest {
         val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Milk", checked = true)))
         val result = sender.send(m, share, emptyList()) as GuestSendResult.Created

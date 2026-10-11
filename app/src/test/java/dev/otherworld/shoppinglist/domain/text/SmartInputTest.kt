@@ -273,6 +273,7 @@ class SmartInputTest {
     fun `merging adds up the short forms of a unit with the long ones (#15)`() {
         assertEquals("5 pcs", smart.mergeQuantities("3 pcs", "2 pieces"))
         assertEquals("35 dag", smart.mergeQuantities("25 dag", "10 dkg"))
+        assertEquals("3 pkg", smart.mergeQuantities("2 pkg", "1 pack"))
     }
 
     @Test

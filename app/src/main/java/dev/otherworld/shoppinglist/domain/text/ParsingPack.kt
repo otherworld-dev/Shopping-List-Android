@@ -55,7 +55,7 @@ data class ParsingPack(
                 "pieces" to "piece", "pcs" to "piece", "pc" to "piece", "dkg" to "dag",
                 "cloves" to "clove",
                 "stalks" to "stalk", "sprigs" to "sprig",
-                "bags" to "bag", "packs" to "pack", "packets" to "pack",
+                "bags" to "bag", "packs" to "pack", "packets" to "pack", "pkg" to "pack",
                 "pinches" to "pinch", "bunches" to "bunch",
                 "heads" to "head",
             ),
