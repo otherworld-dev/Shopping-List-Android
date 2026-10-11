@@ -69,6 +69,30 @@ class SmartInputTest {
     }
 
     @Test
+    fun `reads the short forms of piece and pack (#15)`() {
+        assertEquals(SmartInput.ParsedIngredient("Eggs", "3 pcs"), smart.parseIngredient("3 pcs eggs"))
+        assertEquals(SmartInput.ParsedIngredient("Avocado", "1 pc"), smart.parseIngredient("1 pc avocado"))
+        assertEquals(SmartInput.ParsedIngredient("Noodles", "2 pkg"), smart.parseIngredient("2 pkg noodles"))
+    }
+
+    @Test
+    fun `reads decagrams (#15)`() {
+        assertEquals(SmartInput.ParsedIngredient("Ham", "25 dag"), smart.parseIngredient("25 dag ham"))
+        assertEquals(SmartInput.ParsedIngredient("Cheese", "10 dkg"), smart.parseIngredient("10 dkg cheese"))
+        assertEquals(SmartInput.ParsedIngredient("Ham", "25 dag"), smart.parseIngredient("25dag ham"))
+    }
+
+    @Test
+    fun `reads German amounts on a German phone (#15)`() {
+        val de = SmartInput.forLanguage("de")
+        assertEquals(SmartInput.ParsedIngredient("Schinken", "25 dag"), de.parseIngredient("25 dag Schinken"))
+        assertEquals(SmartInput.ParsedIngredient("Käse", "10 dkg"), de.parseIngredient("10 dkg Käse"))
+        assertEquals(SmartInput.ParsedIngredient("Eier", "3 stk"), de.parseIngredient("3 Stk Eier"))
+        assertEquals(SmartInput.ParsedIngredient("Eier", "3 stk."), de.parseIngredient("3 Stk. Eier"))
+        assertEquals(SmartInput.ParsedIngredient("Nudeln", "2 pkg"), de.parseIngredient("2 Pkg Nudeln"))
+    }
+
+    @Test
     fun `strips parentheticals from name`() {
         val p = smart.parseIngredient("2 cups (packed) flour")
         assertEquals("Flour", p.name)
@@ -229,6 +253,26 @@ class SmartInputTest {
         val plan = smart.planAdd("milk", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Merge
         assertEquals("2", plan.quantity)
         assertEquals("Milk", plan.newName ?: existing.single().name)
+    }
+
+    @Test
+    fun `plan leaves the amount off a name on its own, for the server to fill in (#15)`() {
+        val plan = smart.planAdd("rice", emptyList(), emptyList(), explicitAreaId = null) as SmartInput.AddPlan.Create
+        assertEquals("Rice", plan.name)
+        assertNull(plan.quantity)
+    }
+
+    @Test
+    fun `plan still counts a name on its own as one more when merging`() {
+        val existing = listOf(item(5, "Rice", quantity = "500 g"))
+        val plan = smart.planAdd("rice", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Merge
+        assertEquals("500 g + 1", plan.quantity)
+    }
+
+    @Test
+    fun `merging adds up the short forms of a unit with the long ones (#15)`() {
+        assertEquals("5 pcs", smart.mergeQuantities("3 pcs", "2 pieces"))
+        assertEquals("35 dag", smart.mergeQuantities("25 dag", "10 dkg"))
     }
 
     @Test

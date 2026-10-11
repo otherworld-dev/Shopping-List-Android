@@ -56,6 +56,23 @@ class GuestSenderTest {
     }
 
     @Test
+    fun `a typed amount is sent for the server to remember (#15)`() = runTest {
+        val payload = ItemCreatePayload("Rice", quantity = "500 g", quantityExplicit = true)
+        val result = sender.send(mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), payload)), share, emptyList()) as GuestSendResult.Created
+        assertEquals(CreateItemRequest("Rice", "500 g", quantityExplicit = true), api.bodies.single())
+        assertEquals("500 g", result.quantity)
+    }
+
+    @Test
+    fun `a name on its own goes without an amount and gets the remembered one back (#15)`() = runTest {
+        api.rememberedQuantity = "500 g"
+        val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Rice")))
+        val result = sender.send(m, share, emptyList()) as GuestSendResult.Created
+        assertEquals(CreateItemRequest("Rice"), api.bodies.single())
+        assertEquals("500 g", result.quantity)
+    }
+
+    @Test
     fun `a ticked paste is created, and its tick is left to send next`() = runTest {
         val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Milk", checked = true)))
         val result = sender.send(m, share, emptyList()) as GuestSendResult.Created

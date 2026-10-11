@@ -91,6 +91,11 @@ class ItemRepository @Inject constructor(
         sync.requestSync()
     }
 
+    /**
+     * Adds an item. A null [quantity] is a name typed on its own: the server fills in the amount
+     * it remembers for the name, so the row shows none until then. A list kept on this phone has
+     * no server to ask, so it gets the plain 1.
+     */
     suspend fun createItem(
         listId: Long,
         name: String,
@@ -107,7 +112,7 @@ class ItemRepository @Inject constructor(
             id = id,
             listId = listId,
             name = name,
-            quantity = quantity,
+            quantity = quantity ?: "1".takeIf { listDao.isLocal(listId) },
             unit = unit,
             shopAreaId = shopAreaId,
             checked = checked,
@@ -125,6 +130,7 @@ class ItemRepository @Inject constructor(
                     ItemCreatePayload(
                         name, quantity, unit, shopAreaId, areaExplicit, checked,
                         detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
+                        quantityExplicit = quantity != null,
                     ),
                 ),
             )
@@ -139,6 +145,8 @@ class ItemRepository @Inject constructor(
         quantity: String? = null,
         shopAreaId: Long? = null,
         areaExplicit: Boolean? = null,
+        /** The user changed the amount, so the server remembers it. Never for a merged total. */
+        quantityExplicit: Boolean? = null,
     ) {
         itemDao.getById(item.id)?.let { cur ->
             itemDao.update(
@@ -151,7 +159,13 @@ class ItemRepository @Inject constructor(
         }
         enqueue(
             MutationTypes.UPDATE, item.id, item.listId,
-            json.encodeToString(ItemUpdatePayload.serializer(), ItemUpdatePayload(name = name, quantity = quantity, shopAreaId = shopAreaId, areaExplicit = areaExplicit)),
+            json.encodeToString(
+                ItemUpdatePayload.serializer(),
+                ItemUpdatePayload(
+                    name = name, quantity = quantity, shopAreaId = shopAreaId,
+                    areaExplicit = areaExplicit, quantityExplicit = quantityExplicit,
+                ),
+            ),
         )
         sync.requestSync()
     }
