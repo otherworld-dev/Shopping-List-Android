@@ -80,6 +80,7 @@ class SettingsViewModel @Inject constructor(
     val themeMode = displayPrefs.themeMode
     val listSort = listSettings.listSort
     val showImages = displayPrefs.showImages
+    val openLastList = displayPrefs.openLastList
 
     /** Signed in to a server too old for photos (before 1.9.0), so none can be added there. */
     val imagesUnsupported: StateFlow<Boolean> = combine(
@@ -130,6 +131,8 @@ class SettingsViewModel @Inject constructor(
 
     fun setShowImages(show: Boolean) = displayPrefs.setShowImages(show)
 
+    fun setOpenLastList(open: Boolean) = displayPrefs.setOpenLastList(open)
+
     fun setListSort(mode: ListSortMode) {
         viewModelScope.launch { ordering.setListSort(mode) }
     }
@@ -147,6 +150,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     val showOwnName by viewModel.showOwnName.collectAsStateWithLifecycle()
     val ownNameError by viewModel.ownNameError.collectAsStateWithLifecycle()
     val hasGuestLists by viewModel.hasGuestLists.collectAsStateWithLifecycle()
+    val openLastList by viewModel.openLastList.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -209,6 +213,9 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 Choice(stringResource(R.string.theme_system), themeMode == ThemeMode.SYSTEM) { viewModel.setThemeMode(ThemeMode.SYSTEM) }
                 Choice(stringResource(R.string.theme_light), themeMode == ThemeMode.LIGHT) { viewModel.setThemeMode(ThemeMode.LIGHT) }
                 Choice(stringResource(R.string.theme_dark), themeMode == ThemeMode.DARK) { viewModel.setThemeMode(ThemeMode.DARK) }
+            }
+            Section(stringResource(R.string.settings_startup)) {
+                Toggle(stringResource(R.string.settings_open_last_list), openLastList, viewModel::setOpenLastList)
             }
         }
     }

@@ -62,6 +62,14 @@ class DisplayPrefs @Inject constructor(
     private val _showImages = MutableStateFlow(prefs.getBoolean(KEY_SHOW_IMAGES, false))
     val showImages: StateFlow<Boolean> = _showImages.asStateFlow()
 
+    // On until turned off: most people go back to the same list.
+    private val _openLastList = MutableStateFlow(prefs.getBoolean(KEY_OPEN_LAST_LIST, true))
+    val openLastList: StateFlow<Boolean> = _openLastList.asStateFlow()
+
+    /** The list opened last on this phone (any kind: own, shared, link or phone-only), or null. */
+    val lastListId: Long?
+        get() = if (prefs.contains(KEY_LAST_LIST)) prefs.getLong(KEY_LAST_LIST, 0L) else null
+
     private val collapsedFlows = mutableMapOf<Long, MutableStateFlow<Set<String>>>()
 
     fun setThemeMode(mode: ThemeMode) {
@@ -74,6 +82,21 @@ class DisplayPrefs @Inject constructor(
     fun setShowImages(show: Boolean) {
         _showImages.value = show
         prefs.edit().putBoolean(KEY_SHOW_IMAGES, show).apply()
+    }
+
+    fun setOpenLastList(open: Boolean) {
+        _openLastList.value = open
+        prefs.edit().apply {
+            if (open) remove(KEY_OPEN_LAST_LIST) else putBoolean(KEY_OPEN_LAST_LIST, false)
+        }.apply()
+    }
+
+    fun setLastListId(id: Long) {
+        prefs.edit().putLong(KEY_LAST_LIST, id).apply()
+    }
+
+    fun clearLastList() {
+        prefs.edit().remove(KEY_LAST_LIST).apply()
     }
 
     fun toggleDensity() {
@@ -128,5 +151,7 @@ class DisplayPrefs @Inject constructor(
         const val KEY_BOUGHT_SORT = "bought_sort"
         const val KEY_THEME = "theme"
         const val KEY_SHOW_IMAGES = "show_images"
+        const val KEY_OPEN_LAST_LIST = "open_last_list"
+        const val KEY_LAST_LIST = "last_list_id"
     }
 }

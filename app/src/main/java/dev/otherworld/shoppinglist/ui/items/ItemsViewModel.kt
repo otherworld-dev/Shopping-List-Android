@@ -192,6 +192,8 @@ class ItemsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PhotoUiState())
 
     init {
+        // Remembered whichever way the list was opened, for reopening it on the next start.
+        displayPrefs.setLastListId(listId)
         refresh()
         // Push events come from the user's own server, which knows nothing of a guest list.
         if (!isGuest) {

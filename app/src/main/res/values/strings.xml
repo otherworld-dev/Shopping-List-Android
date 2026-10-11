@@ -158,6 +158,8 @@
     <string name="settings_guest_name">Your name on shared lists (optional)</string>
     <string name="settings_guest_name_hint">Shown to others beside what you add and tick on lists you opened from a link.</string>
     <string name="settings_theme">Theme</string>
+    <string name="settings_startup">Start-up</string>
+    <string name="settings_open_last_list">Open the last list on start</string>
     <string name="settings_item_images">Item images</string>
     <string name="settings_show_item_images">Show item images</string>
     <string name="settings_item_images_hint">Add a photo to an item from its edit window. Photos are part of the list, so everyone with access can see them. This switch only changes what you see on this phone.</string>

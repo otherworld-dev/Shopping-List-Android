@@ -52,6 +52,9 @@ class ListRepository @Inject constructor(
     fun observeLists(): Flow<List<ShoppingListModel>> =
         listDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
+    /** The list with [id] as it's kept on the phone, or null when it's gone. */
+    suspend fun getList(id: Long): ShoppingListModel? = listDao.getById(id)?.toModel()
+
     suspend fun localListCount(): Int = listDao.localLists().size
 
     /** Fetches lists from the server and reconciles them into Room without clobbering pending edits. */
