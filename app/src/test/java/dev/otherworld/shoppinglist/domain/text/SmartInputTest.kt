@@ -277,10 +277,31 @@ class SmartInputTest {
     }
 
     @Test
-    fun `plan ignores checked items when matching`() {
+    fun `plan brings back a ticked item rather than adding another`() {
         val existing = listOf(item(5, "Apple", quantity = "2", checked = true))
-        val plan = smart.planAdd("apple", emptyList(), existing, explicitAreaId = null)
-        assertTrue(plan is SmartInput.AddPlan.Create)
+        val plan = smart.planAdd("apples", emptyList(), existing, explicitAreaId = null)
+        assertEquals(SmartInput.AddPlan.Recycle(existing.single(), quantity = null), plan)
+    }
+
+    @Test
+    fun `plan gives a brought back item the amount typed`() {
+        val existing = listOf(item(5, "Rice", quantity = "1 kg", checked = true))
+        val plan = smart.planAdd("500 g rice", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Recycle
+        assertEquals("500 g", plan.quantity)
+    }
+
+    @Test
+    fun `plan merges into an open item before bringing back a ticked one`() {
+        val existing = listOf(item(5, "Milk", checked = true), item(6, "Milk", quantity = "1"))
+        val plan = smart.planAdd("milk", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Merge
+        assertEquals(6L, plan.target.id)
+    }
+
+    @Test
+    fun `plan brings back the first of several ticked copies`() {
+        val existing = listOf(item(5, "Milk", checked = true), item(6, "Milk", checked = true))
+        val plan = smart.planAdd("milk", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Recycle
+        assertEquals(5L, plan.target.id)
     }
 
     // ---- List markup (web app 1.7.0: stripListMarkup) ----
@@ -471,6 +492,13 @@ class SmartInputTest {
         assertTrue(plan is SmartInput.AddPlan.Create)
         plan as SmartInput.AddPlan.Create
         assertTrue(plan.checked)
+    }
+
+    @Test
+    fun `a checked line never brings back a ticked item`() {
+        val existing = listOf(item(5, "Milk", checked = true))
+        val plan = smart.planAdd("[x] milk", emptyList(), existing, explicitAreaId = null)
+        assertTrue(plan is SmartInput.AddPlan.Create)
     }
 
     @Test

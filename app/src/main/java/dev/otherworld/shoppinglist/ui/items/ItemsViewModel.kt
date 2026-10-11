@@ -229,7 +229,8 @@ class ItemsViewModel @Inject constructor(
     /**
      * Adds [rawInput] with the web app's smart behaviour: parse quantity out of the text,
      * auto-detect a shop area (unless [explicitAreaId] is set), and merge into an existing
-     * unchecked item of the same name instead of creating a duplicate.
+     * unchecked item of the same name instead of creating a duplicate, or else untick a
+     * ticked-off one.
      *
      * Multi-line input (a pasted list) becomes one item per non-blank line, processed in order
      * so a later line merges into an item an earlier line just created — the same as the web
@@ -263,6 +264,16 @@ class ItemsViewModel @Inject constructor(
                         repository.updateItem(plan.target, name = plan.newName, quantity = plan.quantity)
                         existing = existing.map {
                             if (it.id == plan.target.id) it.copy(name = plan.newName ?: it.name, quantity = plan.quantity) else it
+                        }
+                    }
+                    is SmartInput.AddPlan.Recycle -> {
+                        // A typed amount is the one the name gets next time; a bare name keeps the old one.
+                        if (plan.quantity != null) {
+                            repository.updateItem(plan.target, quantity = plan.quantity, quantityExplicit = true)
+                        }
+                        repository.check(plan.target, checked = false)
+                        existing = existing.map {
+                            if (it.id == plan.target.id) it.copy(checked = false, quantity = plan.quantity ?: it.quantity) else it
                         }
                     }
                 }
