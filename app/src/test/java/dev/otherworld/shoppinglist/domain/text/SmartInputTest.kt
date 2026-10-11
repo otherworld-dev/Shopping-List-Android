@@ -506,4 +506,20 @@ class SmartInputTest {
         val existing = listOf(item(5, "Milk", quantity = "1"))
         assertTrue(smart.planAdd("[ ] milk", emptyList(), existing, explicitAreaId = null) is SmartInput.AddPlan.Merge)
     }
+
+    @Test
+    fun `the search key is the name it would add, without the amount`() {
+        assertEquals("milk", smart.searchKey("2 l milk"))
+    }
+
+    @Test
+    fun `the search key folds case and accents like area matching`() {
+        assertEquals("creme fraiche", smart.searchKey("Crème Fraîche"))
+    }
+
+    @Test
+    fun `a blank box has no search key`() {
+        assertEquals("", smart.searchKey("   "))
+        assertEquals("", smart.searchKey(""))
+    }
 }

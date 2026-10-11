@@ -32,7 +32,8 @@ class ItemRowsTest {
         items: List<ItemModel>,
         openSort: OpenSort = OpenSort.AREA,
         collapsed: Set<String> = emptySet(),
-    ) = buildRows(items, areas, openSort, BoughtSort.AREA, collapsed, Locale.ENGLISH)
+        filter: String = "",
+    ) = buildRows(items, areas, openSort, BoughtSort.AREA, collapsed, Locale.ENGLISH, filter)
 
     /** Rows as short labels: "#Dairy", "milk", "#checked". */
     private fun labels(rows: List<Row>) = rows.map {
@@ -118,5 +119,48 @@ class ItemRowsTest {
         val plan = planReorder(dropped)
         assertEquals(listOf(apples.id, milk.id), plan.orderedIds)
         assertEquals(listOf(apples to dairy.id), plan.areaMoves)
+    }
+
+    @Test
+    fun `a filter keeps only the items whose name contains it`() {
+        val list = listOf(item("milk", dairy.id), item("oat milk"), item("apples", produce.id))
+        assertEquals(listOf("#Dairy", "milk", "#other", "oat milk"), labels(rows(list, filter = "milk")))
+    }
+
+    @Test
+    fun `a filter matches names regardless of case and accents`() {
+        val list = listOf(item("Crème fraîche", dairy.id), item("apples", produce.id))
+        assertEquals(listOf("#Dairy", "Crème fraîche"), labels(rows(list, filter = "creme")))
+    }
+
+    @Test
+    fun `a filter finds ticked items so they can be unticked`() {
+        val list = listOf(item("milk", dairy.id, checked = true), item("apples", produce.id))
+        assertEquals(listOf("#checked", "milk"), labels(rows(list, filter = "milk")))
+    }
+
+    @Test
+    fun `a filter shows the matches inside a folded area`() {
+        val list = listOf(item("milk", dairy.id), item("cheese", dairy.id))
+        val result = rows(list, collapsed = setOf("2"), filter = "milk")
+        assertEquals(listOf("#Dairy", "milk"), labels(result))
+        assertFalse((result.first() as Row.AreaHeaderRow).collapsed)
+    }
+
+    @Test
+    fun `nothing can be dragged while filtering`() {
+        val list = listOf(item("milk", dairy.id), item("oat milk"))
+        assertTrue(rows(list, filter = "milk").filterIsInstance<Row.ItemRowData>().none { it.draggable })
+    }
+
+    @Test
+    fun `a filter that matches nothing leaves no rows`() {
+        assertEquals(emptyList<String>(), labels(rows(listOf(item("milk", dairy.id)), filter = "bread")))
+    }
+
+    @Test
+    fun `a blank filter changes nothing`() {
+        val list = listOf(item("milk", dairy.id), item("apples", produce.id, checked = true))
+        assertEquals(rows(list), rows(list, filter = "  "))
     }
 }

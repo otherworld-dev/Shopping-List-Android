@@ -7,6 +7,7 @@ import dev.otherworld.shoppinglist.domain.sort.CollapsedAreas
 import dev.otherworld.shoppinglist.domain.sort.OpenSort
 import dev.otherworld.shoppinglist.domain.sort.groupOpenItems
 import dev.otherworld.shoppinglist.domain.sort.sortBought
+import dev.otherworld.shoppinglist.domain.text.fold
 import java.util.Locale
 
 // ---- Flattened display rows (headers + items) so the list can be drag-reordered ----
@@ -38,6 +39,12 @@ internal sealed interface Row {
     }
 }
 
+/**
+ * The list as display rows. A non-blank [filter] (a [dev.otherworld.shoppinglist.domain.text.SmartInput.searchKey])
+ * keeps only the items whose folded name contains it, ticked ones too, so one can be found and
+ * unticked. While filtering, folded areas show their matches and nothing can be dragged: the
+ * rows aren't the whole list, so a drop couldn't say where an item belongs.
+ */
 internal fun buildRows(
     items: List<ItemModel>,
     areas: List<ShopAreaModel>,
@@ -45,19 +52,22 @@ internal fun buildRows(
     boughtSort: BoughtSort,
     collapsedKeys: Set<String>,
     locale: Locale,
+    filter: String = "",
 ): List<Row> {
+    val filtering = filter.isNotBlank()
+    val shown = if (filtering) items.filter { fold(it.name).contains(filter) } else items
     val rows = mutableListOf<Row>()
     val orderedAreas = areas.sortedWith(compareBy({ it.sortOrder }, { it.id }))
-    val unchecked = items.filterNot { it.checked }.sortedBy { it.sortOrder }
+    val unchecked = shown.filterNot { it.checked }.sortedBy { it.sortOrder }
     val groups = groupOpenItems(unchecked, orderedAreas, openSort, locale)
     // Dragging sets the order and area by hand, which only means something when the list
     // shows that order. In the A-to-Z modes the sort decides where an item goes.
-    val draggable = openSort == OpenSort.AREA
+    val draggable = openSort == OpenSort.AREA && !filtering
     groups.forEach { group ->
         // A lone uncategorized group gets no header: nothing to name and nothing to fold —
         // the flat A-to-Z sort, and lists whose open items all have no area.
         val hasHeader = group.area != null || groups.size > 1
-        val collapsed = hasHeader && CollapsedAreas.areaKey(group.area?.id) in collapsedKeys
+        val collapsed = !filtering && hasHeader && CollapsedAreas.areaKey(group.area?.id) in collapsedKeys
         if (hasHeader) {
             rows += Row.AreaHeaderRow(
                 area = group.area,
@@ -74,7 +84,7 @@ internal fun buildRows(
             }
         }
     }
-    val checked = sortBought(items.filter { it.checked }, boughtSort, orderedAreas, locale)
+    val checked = sortBought(shown.filter { it.checked }, boughtSort, orderedAreas, locale)
     if (checked.isNotEmpty()) {
         rows += Row.CheckedHeaderRow(checked.size)
         // Checked items are listed together across areas, so the area name still carries

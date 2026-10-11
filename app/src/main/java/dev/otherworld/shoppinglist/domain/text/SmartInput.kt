@@ -312,6 +312,12 @@ class SmartInput(
         return parseLine(markup.rest).copy(checked = markup.checked)
     }
 
+    /**
+     * What the add box filters the list by: the name it would add, folded the way [detectArea]
+     * matches, so "2 l Milk" finds "milk". Blank when there's no name to look for.
+     */
+    fun searchKey(input: String): String = fold(parseIngredient(input).name).trim()
+
     /** The quantity and name logic, on a line whose list markup is already gone. */
     private fun parseLine(trimmed: String): ParsedIngredient {
         if (trimmed.isEmpty()) return ParsedIngredient("", null)
