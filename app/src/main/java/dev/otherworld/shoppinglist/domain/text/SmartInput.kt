@@ -41,6 +41,15 @@ class SmartInput(
             val quantity: String,
             val newName: String?,
         ) : AddPlan
+
+        /**
+         * Matches a ticked-off item — untick it rather than add another beside it. [quantity]
+         * is the amount typed, or null to keep the one it had.
+         */
+        data class Recycle(
+            val target: ItemModel,
+            val quantity: String?,
+        ) : AddPlan
     }
 
     /**
@@ -73,6 +82,11 @@ class SmartInput(
             return AddPlan.Merge(match, merged, newName)
         }
 
+        // Bought before and ticked off: bring that one back so the list doesn't fill up with
+        // ticked copies of the same thing.
+        val ticked = if (parsed.checked) null else findCheckedMatch(existing, parsed.name)
+        if (ticked != null) return AddPlan.Recycle(ticked, parsed.quantity)
+
         val areaId = explicitAreaId ?: detectArea(parsed.name, areas)
         return AddPlan.Create(parsed.name, parsed.quantity, areaId, explicitAreaId != null, parsed.checked)
     }
@@ -82,6 +96,11 @@ class SmartInput(
     fun findMatchingItem(items: List<ItemModel>, name: String): ItemModel? {
         val normalized = normalizeName(name)
         return items.firstOrNull { !it.checked && normalizeName(it.name) == normalized }
+    }
+
+    fun findCheckedMatch(items: List<ItemModel>, name: String): ItemModel? {
+        val normalized = normalizeName(name)
+        return items.firstOrNull { it.checked && normalizeName(it.name) == normalized }
     }
 
     fun normalizeName(name: String): String {
