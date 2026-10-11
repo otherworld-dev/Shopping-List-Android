@@ -727,7 +727,8 @@ internal fun ItemRow(
         }
         Spacer(Modifier.width(8.dp))
         Text(
-            (item.quantity?.takeIf { it.isNotBlank() } ?: "1"),
+            // A name added on its own shows no amount until the server gives it the remembered one.
+            item.quantity?.takeIf { it.isNotBlank() } ?: if (item.id < 0) "" else "1",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.widthIn(min = 18.dp),

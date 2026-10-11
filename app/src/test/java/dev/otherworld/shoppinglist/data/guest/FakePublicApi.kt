@@ -35,6 +35,8 @@ class FakePublicApi : PublicApi {
     var items = listOf<ItemDto>()
     var areas = listOf<ShopAreaDto>()
     var nextItemId = 500L
+    /** What the server remembers for a name added on its own; it falls back to "1". */
+    var rememberedQuantity: String? = null
     var capabilities = CapabilitiesResponse()
     var codeToken = "tok"
 
@@ -53,7 +55,8 @@ class FakePublicApi : PublicApi {
     override suspend fun items(url: String) = record("items", url).let { ocs(items) }
     override suspend fun createItem(url: String, body: CreateItemRequest): OcsResponse<ItemDto> {
         record("createItem", url, body)
-        return ocs(ItemDto(id = nextItemId++, listId = 9, name = body.name, updatedAt = "2026-09-27T10:00:00+00:00"))
+        val quantity = body.quantity ?: rememberedQuantity ?: "1"
+        return ocs(ItemDto(id = nextItemId++, listId = 9, name = body.name, quantity = quantity, updatedAt = "2026-09-27T10:00:00+00:00"))
     }
     override suspend fun updateItem(url: String, body: UpdateItemRequest) =
         record("updateItem", url, body).let { ocs(ItemDto(id = 1, listId = 9)) }

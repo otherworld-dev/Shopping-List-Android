@@ -36,6 +36,8 @@ sealed interface GuestSendResult {
         val updatedAt: String?,
         val detectedAreaId: Long?,
         val tickPending: Boolean = false,
+        /** The amount the server gave it, the remembered one for a name added on its own. */
+        val quantity: String? = null,
     ) : GuestSendResult
 }
 
@@ -88,13 +90,17 @@ class GuestSender @Inject constructor(
                 val areaId = areaForQueuedCreate(p, if (p.detectArea) areasFor(m.listId, share, localAreas) else localAreas, smartInput)
                 val created = api.createItem(
                     PublicUrls.items(s, t),
-                    CreateItemRequest(p.name, p.quantity, p.unit, areaId?.let { ids.remoteId(it) }, guestName = nameToSend()),
+                    CreateItemRequest(
+                        p.name, p.quantity, p.unit, areaId?.let { ids.remoteId(it) },
+                        guestName = nameToSend(), quantityExplicit = p.quantityExplicit,
+                    ),
                 ).ocs.data
                 return GuestSendResult.Created(
                     localId = ids.localId(share.id, GuestIdKind.ITEM, created.id),
                     updatedAt = created.updatedAt,
                     detectedAreaId = areaId.takeIf { p.detectArea },
                     tickPending = p.checked,
+                    quantity = created.quantity,
                 )
             }
             MutationTypes.UPDATE -> {
@@ -102,7 +108,10 @@ class GuestSender @Inject constructor(
                 val p = json.decodeFromString<ItemUpdatePayload>(m.payload)
                 api.updateItem(
                     PublicUrls.item(s, t, remote),
-                    UpdateItemRequest(name = p.name, quantity = p.quantity, unit = p.unit, shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }),
+                    UpdateItemRequest(
+                        name = p.name, quantity = p.quantity, unit = p.unit,
+                        shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }, quantityExplicit = p.quantityExplicit,
+                    ),
                 )
             }
             MutationTypes.CHECK -> {

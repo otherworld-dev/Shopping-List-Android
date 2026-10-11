@@ -84,6 +84,9 @@ data class CreateItemRequest(
     val checked: Boolean = false,
     // Public link API only, since server app 1.10.0: the guest's name, left out when null.
     val guestName: String? = null,
+    // Since server app 1.11.0: a typed amount, which the server remembers for the name. A null
+    // quantity gets the remembered one back (older servers give it "1", as they always have).
+    val quantityExplicit: Boolean = false,
 )
 
 @Serializable
@@ -94,6 +97,9 @@ data class UpdateItemRequest(
     val shopAreaId: Long? = null,
     val sortOrder: Int? = null,
     val areaExplicit: Boolean? = null,
+    // Since server app 1.11.0: the user changed the amount, so the server remembers it. Never
+    // sent for a merged total.
+    val quantityExplicit: Boolean? = null,
 )
 
 @Serializable

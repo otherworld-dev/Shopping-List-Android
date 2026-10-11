@@ -37,6 +37,10 @@ data class ParsingPack(
                 "pack", "packs", "packet", "packets",
                 "bag", "bags",
                 "fl oz",
+                "pc", "pcs", "pkg", "dag", "dkg",
+                // German's short forms of Stück, from the web app's de pack. Every language
+                // reads with this pack here, so they sit with the English units.
+                "stk", "stk.",
             ),
             unitAliases = mapOf(
                 "cups" to "cup", "teaspoons" to "teaspoon", "tsp" to "teaspoon",
@@ -48,9 +52,10 @@ data class ParsingPack(
                 "milliliters" to "milliliter", "ml" to "milliliter",
                 "liters" to "liter", "l" to "liter",
                 "cans" to "can", "bottles" to "bottle", "slices" to "slice",
-                "pieces" to "piece", "cloves" to "clove",
+                "pieces" to "piece", "pcs" to "piece", "pc" to "piece", "dkg" to "dag",
+                "cloves" to "clove",
                 "stalks" to "stalk", "sprigs" to "sprig",
-                "bags" to "bag", "packs" to "pack", "packets" to "pack",
+                "bags" to "bag", "packs" to "pack", "packets" to "pack", "pkg" to "pack",
                 "pinches" to "pinch", "bunches" to "bunch",
                 "heads" to "head",
             ),

@@ -275,13 +275,16 @@ class ItemsViewModel @Inject constructor(
     }
 
     fun editItem(item: ItemModel, name: String, quantity: String?, shopAreaId: Long?) {
+        val newQuantity = quantity?.trim()?.ifBlank { null }
         viewModelScope.launch {
             repository.updateItem(
                 item,
                 name = name.trim(),
-                quantity = quantity?.trim()?.ifBlank { null },
+                quantity = newQuantity,
                 shopAreaId = shopAreaId,
                 areaExplicit = if (shopAreaId != null) true else null,
+                // An amount the user changed becomes the one the name gets next time.
+                quantityExplicit = if (newQuantity != null && newQuantity != item.quantity) true else null,
             )
         }
     }

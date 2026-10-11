@@ -23,10 +23,13 @@ class SmartInput(
     data class ParsedIngredient(val name: String, val quantity: String?, val checked: Boolean = false)
 
     sealed interface AddPlan {
-        /** No existing match — create a new item. */
+        /**
+         * No existing match — create a new item. [quantity] is null for a name typed on its own,
+         * so the server can give it the amount it had last time in the list.
+         */
         data class Create(
             val name: String,
-            val quantity: String,
+            val quantity: String?,
             val shopAreaId: Long?,
             val areaExplicit: Boolean,
             val checked: Boolean = false,
@@ -53,13 +56,13 @@ class SmartInput(
     ): AddPlan? {
         val parsed = parseIngredient(rawInput)
         if (parsed.name.isBlank()) return null
-        val incoming = parsed.quantity ?: "1"
 
         // A line pasted as already checked off ("[x] Milk") records something bought, not more
         // of something outstanding, so it never merges into an open item (web app 1.7.1).
         val match = if (parsed.checked) null else findMatchingItem(existing, parsed.name)
         if (match != null) {
-            val merged = mergeQuantities(match.quantity, incoming)
+            // A bare name counts as one more.
+            val merged = mergeQuantities(match.quantity, parsed.quantity ?: "1")
             val oldQty = leadingNumber(match.quantity)
             val newQty = leadingNumber(merged)
             val newName = if (oldQty != null && oldQty <= 1.0 && newQty != null && newQty > 1.0) {
@@ -71,7 +74,7 @@ class SmartInput(
         }
 
         val areaId = explicitAreaId ?: detectArea(parsed.name, areas)
-        return AddPlan.Create(parsed.name, incoming, areaId, explicitAreaId != null, parsed.checked)
+        return AddPlan.Create(parsed.name, parsed.quantity, areaId, explicitAreaId != null, parsed.checked)
     }
 
     // ---- Duplicate detection / normalization ----
