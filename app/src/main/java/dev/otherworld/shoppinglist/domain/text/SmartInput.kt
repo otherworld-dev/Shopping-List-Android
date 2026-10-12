@@ -33,6 +33,11 @@ class SmartInput(
             val shopAreaId: Long?,
             val areaExplicit: Boolean,
             val checked: Boolean = false,
+            /**
+             * [shopAreaId] is the list's default area, not a keyword match or a pick. The phone
+             * shows the item there but sends no area, and the server applies its own default.
+             */
+            val areaIsDefault: Boolean = false,
         ) : AddPlan
 
         /** Matches an existing unchecked item — merge quantities (and maybe pluralize). */
@@ -56,8 +61,9 @@ class SmartInput(
      * Decides what adding [rawInput] should do, given the current [areas] and [existing] items.
      * Returns null if the input parses to an empty name. [explicitAreaId] is the user's manual
      * area pick (null = auto-detect). [defaultAreaId] is the list's default area, where a new
-     * item goes when no keyword places it; the server applies the same one, so this only puts
-     * the item in the right place before it has synced.
+     * item goes when no keyword places it. The server applies its own, so this only puts the
+     * item in the right place before it has synced, and the plan says so ([AddPlan.Create.areaIsDefault])
+     * for the area not to be sent: the phone's copy of the default can be out of date.
      */
     fun planAdd(
         rawInput: String,
@@ -90,11 +96,13 @@ class SmartInput(
         val ticked = if (parsed.checked) null else findCheckedMatch(existing, parsed.name)
         if (ticked != null) return AddPlan.Recycle(ticked, parsed.quantity)
 
+        val placedAreaId = explicitAreaId ?: detectArea(parsed.name, areas)
         // A default that isn't one of the areas was deleted, and the list here has yet to hear.
-        val areaId = explicitAreaId
-            ?: detectArea(parsed.name, areas)
-            ?: defaultAreaId?.takeIf { id -> areas.any { it.id == id } }
-        return AddPlan.Create(parsed.name, parsed.quantity, areaId, explicitAreaId != null, parsed.checked)
+        val defaultArea = defaultAreaId?.takeIf { id -> placedAreaId == null && areas.any { it.id == id } }
+        return AddPlan.Create(
+            parsed.name, parsed.quantity, placedAreaId ?: defaultArea, explicitAreaId != null, parsed.checked,
+            areaIsDefault = defaultArea != null,
+        )
     }
 
     // ---- Duplicate detection / normalization ----

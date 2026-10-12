@@ -265,6 +265,7 @@ class ItemsViewModel @Inject constructor(
                             checked = plan.checked,
                             // With no areas known yet there was nothing to detect against.
                             detectAreaOnSync = current.areas.isEmpty(),
+                            areaIsListDefault = plan.areaIsDefault,
                         )
                         existing = existing + created
                     }

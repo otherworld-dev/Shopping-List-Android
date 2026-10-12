@@ -62,6 +62,12 @@ class ManageAreasViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    init {
+        // The lists are otherwise only fetched from the lists screen, so a default changed on
+        // another device since then would show its old value here. Offline, what's known stays.
+        viewModelScope.launch { runCatching { listRepository.refresh() } }
+    }
+
     private val _error = MutableStateFlow<UiText?>(null)
     val error: StateFlow<UiText?> = _error
 

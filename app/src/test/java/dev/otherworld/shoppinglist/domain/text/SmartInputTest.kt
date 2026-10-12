@@ -547,6 +547,16 @@ class SmartInputTest {
         assertEquals(2L, plan.shopAreaId)
         // Nobody chose it, so the server mustn't learn a keyword from it.
         assertFalse(plan.areaExplicit)
+        // And it is only where the phone shows the item: the server applies its own default.
+        assertTrue(plan.areaIsDefault)
+    }
+
+    @Test
+    fun `an area from a keyword or a pick is not marked as the default`() {
+        val detected = smart.planAdd("bananas", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 1L)
+        val picked = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = 2L, defaultAreaId = 2L)
+        assertFalse((detected as SmartInput.AddPlan.Create).areaIsDefault)
+        assertFalse((picked as SmartInput.AddPlan.Create).areaIsDefault)
     }
 
     @Test

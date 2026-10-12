@@ -19,6 +19,14 @@ internal fun areaForQueuedCreate(
 }
 
 /**
+ * The area a new item's create is queued with, given the one the phone shows it under. The
+ * list's default area is shown but never sent: the phone's copy of it can be out of date, and
+ * an area that is sent beats the server's own default, so a stale one would stick. Sent with
+ * none, the item gets the server's current default (see [areaAfterCreate]).
+ */
+internal fun areaToSend(shownAreaId: Long?, isListDefault: Boolean): Long? = shownAreaId.takeUnless { isListDefault }
+
+/**
  * The area an item has once its create has synced. One sent with no area may come back with
  * the list's default area, which the server (app 1.12.0 and later) gives to items no keyword
  * placed. An area the item already has here is kept: it was detected or picked when the item

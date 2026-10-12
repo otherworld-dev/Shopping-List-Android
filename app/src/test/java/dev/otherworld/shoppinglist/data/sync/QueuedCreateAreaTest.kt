@@ -57,6 +57,23 @@ class QueuedCreateAreaTest {
     }
 
     @Test
+    fun `the list's default area is shown on the phone but not sent`() {
+        // The phone's copy of the default can be out of date, and an area that is sent beats
+        // the server's own default, so a stale one would stick.
+        assertNull(areaToSend(shownAreaId = 12L, isListDefault = true))
+    }
+
+    @Test
+    fun `a detected or picked area is sent`() {
+        assertEquals(dairy.id, areaToSend(shownAreaId = dairy.id, isListDefault = false))
+    }
+
+    @Test
+    fun `an item with no area sends none`() {
+        assertNull(areaToSend(shownAreaId = null, isListDefault = false))
+    }
+
+    @Test
     fun `an item sent with no area takes the one the server gave it`() {
         // The list's default area, on a server that has one (1.12.0 and later).
         assertEquals(12L, areaAfterCreate(localAreaId = null, serverAreaId = 12L))

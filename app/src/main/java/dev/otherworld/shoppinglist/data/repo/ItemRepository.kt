@@ -17,6 +17,7 @@ import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.ReorderPayload
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
+import dev.otherworld.shoppinglist.data.sync.areaToSend
 import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
@@ -106,6 +107,8 @@ class ItemRepository @Inject constructor(
         checked: Boolean = false,
         /** The list's areas weren't on the phone yet, so detect the area when the create syncs. */
         detectAreaOnSync: Boolean = false,
+        /** [shopAreaId] is the list's default area: shown here, but left for the server to apply. */
+        areaIsListDefault: Boolean = false,
     ): ItemModel {
         val id = tempIds.next()
         val entity = ItemEntity(
@@ -128,7 +131,7 @@ class ItemRepository @Inject constructor(
                 json.encodeToString(
                     ItemCreatePayload.serializer(),
                     ItemCreatePayload(
-                        name, quantity, unit, shopAreaId, areaExplicit, checked,
+                        name, quantity, unit, areaToSend(shopAreaId, areaIsListDefault), areaExplicit, checked,
                         detectArea = detectAreaOnSync && shopAreaId == null && !areaExplicit,
                         quantityExplicit = quantity != null,
                     ),
