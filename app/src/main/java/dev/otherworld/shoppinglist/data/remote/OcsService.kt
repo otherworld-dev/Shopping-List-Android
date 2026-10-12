@@ -27,6 +27,8 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateShareRequest
+import dev.otherworld.shoppinglist.data.remote.dto.defaultAreaBody
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -60,6 +62,10 @@ interface OcsService {
 
     @DELETE("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}")
     suspend fun deleteList(@Path("id") id: Long)
+
+    /** The area a list's new items go to when no keyword places them (since server 1.12.0); see [defaultAreaBody]. */
+    @PUT("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}/default-area")
+    suspend fun setDefaultArea(@Path("id") id: Long, @Body body: JsonObject): OcsResponse<ListDto>
 
     /** Per-user preference (since server 1.8.0), so pinning never changes the list for others. */
     @PATCH("ocs/v2.php/apps/shopping_list/api/v1/lists/{id}/preferences")

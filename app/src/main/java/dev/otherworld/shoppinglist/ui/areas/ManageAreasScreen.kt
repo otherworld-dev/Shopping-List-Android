@@ -8,13 +8,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -30,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -45,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -69,12 +78,14 @@ fun ManageAreasScreen(
 ) {
     val areas by viewModel.areas.collectAsStateWithLifecycle()
     val otherLists by viewModel.otherLists.collectAsStateWithLifecycle()
+    val defaultArea by viewModel.defaultArea.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     var overflow by remember { mutableStateOf(false) }
     var showCreate by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ShopAreaModel?>(null) }
     var showCopy by remember { mutableStateOf(false) }
+    var showDefaultArea by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(error) {
@@ -125,6 +136,23 @@ fun ManageAreasScreen(
         },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+            // The list's own setting, so it sits above the areas rather than among them.
+            defaultArea?.let { current ->
+                item(key = "default-area") {
+                    ListItem(
+                        modifier = Modifier.clickable { showDefaultArea = true },
+                        headlineContent = { Text(stringResource(R.string.default_area_title)) },
+                        supportingContent = { Text(stringResource(R.string.default_area_hint)) },
+                        trailingContent = {
+                            Text(
+                                current.area?.name ?: stringResource(R.string.default_area_none),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        },
+                    )
+                    HorizontalDivider()
+                }
+            }
             items(areas, key = { it.id }) { area ->
                 ListItem(
                     modifier = Modifier.clickable { editTarget = area },
@@ -169,6 +197,17 @@ fun ManageAreasScreen(
             onDismiss = { editTarget = null },
         )
     }
+    if (showDefaultArea) {
+        DefaultAreaDialog(
+            areas = areas,
+            selectedId = defaultArea?.area?.id,
+            onSelect = { id ->
+                showDefaultArea = false
+                viewModel.setDefaultArea(id)
+            },
+            onDismiss = { showDefaultArea = false },
+        )
+    }
     if (showCopy) {
         AlertDialog(
             onDismissRequest = { showCopy = false },
@@ -189,6 +228,45 @@ fun ManageAreasScreen(
             confirmButton = {},
             dismissButton = { TextButton(onClick = { showCopy = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
+    }
+}
+
+/** None, then each of the list's areas; choosing one saves it and closes. */
+@Composable
+private fun DefaultAreaDialog(
+    areas: List<ShopAreaModel>,
+    selectedId: Long?,
+    onSelect: (Long?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.default_area_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+                DefaultAreaChoice(stringResource(R.string.default_area_none), selectedId == null) { onSelect(null) }
+                areas.forEach { area ->
+                    DefaultAreaChoice(area.name, selectedId == area.id) { onSelect(area.id) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+@Composable
+private fun DefaultAreaChoice(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 

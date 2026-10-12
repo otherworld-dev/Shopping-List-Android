@@ -1,6 +1,9 @@
 package dev.otherworld.shoppinglist.data.remote.dto
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class ListDto(
@@ -70,6 +73,14 @@ data class CreateListRequest(val title: String)
 
 @Serializable
 data class UpdateListRequest(val title: String)
+
+/**
+ * The body for PUT …/lists/{id}/default-area. Built by hand rather than as a request class:
+ * those leave null fields out, and here "none" has to be sent as an explicit null, because the
+ * server refuses a request without the field so that leaving it out can never clear the setting.
+ */
+fun defaultAreaBody(shopAreaId: Long?): JsonObject =
+    JsonObject(mapOf("shopAreaId" to (shopAreaId?.let { JsonPrimitive(it) } ?: JsonNull)))
 
 /** Per-user list preferences (PATCH …/lists/{id}/preferences); pinning is the only one so far. */
 @Serializable
