@@ -1,0 +1,3 @@
+Search a list from the add box: what you type narrows the list, ticked items included, with a button to clear it and one to add. The app opens on the list you used last, which you can turn off in Settings, and Settings has a Text size choice as well. A name typed on its own gets the amount it had last time, and adding something already ticked off brings it back rather than adding it again.
+
+Remembered amounts need version 1.11 of the Shopping List server app.
