@@ -55,13 +55,16 @@ class SmartInput(
     /**
      * Decides what adding [rawInput] should do, given the current [areas] and [existing] items.
      * Returns null if the input parses to an empty name. [explicitAreaId] is the user's manual
-     * area pick (null = auto-detect).
+     * area pick (null = auto-detect). [defaultAreaId] is the list's default area, where a new
+     * item goes when no keyword places it; the server applies the same one, so this only puts
+     * the item in the right place before it has synced.
      */
     fun planAdd(
         rawInput: String,
         areas: List<ShopAreaModel>,
         existing: List<ItemModel>,
         explicitAreaId: Long?,
+        defaultAreaId: Long? = null,
     ): AddPlan? {
         val parsed = parseIngredient(rawInput)
         if (parsed.name.isBlank()) return null
@@ -87,7 +90,10 @@ class SmartInput(
         val ticked = if (parsed.checked) null else findCheckedMatch(existing, parsed.name)
         if (ticked != null) return AddPlan.Recycle(ticked, parsed.quantity)
 
-        val areaId = explicitAreaId ?: detectArea(parsed.name, areas)
+        // A default that isn't one of the areas was deleted, and the list here has yet to hear.
+        val areaId = explicitAreaId
+            ?: detectArea(parsed.name, areas)
+            ?: defaultAreaId?.takeIf { id -> areas.any { it.id == id } }
         return AddPlan.Create(parsed.name, parsed.quantity, areaId, explicitAreaId != null, parsed.checked)
     }
 

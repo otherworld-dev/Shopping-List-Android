@@ -82,6 +82,8 @@ data class ItemsUiState(
     /** This user's Nextcloud id, to tell their own items apart; null on a guest list (no ids there). */
     val me: String? = null,
     val showOwnName: Boolean = false,
+    /** The list's default area, for items no keyword places; null for none (and on older servers). */
+    val defaultAreaId: Long? = null,
 )
 
 @HiltViewModel
@@ -155,6 +157,7 @@ class ItemsViewModel @Inject constructor(
             droppedChanges = share?.droppedChanges ?: 0,
             me = if (isGuest) null else listSettings.ownUserIdOrLogin(values[12] as String?),
             showOwnName = values[11] as Boolean,
+            defaultAreaId = lists.firstOrNull { it.id == listId }?.defaultAreaId,
         )
     }.stateIn(
         viewModelScope,
@@ -250,7 +253,7 @@ class ItemsViewModel @Inject constructor(
             // creates/merges locally for duplicate detection.
             var existing = current.items
             for (line in lines) {
-                when (val plan = smartInput.planAdd(line, current.areas, existing, explicitAreaId)) {
+                when (val plan = smartInput.planAdd(line, current.areas, existing, explicitAreaId, current.defaultAreaId)) {
                     null -> Unit
                     is SmartInput.AddPlan.Create -> {
                         val created = repository.createItem(

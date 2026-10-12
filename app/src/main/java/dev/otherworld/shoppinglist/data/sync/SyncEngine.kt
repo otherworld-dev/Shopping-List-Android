@@ -171,7 +171,10 @@ class SyncEngine @Inject constructor(
             itemDao.getById(m.targetId)?.let { row -> if (row.shopAreaId == null) itemDao.upsert(row.copy(shopAreaId = area)) }
         }
         return db.withTransaction {
-            remapItemId(tempId = m.targetId, realId = result.localId, updatedAt = result.updatedAt, quantity = result.quantity)
+            remapItemId(
+                tempId = m.targetId, realId = result.localId, updatedAt = result.updatedAt,
+                quantity = result.quantity, shopAreaId = result.serverAreaId,
+            )
             if (!result.tickPending) return@withTransaction false
             // Re-read: the remap has already rewritten this row's targetId.
             val row = mutationDao.getBySeq(m.seq) ?: return@withTransaction false
@@ -222,7 +225,10 @@ class SyncEngine @Inject constructor(
                         quantityExplicit = p.quantityExplicit,
                     ),
                 ).ocs.data
-                remapItemId(tempId = m.targetId, realId = created.id, updatedAt = created.updatedAt, quantity = created.quantity)
+                remapItemId(
+                    tempId = m.targetId, realId = created.id, updatedAt = created.updatedAt,
+                    quantity = created.quantity, shopAreaId = created.shopAreaId,
+                )
                 // The server gives a new item the photo it remembers for that name.
                 takeImageKey(created.id, created.imageKey)
                 // An explicit area assignment makes the server learn this name -> area; pull the
@@ -317,12 +323,17 @@ class SyncEngine @Inject constructor(
      * the server gave the item, which fills in a name added without an amount; a row that has
      * one (typed, or a merge queued behind the create) keeps it.
      */
-    private suspend fun remapItemId(tempId: Long, realId: Long, updatedAt: String?, quantity: String?) {
+    private suspend fun remapItemId(tempId: Long, realId: Long, updatedAt: String?, quantity: String?, shopAreaId: Long?) {
         if (tempId == realId) return
         db.withTransaction {
             val temp = itemDao.getById(tempId) ?: return@withTransaction
             itemDao.deleteById(tempId)
-            itemDao.upsert(temp.copy(id = realId, updatedAt = updatedAt, quantity = temp.quantity ?: quantity))
+            itemDao.upsert(
+                temp.copy(
+                    id = realId, updatedAt = updatedAt, quantity = temp.quantity ?: quantity,
+                    shopAreaId = areaAfterCreate(temp.shopAreaId, shopAreaId),
+                ),
+            )
             mutationDao.remapTarget(MutationEntities.ITEM, tempId, realId)
             remapReorderIds(tempId, realId)
         }

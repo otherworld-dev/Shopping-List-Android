@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -70,6 +71,21 @@ class GuestSenderTest {
         val result = sender.send(m, share, emptyList()) as GuestSendResult.Created
         assertEquals(CreateItemRequest("Rice"), api.bodies.single())
         assertEquals("500 g", result.quantity)
+    }
+
+    @Test
+    fun `an item sent with no area comes back with the list's default area, as this phone's id for it`() = runTest {
+        api.defaultAreaId = 30
+        val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Batteries")))
+        val result = sender.send(m, share, emptyList()) as GuestSendResult.Created
+        assertEquals(CreateItemRequest("Batteries"), api.bodies.single())
+        assertEquals(ids.localId(4, GuestIdKind.AREA, 30), result.serverAreaId)
+    }
+
+    @Test
+    fun `an item on a list with no default area comes back with none`() = runTest {
+        val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Batteries")))
+        assertNull((sender.send(m, share, emptyList()) as GuestSendResult.Created).serverAreaId)
     }
 
     @Test

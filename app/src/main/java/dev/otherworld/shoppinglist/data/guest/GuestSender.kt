@@ -38,6 +38,8 @@ sealed interface GuestSendResult {
         val tickPending: Boolean = false,
         /** The amount the server gave it, the remembered one for a name added on its own. */
         val quantity: String? = null,
+        /** The area the server gave it, as this phone's id for it: the list's default when none was sent. */
+        val serverAreaId: Long? = null,
     ) : GuestSendResult
 }
 
@@ -101,6 +103,7 @@ class GuestSender @Inject constructor(
                     detectedAreaId = areaId.takeIf { p.detectArea },
                     tickPending = p.checked,
                     quantity = created.quantity,
+                    serverAreaId = created.shopAreaId?.let { ids.localId(share.id, GuestIdKind.AREA, it) },
                 )
             }
             MutationTypes.UPDATE -> {

@@ -37,6 +37,9 @@ class FakePublicApi : PublicApi {
     var nextItemId = 500L
     /** What the server remembers for a name added on its own; it falls back to "1". */
     var rememberedQuantity: String? = null
+
+    /** The friend's list's default area (server app 1.12.0), given to an item sent with none. */
+    var defaultAreaId: Long? = null
     var capabilities = CapabilitiesResponse()
     var codeToken = "tok"
 
@@ -56,7 +59,7 @@ class FakePublicApi : PublicApi {
     override suspend fun createItem(url: String, body: CreateItemRequest): OcsResponse<ItemDto> {
         record("createItem", url, body)
         val quantity = body.quantity ?: rememberedQuantity ?: "1"
-        return ocs(ItemDto(id = nextItemId++, listId = 9, name = body.name, quantity = quantity, updatedAt = "2026-09-27T10:00:00+00:00"))
+        return ocs(ItemDto(id = nextItemId++, listId = 9, name = body.name, quantity = quantity, shopAreaId = body.shopAreaId ?: defaultAreaId, updatedAt = "2026-09-27T10:00:00+00:00"))
     }
     override suspend fun updateItem(url: String, body: UpdateItemRequest) =
         record("updateItem", url, body).let { ocs(ItemDto(id = 1, listId = 9)) }
