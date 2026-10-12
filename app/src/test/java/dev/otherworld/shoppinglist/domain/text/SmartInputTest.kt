@@ -522,4 +522,16 @@ class SmartInputTest {
         assertEquals("", smart.searchKey("   "))
         assertEquals("", smart.searchKey(""))
     }
+
+    @Test
+    fun `an amount with no name yet has no search key`() {
+        assertEquals("", smart.searchKey("2"))
+        assertEquals("", smart.searchKey("2 l"))
+        assertEquals("", smart.searchKey("1.5 kg"))
+    }
+
+    @Test
+    fun `a name that starts with digits is still searched for`() {
+        assertEquals("7up", smart.searchKey("7up"))
+    }
 }

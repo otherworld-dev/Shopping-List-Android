@@ -314,9 +314,16 @@ class SmartInput(
 
     /**
      * What the add box filters the list by: the name it would add, folded the way [detectArea]
-     * matches, so "2 l Milk" finds "milk". Blank when there's no name to look for.
+     * matches, so "2 l Milk" finds "milk". Blank when there's no name to look for — including
+     * an amount typed first ("2", "2 l"), where the parser falls back to the whole line as the
+     * name, so the list doesn't blank out while the name is still to come.
      */
-    fun searchKey(input: String): String = fold(parseIngredient(input).name).trim()
+    fun searchKey(input: String): String {
+        val line = stripListMarkup(input)
+        val parsed = parseLine(line)
+        if (parsed.quantity != null && parsed.name == cleanName(line)) return ""
+        return fold(parsed.name).trim()
+    }
 
     /** The quantity and name logic, on a line whose list markup is already gone. */
     private fun parseLine(trimmed: String): ParsedIngredient {
