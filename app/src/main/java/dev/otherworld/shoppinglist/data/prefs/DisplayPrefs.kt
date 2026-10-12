@@ -31,6 +31,18 @@ enum class ThemeMode(val storageValue: String) {
     }
 }
 
+/** How big the app's text is, on top of the phone's own font size (issue #16). */
+enum class TextScale(val storageValue: String, val factor: Float) {
+    SMALL("small", 0.9f),
+    DEFAULT("default", 1f),
+    LARGE("large", 1.15f),
+    LARGER("larger", 1.3f);
+
+    companion object {
+        fun fromStorage(raw: String?): TextScale = entries.firstOrNull { it.storageValue == raw } ?: DEFAULT
+    }
+}
+
 /**
  * Local, per-device display preferences that don't sync to the server. Backed by
  * SharedPreferences and exposed as StateFlows so the list re-renders when they change,
@@ -58,6 +70,9 @@ class DisplayPrefs @Inject constructor(
     private val _themeMode = MutableStateFlow(ThemeMode.fromStorage(prefs.getString(KEY_THEME, null)))
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    private val _textScale = MutableStateFlow(TextScale.fromStorage(prefs.getString(KEY_TEXT_SCALE, null)))
+    val textScale: StateFlow<TextScale> = _textScale.asStateFlow()
+
     // Off until turned on, like the web app's switch; on the phone it's this device's own choice.
     private val _showImages = MutableStateFlow(prefs.getBoolean(KEY_SHOW_IMAGES, false))
     val showImages: StateFlow<Boolean> = _showImages.asStateFlow()
@@ -76,6 +91,13 @@ class DisplayPrefs @Inject constructor(
         _themeMode.value = mode
         prefs.edit().apply {
             if (mode == ThemeMode.SYSTEM) remove(KEY_THEME) else putString(KEY_THEME, mode.storageValue)
+        }.apply()
+    }
+
+    fun setTextScale(scale: TextScale) {
+        _textScale.value = scale
+        prefs.edit().apply {
+            if (scale == TextScale.DEFAULT) remove(KEY_TEXT_SCALE) else putString(KEY_TEXT_SCALE, scale.storageValue)
         }.apply()
     }
 
@@ -153,5 +175,6 @@ class DisplayPrefs @Inject constructor(
         const val KEY_SHOW_IMAGES = "show_images"
         const val KEY_OPEN_LAST_LIST = "open_last_list"
         const val KEY_LAST_LIST = "last_list_id"
+        const val KEY_TEXT_SCALE = "text_scale"
     }
 }

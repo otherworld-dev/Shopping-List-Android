@@ -13,6 +13,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import dev.otherworld.shoppinglist.data.guest.PendingLinks
@@ -42,6 +44,7 @@ class MainActivity : ComponentActivity() {
             val brandHex by serverTheme.brandHex.collectAsStateWithLifecycle()
             val brand = parseHexColor(brandHex) ?: DefaultBrand
             val themeMode by displayPrefs.themeMode.collectAsStateWithLifecycle()
+            val textScale by displayPrefs.textScale.collectAsStateWithLifecycle()
             val dark = themeMode.isDark(isSystemInDarkTheme())
             // The bars follow the app's theme, not the phone's: with Dark forced on a light
             // phone, SystemBarStyle.auto would put dark icons on the dark gradient.
@@ -55,8 +58,12 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
             ShoppingListTheme(brandColor = brand, dark = dark) {
+                // Text size from Settings, on top of the phone's own font scale: every sp in the
+                // app (menus and dialogs too) follows it, while dp layout sizes stay put.
+                val base = LocalDensity.current
                 CompositionLocalProvider(
                     LocalContentColor provides MaterialTheme.colorScheme.onBackground,
+                    LocalDensity provides Density(base.density, base.fontScale * textScale.factor),
                 ) {
                     AppBackground {
                         AppRoot()

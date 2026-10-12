@@ -160,6 +160,11 @@
     <string name="settings_theme">Theme</string>
     <string name="settings_startup">Start-up</string>
     <string name="settings_open_last_list">Open the last list on start</string>
+    <string name="settings_text_size">Text size</string>
+    <string name="text_size_small">Small</string>
+    <string name="text_size_default">Default</string>
+    <string name="text_size_large">Large</string>
+    <string name="text_size_larger">Larger</string>
     <string name="settings_item_images">Item images</string>
     <string name="settings_show_item_images">Show item images</string>
     <string name="settings_item_images_hint">Add a photo to an item from its edit window. Photos are part of the list, so everyone with access can see them. This switch only changes what you see on this phone.</string>

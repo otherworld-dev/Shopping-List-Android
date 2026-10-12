@@ -50,6 +50,7 @@ import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.auth.LocalMode
+import dev.otherworld.shoppinglist.data.prefs.TextScale
 import dev.otherworld.shoppinglist.data.prefs.ThemeMode
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
@@ -81,6 +82,7 @@ class SettingsViewModel @Inject constructor(
     val listSort = listSettings.listSort
     val showImages = displayPrefs.showImages
     val openLastList = displayPrefs.openLastList
+    val textScale = displayPrefs.textScale
 
     /** Signed in to a server too old for photos (before 1.9.0), so none can be added there. */
     val imagesUnsupported: StateFlow<Boolean> = combine(
@@ -133,6 +135,8 @@ class SettingsViewModel @Inject constructor(
 
     fun setOpenLastList(open: Boolean) = displayPrefs.setOpenLastList(open)
 
+    fun setTextScale(scale: TextScale) = displayPrefs.setTextScale(scale)
+
     fun setListSort(mode: ListSortMode) {
         viewModelScope.launch { ordering.setListSort(mode) }
     }
@@ -151,6 +155,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     val ownNameError by viewModel.ownNameError.collectAsStateWithLifecycle()
     val hasGuestLists by viewModel.hasGuestLists.collectAsStateWithLifecycle()
     val openLastList by viewModel.openLastList.collectAsStateWithLifecycle()
+    val textScale by viewModel.textScale.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -213,6 +218,12 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 Choice(stringResource(R.string.theme_system), themeMode == ThemeMode.SYSTEM) { viewModel.setThemeMode(ThemeMode.SYSTEM) }
                 Choice(stringResource(R.string.theme_light), themeMode == ThemeMode.LIGHT) { viewModel.setThemeMode(ThemeMode.LIGHT) }
                 Choice(stringResource(R.string.theme_dark), themeMode == ThemeMode.DARK) { viewModel.setThemeMode(ThemeMode.DARK) }
+            }
+            Section(stringResource(R.string.settings_text_size)) {
+                Choice(stringResource(R.string.text_size_small), textScale == TextScale.SMALL) { viewModel.setTextScale(TextScale.SMALL) }
+                Choice(stringResource(R.string.text_size_default), textScale == TextScale.DEFAULT) { viewModel.setTextScale(TextScale.DEFAULT) }
+                Choice(stringResource(R.string.text_size_large), textScale == TextScale.LARGE) { viewModel.setTextScale(TextScale.LARGE) }
+                Choice(stringResource(R.string.text_size_larger), textScale == TextScale.LARGER) { viewModel.setTextScale(TextScale.LARGER) }
             }
             Section(stringResource(R.string.settings_startup)) {
                 Toggle(stringResource(R.string.settings_open_last_list), openLastList, viewModel::setOpenLastList)
