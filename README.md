@@ -31,8 +31,13 @@ syncs through your own Nextcloud server: no third-party cloud, no accounts, no t
 As the official app, it's available through:
 
 - **[Google Play](https://play.google.com/store/apps/details?id=dev.otherworld.shoppinglist)** — the easiest way to install and stay updated (a small price supports development; the app is equally free to build from source)
-- **[F-Droid](https://f-droid.org/packages/dev.otherworld.shoppinglist/)** — free, coming soon
-- **APK** — from the [Releases](https://github.com/otherworld-dev/Shopping-List-Android/releases) page
+- **[F-Droid](https://f-droid.org/packages/dev.otherworld.shoppinglist/)** — free, built from this source by F-Droid
+
+Each store signs the app with its own key, so Android will not update a copy installed from one
+with a build from the other. The same applies to the 0.2.0 APK from the
+[Releases](https://github.com/otherworld-dev/Shopping-List-Android/releases) page and to a build of
+your own. To change over, upload any lists marked "On this phone" to your account first as they are
+removed with the app, then uninstall it and install it again from the store you want to use.
 
 More at **<https://shoppinglist.otherworld.dev>**.
 
