@@ -27,6 +27,8 @@ data class ShoppingListModel(
     val guestShareId: Long? = null,
     /** Kept on this phone only, never synced (see ListEntity.isLocal). */
     val isLocal: Boolean = false,
+    /** The area a new item goes to when no keyword places it; null for none. */
+    val defaultAreaId: Long? = null,
 ) {
     val canWrite: Boolean get() = permission >= Permission.WRITE
     val isGuest: Boolean get() = guestShareId != null

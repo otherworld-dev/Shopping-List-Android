@@ -13,6 +13,8 @@ data class ListDto(
     val isPinned: Boolean? = null,
     // Since server app 1.10.0: this user's own place in the Custom order.
     val position: Int? = null,
+    // Since server app 1.12.0: the area a new item goes to when no keyword places it.
+    val defaultShopAreaId: Long? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )

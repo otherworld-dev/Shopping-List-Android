@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GuestShareEntity::class,
         GuestIdEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -85,6 +85,11 @@ abstract class AppDatabase : RoomDatabase() {
                     db.execSQL("ALTER TABLE items ADD COLUMN addedByGuest INTEGER NOT NULL DEFAULT 0")
                     db.execSQL("ALTER TABLE items ADD COLUMN checkedByName TEXT")
                     db.execSQL("ALTER TABLE items ADD COLUMN checkedByGuest INTEGER NOT NULL DEFAULT 0")
+                }
+            },
+            object : Migration(7, 8) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE lists ADD COLUMN defaultAreaId INTEGER")
                 }
             },
         )
