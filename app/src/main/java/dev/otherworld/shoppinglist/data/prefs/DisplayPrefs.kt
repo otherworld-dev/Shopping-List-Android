@@ -31,6 +31,27 @@ enum class ThemeMode(val storageValue: String) {
     }
 }
 
+/** How big the app's text is, on top of the phone's own font size (issue #16). */
+enum class TextScale(val storageValue: String, val factor: Float) {
+    SMALL("small", 0.9f),
+    DEFAULT("default", 1f),
+    LARGE("large", 1.15f),
+    LARGER("larger", 1.3f);
+
+    /**
+     * The font scale to use on a phone set to [system]. Kept to 2x at most, where Android's
+     * gentle (non-linear) scaling ends and big text would suddenly grow in a straight line;
+     * a phone already past that is left as it is.
+     */
+    fun fontScaleOn(system: Float): Float = (system * factor).coerceAtMost(maxOf(MAX_FONT_SCALE, system))
+
+    companion object {
+        private const val MAX_FONT_SCALE = 2f
+
+        fun fromStorage(raw: String?): TextScale = entries.firstOrNull { it.storageValue == raw } ?: DEFAULT
+    }
+}
+
 /**
  * Local, per-device display preferences that don't sync to the server. Backed by
  * SharedPreferences and exposed as StateFlows so the list re-renders when they change,
@@ -44,7 +65,7 @@ enum class ThemeMode(val storageValue: String) {
 class DisplayPrefs @Inject constructor(
     @ApplicationContext context: Context,
 ) {
-    private val prefs = context.getSharedPreferences("display_prefs", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _density = MutableStateFlow(read())
     val density: StateFlow<Density> = _density.asStateFlow()
@@ -58,9 +79,20 @@ class DisplayPrefs @Inject constructor(
     private val _themeMode = MutableStateFlow(ThemeMode.fromStorage(prefs.getString(KEY_THEME, null)))
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    private val _textScale = MutableStateFlow(TextScale.fromStorage(prefs.getString(KEY_TEXT_SCALE, null)))
+    val textScale: StateFlow<TextScale> = _textScale.asStateFlow()
+
     // Off until turned on, like the web app's switch; on the phone it's this device's own choice.
     private val _showImages = MutableStateFlow(prefs.getBoolean(KEY_SHOW_IMAGES, false))
     val showImages: StateFlow<Boolean> = _showImages.asStateFlow()
+
+    // On until turned off: most people go back to the same list.
+    private val _openLastList = MutableStateFlow(prefs.getBoolean(KEY_OPEN_LAST_LIST, true))
+    val openLastList: StateFlow<Boolean> = _openLastList.asStateFlow()
+
+    /** The list opened last on this phone (any kind: own, shared, link or phone-only), or null. */
+    val lastListId: Long?
+        get() = if (prefs.contains(KEY_LAST_LIST)) prefs.getLong(KEY_LAST_LIST, 0L) else null
 
     private val collapsedFlows = mutableMapOf<Long, MutableStateFlow<Set<String>>>()
 
@@ -71,9 +103,31 @@ class DisplayPrefs @Inject constructor(
         }.apply()
     }
 
+    fun setTextScale(scale: TextScale) {
+        _textScale.value = scale
+        prefs.edit().apply {
+            if (scale == TextScale.DEFAULT) remove(KEY_TEXT_SCALE) else putString(KEY_TEXT_SCALE, scale.storageValue)
+        }.apply()
+    }
+
     fun setShowImages(show: Boolean) {
         _showImages.value = show
         prefs.edit().putBoolean(KEY_SHOW_IMAGES, show).apply()
+    }
+
+    fun setOpenLastList(open: Boolean) {
+        _openLastList.value = open
+        prefs.edit().apply {
+            if (open) remove(KEY_OPEN_LAST_LIST) else putBoolean(KEY_OPEN_LAST_LIST, false)
+        }.apply()
+    }
+
+    fun setLastListId(id: Long) {
+        prefs.edit().putLong(KEY_LAST_LIST, id).apply()
+    }
+
+    fun clearLastList() {
+        prefs.edit().remove(KEY_LAST_LIST).apply()
     }
 
     fun toggleDensity() {
@@ -122,11 +176,24 @@ class DisplayPrefs @Inject constructor(
 
     private fun collapsedKey(listId: Long) = "collapsed_areas.$listId"
 
-    private companion object {
-        const val KEY_COMPACT = "compact_rows"
-        const val KEY_OPEN_SORT = "open_sort"
-        const val KEY_BOUGHT_SORT = "bought_sort"
-        const val KEY_THEME = "theme"
-        const val KEY_SHOW_IMAGES = "show_images"
+    companion object {
+        private const val PREFS_NAME = "display_prefs"
+
+        /**
+         * The saved text size, read straight from storage: the activity needs it in
+         * attachBaseContext, before anything can be injected.
+         */
+        fun storedTextScale(context: Context): TextScale = TextScale.fromStorage(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TEXT_SCALE, null),
+        )
+
+        private const val KEY_COMPACT = "compact_rows"
+        private const val KEY_OPEN_SORT = "open_sort"
+        private const val KEY_BOUGHT_SORT = "bought_sort"
+        private const val KEY_THEME = "theme"
+        private const val KEY_SHOW_IMAGES = "show_images"
+        private const val KEY_OPEN_LAST_LIST = "open_last_list"
+        private const val KEY_LAST_LIST = "last_list_id"
+        private const val KEY_TEXT_SCALE = "text_scale"
     }
 }

@@ -1,6 +1,8 @@
 package dev.otherworld.shoppinglist
 
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,15 +16,18 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import dev.otherworld.shoppinglist.data.guest.PendingLinks
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
+import dev.otherworld.shoppinglist.data.prefs.TextScale
 import dev.otherworld.shoppinglist.data.theme.ServerTheme
 import dev.otherworld.shoppinglist.ui.AppRoot
 import dev.otherworld.shoppinglist.ui.common.parseHexColor
 import dev.otherworld.shoppinglist.ui.theme.AppBackground
 import dev.otherworld.shoppinglist.ui.theme.DefaultBrand
 import dev.otherworld.shoppinglist.ui.theme.ShoppingListTheme
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -32,8 +37,24 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var displayPrefs: DisplayPrefs
     @Inject lateinit var pendingLinks: PendingLinks
 
+    /** The text size this activity was built with; choosing another rebuilds it. */
+    private var appliedTextScale = TextScale.DEFAULT
+
+    // Text size from Settings, on top of the phone's own font scale. It goes on the activity's
+    // configuration rather than into Compose, because dialogs, menus and sheets are windows of
+    // their own that read their density afresh from it; dp layout sizes stay put.
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        appliedTextScale = DisplayPrefs.storedTextScale(newBase)
+        val system = newBase.resources.configuration.fontScale
+        applyOverrideConfiguration(Configuration().apply { fontScale = appliedTextScale.fontScaleOn(system) })
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            displayPrefs.textScale.collect { if (it != appliedTextScale) recreate() }
+        }
         // Only on a fresh start: a recreated activity (rotation) would offer the same link again,
         // and so would Recents, which relaunches with the intent the task was first opened with.
         val fromHistory = ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0

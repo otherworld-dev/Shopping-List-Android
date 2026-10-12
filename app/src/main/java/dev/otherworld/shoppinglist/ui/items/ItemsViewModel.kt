@@ -192,6 +192,8 @@ class ItemsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PhotoUiState())
 
     init {
+        // Remembered whichever way the list was opened, for reopening it on the next start.
+        displayPrefs.setLastListId(listId)
         refresh()
         // Push events come from the user's own server, which knows nothing of a guest list.
         if (!isGuest) {
@@ -225,6 +227,9 @@ class ItemsViewModel @Inject constructor(
             runCatching { repository.refresh(listId) }
         }
     }
+
+    /** What the add box's [text] filters the list by; see [SmartInput.searchKey]. */
+    fun searchKey(text: String): String = smartInput.searchKey(text)
 
     /**
      * Adds [rawInput] with the web app's smart behaviour: parse quantity out of the text,
