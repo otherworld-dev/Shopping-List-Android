@@ -854,12 +854,14 @@ private fun AddItemRow(text: String, onTextChange: (String) -> Unit, onAdd: (Str
                 // in the field for editing. singleLine only shapes the IME/layout — pasted
                 // newlines do arrive here.
                 if (new.contains('\n')) {
-                    val lines = SmartInput.splitLines(new)
+                    // Only what was pasted: a search typed first mustn't join the first line.
+                    val pasted = pastedText(text, new)
+                    val lines = SmartInput.splitLines(pasted)
                     if (lines.size > 1) {
-                        onAdd(new)
+                        onAdd(pasted)
                         onTextChange("")
                     } else {
-                        onTextChange(lines.firstOrNull().orEmpty())
+                        onTextChange(SmartInput.splitLines(new).firstOrNull().orEmpty())
                     }
                 } else {
                     onTextChange(new)
