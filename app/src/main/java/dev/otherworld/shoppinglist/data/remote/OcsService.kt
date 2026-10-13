@@ -22,7 +22,6 @@ import dev.otherworld.shoppinglist.data.remote.dto.ShareesResponse
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
 import dev.otherworld.shoppinglist.data.remote.dto.TagDto
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
-import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateLinkRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
@@ -96,7 +95,7 @@ interface OcsService {
     suspend fun updateItem(
         @Path("listId") listId: Long,
         @Path("id") id: Long,
-        @Body body: UpdateItemRequest,
+        @Body body: JsonObject,
     ): OcsResponse<ItemDto>
 
     @PUT("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/check")

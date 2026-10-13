@@ -296,13 +296,16 @@ class ItemsViewModel @Inject constructor(
 
     fun editItem(item: ItemModel, name: String, quantity: String?, shopAreaId: Long?) {
         val newQuantity = quantity?.trim()?.ifBlank { null }
+        // "No area" picked for an item that has one. Like the web app, it counts as a choice.
+        val clearArea = shopAreaId == null && item.shopAreaId != null
         viewModelScope.launch {
             repository.updateItem(
                 item,
                 name = name.trim(),
                 quantity = newQuantity,
                 shopAreaId = shopAreaId,
-                areaExplicit = if (shopAreaId != null) true else null,
+                clearArea = clearArea,
+                areaExplicit = if (shopAreaId != null || clearArea) true else null,
                 // An amount the user changed becomes the one the name gets next time.
                 quantityExplicit = if (newQuantity != null && newQuantity != item.quantity) true else null,
             )
@@ -416,10 +419,12 @@ class ItemsViewModel @Inject constructor(
         viewModelScope.launch { repository.reorder(listId, orderedIds) }
     }
 
-    /** Reassigns an item to [areaId] (e.g. when dragged into another area's group). */
+    /** Reassigns an item to [areaId] (when dragged into another area's group); null takes it out of its area. */
     fun moveToArea(item: ItemModel, areaId: Long?) {
-        if (item.shopAreaId == areaId || areaId == null) return
-        viewModelScope.launch { repository.updateItem(item, shopAreaId = areaId, areaExplicit = true) }
+        if (item.shopAreaId == areaId) return
+        viewModelScope.launch {
+            repository.updateItem(item, shopAreaId = areaId, clearArea = areaId == null, areaExplicit = true)
+        }
     }
 
     /** Persists a new ordering of the shop-area groups (drag-and-drop). */

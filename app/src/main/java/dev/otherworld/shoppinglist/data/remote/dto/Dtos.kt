@@ -1,9 +1,11 @@
 package dev.otherworld.shoppinglist.data.remote.dto
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 @Serializable
 data class ListDto(
@@ -114,6 +116,16 @@ data class UpdateItemRequest(
     // sent for a merged total.
     val quantityExplicit: Boolean? = null,
 )
+
+/**
+ * An item update as it is sent. The server only changes a field that is in the request, and a
+ * request class leaves its null fields out, so taking an item out of its area ([clearArea])
+ * has to put the null in by hand, as [defaultAreaBody] does.
+ */
+fun updateItemBody(json: Json, request: UpdateItemRequest, clearArea: Boolean = false): JsonObject {
+    val fields = json.encodeToJsonElement(UpdateItemRequest.serializer(), request).jsonObject
+    return if (clearArea) JsonObject(fields + ("shopAreaId" to JsonNull)) else fields
+}
 
 @Serializable
 data class CheckRequest(

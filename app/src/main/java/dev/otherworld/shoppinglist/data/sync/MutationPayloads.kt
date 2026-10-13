@@ -27,6 +27,8 @@ data class ItemUpdatePayload(
     val sortOrder: Int? = null,
     val areaExplicit: Boolean? = null,
     val quantityExplicit: Boolean? = null,
+    /** The item was taken out of its area: a null [shopAreaId] alone means the area is left as it is. */
+    val clearArea: Boolean = false,
 )
 
 @Serializable

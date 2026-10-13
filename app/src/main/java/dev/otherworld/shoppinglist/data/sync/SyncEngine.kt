@@ -20,6 +20,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.ReorderListsRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateAreaRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
+import dev.otherworld.shoppinglist.data.remote.dto.updateItemBody
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
 import dev.otherworld.shoppinglist.domain.text.SmartInput
@@ -239,7 +240,11 @@ class SyncEngine @Inject constructor(
                 val p = json.decodeFromString<ItemUpdatePayload>(m.payload)
                 val updated = service.updateItem(
                     m.listId, m.targetId,
-                    UpdateItemRequest(p.name, p.quantity, p.unit, p.shopAreaId, p.sortOrder, p.areaExplicit, p.quantityExplicit),
+                    updateItemBody(
+                        json,
+                        UpdateItemRequest(p.name, p.quantity, p.unit, p.shopAreaId, p.sortOrder, p.areaExplicit, p.quantityExplicit),
+                        p.clearArea,
+                    ),
                 ).ocs.data
                 // A rename can bring the photo remembered for the new name.
                 if (p.name != null) takeImageKey(m.targetId, updated.imageKey)

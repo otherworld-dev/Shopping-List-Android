@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
+import dev.otherworld.shoppinglist.data.remote.dto.updateItemBody
 import dev.otherworld.shoppinglist.data.sync.CheckPayload
 import dev.otherworld.shoppinglist.data.sync.ItemCreatePayload
 import dev.otherworld.shoppinglist.data.sync.ItemUpdatePayload
@@ -111,9 +112,13 @@ class GuestSender @Inject constructor(
                 val p = json.decodeFromString<ItemUpdatePayload>(m.payload)
                 api.updateItem(
                     PublicUrls.item(s, t, remote),
-                    UpdateItemRequest(
-                        name = p.name, quantity = p.quantity, unit = p.unit,
-                        shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }, quantityExplicit = p.quantityExplicit,
+                    updateItemBody(
+                        json,
+                        UpdateItemRequest(
+                            name = p.name, quantity = p.quantity, unit = p.unit,
+                            shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }, quantityExplicit = p.quantityExplicit,
+                        ),
+                        p.clearArea,
                     ),
                 )
             }
