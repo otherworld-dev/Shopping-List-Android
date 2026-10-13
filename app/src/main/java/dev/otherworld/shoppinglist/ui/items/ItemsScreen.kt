@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -131,6 +132,9 @@ fun ItemsScreen(
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
     var showReorderAreas by rememberSaveable { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
+    // The add box doubles as a search: what's typed narrows the list until it's added or cleared.
+    var addText by rememberSaveable { mutableStateOf("") }
+    val filter = remember(addText) { viewModel.searchKey(addText) }
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -200,11 +204,11 @@ fun ItemsScreen(
     val areaById = remember(state.areas) { state.areas.associateBy { it.id } }
     val locale = Locale.getDefault()
     var rows by remember {
-        mutableStateOf(buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale))
+        mutableStateOf(buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter))
     }
     var dragging by remember { mutableStateOf(false) }
-    LaunchedEffect(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas) {
-        if (!dragging) rows = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale)
+    LaunchedEffect(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, filter) {
+        if (!dragging) rows = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter)
     }
 
     val lazyListState = rememberLazyListState()
@@ -217,6 +221,10 @@ fun ItemsScreen(
         val plan = planReorder(rows)
         plan.areaMoves.forEach { (item, areaId) -> viewModel.moveToArea(item, areaId) }
         viewModel.reorder(plan.orderedIds)
+        // A drop that changes nothing (above the first header, say) never updates the list, so
+        // the row would stay where it was let go.
+        val shown = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter)
+        if (plan.changesNothing(shown)) rows = shown
     }
 
     Box(Modifier.fillMaxSize().systemBarsPadding(), contentAlignment = Alignment.TopCenter) {
@@ -335,7 +343,11 @@ fun ItemsScreen(
                     )
                 }
                 if (state.canWrite) {
-                    AddItemRow(onAdd = { name -> viewModel.addItem(name, null) })
+                    AddItemRow(
+                        text = addText,
+                        onTextChange = { addText = it },
+                        onAdd = { name -> viewModel.addItem(name, null) },
+                    )
                     RowDivider()
                 }
                 when {
@@ -347,6 +359,14 @@ fun ItemsScreen(
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 if (state.canWrite) stringResource(R.string.items_empty_writable) else stringResource(R.string.items_empty_readonly),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(24.dp),
+                            )
+                        }
+                    filter.isNotEmpty() && rows.none { it is Row.ItemRowData } ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                stringResource(R.string.items_no_matches),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(24.dp),
                             )
@@ -727,7 +747,8 @@ internal fun ItemRow(
         }
         Spacer(Modifier.width(8.dp))
         Text(
-            (item.quantity?.takeIf { it.isNotBlank() } ?: "1"),
+            // A name added on its own shows no amount until the server gives it the remembered one.
+            item.quantity?.takeIf { it.isNotBlank() } ?: if (item.id < 0) "" else "1",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.widthIn(min = 18.dp),
@@ -808,21 +829,27 @@ private fun AreaTag(area: ShopAreaModel?, showName: Boolean) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddItemRow(onAdd: (String) -> Unit) {
-    var text by rememberSaveable { mutableStateOf("") }
+private fun AddItemRow(text: String, onTextChange: (String) -> Unit, onAdd: (String) -> Unit) {
+    val canAdd = text.isNotBlank()
     val submit = {
-        if (text.isNotBlank()) {
+        if (canAdd) {
             onAdd(text)
-            text = ""
+            onTextChange("")
         }
     }
 
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(8.dp))
+        IconButton(onClick = submit, enabled = canAdd, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = stringResource(R.string.cd_add_item),
+                tint = if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(4.dp))
         androidx.compose.foundation.text.BasicTextField(
             value = text,
             onValueChange = { new ->
@@ -831,15 +858,17 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
                 // in the field for editing. singleLine only shapes the IME/layout — pasted
                 // newlines do arrive here.
                 if (new.contains('\n')) {
-                    val lines = SmartInput.splitLines(new)
+                    // Only what was pasted: a search typed first mustn't join the first line.
+                    val pasted = pastedText(text, new)
+                    val lines = SmartInput.splitLines(pasted)
                     if (lines.size > 1) {
-                        onAdd(new)
-                        text = ""
+                        onAdd(pasted)
+                        onTextChange("")
                     } else {
-                        text = lines.firstOrNull().orEmpty()
+                        onTextChange(SmartInput.splitLines(new).firstOrNull().orEmpty())
                     }
                 } else {
-                    text = new
+                    onTextChange(new)
                 }
             },
             singleLine = true,
@@ -850,7 +879,7 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
                 imeAction = ImeAction.Done,
             ),
             keyboardActions = KeyboardActions(onDone = { submit() }),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
             decorationBox = { inner ->
                 if (text.isEmpty()) {
                     Text(
@@ -863,6 +892,11 @@ private fun AddItemRow(onAdd: (String) -> Unit) {
                 inner()
             },
         )
+        if (text.isNotEmpty()) {
+            IconButton(onClick = { onTextChange("") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_clear_input))
+            }
+        }
     }
 }
 

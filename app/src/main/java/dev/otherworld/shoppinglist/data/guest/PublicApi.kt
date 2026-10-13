@@ -7,8 +7,8 @@ import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ShopAreaDto
-import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -35,7 +35,7 @@ interface PublicApi {
     suspend fun createItem(@Url url: String, @Body body: CreateItemRequest): OcsResponse<ItemDto>
 
     @PUT
-    suspend fun updateItem(@Url url: String, @Body body: UpdateItemRequest): OcsResponse<ItemDto>
+    suspend fun updateItem(@Url url: String, @Body body: JsonObject): OcsResponse<ItemDto>
 
     @PUT
     suspend fun checkItem(@Url url: String, @Body body: CheckRequest): OcsResponse<ItemDto>

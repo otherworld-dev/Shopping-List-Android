@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
 import dev.otherworld.shoppinglist.data.local.toModel
 import dev.otherworld.shoppinglist.data.remote.OcsService
+import dev.otherworld.shoppinglist.data.remote.dto.defaultAreaBody
 import dev.otherworld.shoppinglist.data.sync.ListOrderPayload
 import dev.otherworld.shoppinglist.data.sync.localChangeWins
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
@@ -51,6 +52,9 @@ class ListRepository @Inject constructor(
 
     fun observeLists(): Flow<List<ShoppingListModel>> =
         listDao.observeAll().map { rows -> rows.map { it.toModel() } }
+
+    /** The list with [id] as it's kept on the phone, or null when it's gone. */
+    suspend fun getList(id: Long): ShoppingListModel? = listDao.getById(id)?.toModel()
 
     suspend fun localListCount(): Int = listDao.localLists().size
 
@@ -146,6 +150,16 @@ class ListRepository @Inject constructor(
         if (list?.isLocal == true) return
         enqueue(MutationTypes.RENAME, id, json.encodeToString(TitlePayload.serializer(), TitlePayload(title)))
         sync.requestSync()
+    }
+
+    /**
+     * Chooses the area this list's new items go to when no keyword places them; null for none.
+     * Sent straight away rather than queued, like the other area changes: it is everyone's
+     * setting, and the phone only shows what the server has agreed to.
+     */
+    suspend fun setDefaultArea(id: Long, areaId: Long?) {
+        val dto = service.setDefaultArea(id, defaultAreaBody(areaId)).ocs.data
+        listDao.getById(id)?.let { listDao.update(it.copy(defaultAreaId = dto.defaultShopAreaId)) }
     }
 
     /**

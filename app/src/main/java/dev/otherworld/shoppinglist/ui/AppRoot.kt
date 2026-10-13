@@ -19,7 +19,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -40,6 +42,8 @@ import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.guest.PendingLinks
+import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
+import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
@@ -89,6 +93,7 @@ class AppViewModel @Inject constructor(
     private val pendingLinks: PendingLinks,
     private val lists: ListRepository,
     localMode: LocalMode,
+    private val displayPrefs: DisplayPrefs,
     private val imageLoader: ImageLoader,
 ) : ViewModel() {
     val account: StateFlow<Account?> = credentialStore.accountFlow
@@ -100,7 +105,16 @@ class AppViewModel @Inject constructor(
     val hasGuests: StateFlow<Boolean?> =
         guests.observeHasShares().stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val pendingLink: StateFlow<String?> = pendingLinks.link
+    val openLastList: StateFlow<Boolean> = displayPrefs.openLastList
     private val transitions = SignInTransitions()
+
+    fun lastListId(): Long? = displayPrefs.lastListId
+
+    /** The list to reopen at start-up if it's still on the phone; one that's gone is forgotten. */
+    suspend fun lastList(): ShoppingListModel? {
+        val id = displayPrefs.lastListId ?: return null
+        return lists.getList(id) ?: null.also { displayPrefs.clearLastList() }
+    }
 
     private val _uploadOffer = MutableStateFlow<UploadOffer?>(null)
     val uploadOffer: StateFlow<UploadOffer?> = _uploadOffer.asStateFlow()
@@ -140,6 +154,7 @@ class AppViewModel @Inject constructor(
                     // Only on a real logout: at start-up with no account the sort is local mode's own.
                     if (previous == true) {
                         listSettings.clear()
+                        displayPrefs.clearLastList()
                         forgetPhotos()
                     }
                     certAlerts.onLoggedOut()
@@ -192,6 +207,8 @@ fun AppRoot(
     // for the very first composition.
     val start = rememberSaveable { if (signedIn) Routes.HOME else Routes.LOGIN }
     val navController = rememberNavController()
+    // Saved, so a rotation or restored process (whose back stack comes back by itself) skips it.
+    var lastListChecked by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize()) {
         // Persistent banner when the user dismissed a changed-certificate prompt but sync is
@@ -343,6 +360,21 @@ fun AppRoot(
         val link = pendingLink ?: return@LaunchedEffect
         viewModel.consumeLink()
         navController.navigate("join?url=${Uri.encode(link)}")
+    }
+
+    // Reopen the list used last, on top of the lists screen so Back goes there.
+    LaunchedEffect(Unit) {
+        val restore = shouldRestoreLastList(
+            alreadyChecked = lastListChecked,
+            startRoute = start,
+            hasPendingLink = pendingLink != null,
+            enabled = viewModel.openLastList.value,
+            lastListId = viewModel.lastListId(),
+        )
+        lastListChecked = true
+        if (!restore) return@LaunchedEffect
+        val list = viewModel.lastList() ?: return@LaunchedEffect
+        navController.navigate("items/${list.id}?title=${Uri.encode(list.title)}&canWrite=${list.canWrite}")
     }
 }
 

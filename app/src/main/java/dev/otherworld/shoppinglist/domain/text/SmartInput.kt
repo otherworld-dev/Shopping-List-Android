@@ -23,13 +23,21 @@ class SmartInput(
     data class ParsedIngredient(val name: String, val quantity: String?, val checked: Boolean = false)
 
     sealed interface AddPlan {
-        /** No existing match — create a new item. */
+        /**
+         * No existing match — create a new item. [quantity] is null for a name typed on its own,
+         * so the server can give it the amount it had last time in the list.
+         */
         data class Create(
             val name: String,
-            val quantity: String,
+            val quantity: String?,
             val shopAreaId: Long?,
             val areaExplicit: Boolean,
             val checked: Boolean = false,
+            /**
+             * [shopAreaId] is the list's default area, not a keyword match or a pick. The phone
+             * shows the item there but sends no area, and the server applies its own default.
+             */
+            val areaIsDefault: Boolean = false,
         ) : AddPlan
 
         /** Matches an existing unchecked item — merge quantities (and maybe pluralize). */
@@ -38,28 +46,41 @@ class SmartInput(
             val quantity: String,
             val newName: String?,
         ) : AddPlan
+
+        /**
+         * Matches a ticked-off item — untick it rather than add another beside it. [quantity]
+         * is the amount typed, or null to keep the one it had.
+         */
+        data class Recycle(
+            val target: ItemModel,
+            val quantity: String?,
+        ) : AddPlan
     }
 
     /**
      * Decides what adding [rawInput] should do, given the current [areas] and [existing] items.
      * Returns null if the input parses to an empty name. [explicitAreaId] is the user's manual
-     * area pick (null = auto-detect).
+     * area pick (null = auto-detect). [defaultAreaId] is the list's default area, where a new
+     * item goes when no keyword places it. The server applies its own, so this only puts the
+     * item in the right place before it has synced, and the plan says so ([AddPlan.Create.areaIsDefault])
+     * for the area not to be sent: the phone's copy of the default can be out of date.
      */
     fun planAdd(
         rawInput: String,
         areas: List<ShopAreaModel>,
         existing: List<ItemModel>,
         explicitAreaId: Long?,
+        defaultAreaId: Long? = null,
     ): AddPlan? {
         val parsed = parseIngredient(rawInput)
         if (parsed.name.isBlank()) return null
-        val incoming = parsed.quantity ?: "1"
 
         // A line pasted as already checked off ("[x] Milk") records something bought, not more
         // of something outstanding, so it never merges into an open item (web app 1.7.1).
         val match = if (parsed.checked) null else findMatchingItem(existing, parsed.name)
         if (match != null) {
-            val merged = mergeQuantities(match.quantity, incoming)
+            // A bare name counts as one more.
+            val merged = mergeQuantities(match.quantity, parsed.quantity ?: "1")
             val oldQty = leadingNumber(match.quantity)
             val newQty = leadingNumber(merged)
             val newName = if (oldQty != null && oldQty <= 1.0 && newQty != null && newQty > 1.0) {
@@ -70,8 +91,18 @@ class SmartInput(
             return AddPlan.Merge(match, merged, newName)
         }
 
-        val areaId = explicitAreaId ?: detectArea(parsed.name, areas)
-        return AddPlan.Create(parsed.name, incoming, areaId, explicitAreaId != null, parsed.checked)
+        // Bought before and ticked off: bring that one back so the list doesn't fill up with
+        // ticked copies of the same thing.
+        val ticked = if (parsed.checked) null else findCheckedMatch(existing, parsed.name)
+        if (ticked != null) return AddPlan.Recycle(ticked, parsed.quantity)
+
+        val placedAreaId = explicitAreaId ?: detectArea(parsed.name, areas)
+        // A default that isn't one of the areas was deleted, and the list here has yet to hear.
+        val defaultArea = defaultAreaId?.takeIf { id -> placedAreaId == null && areas.any { it.id == id } }
+        return AddPlan.Create(
+            parsed.name, parsed.quantity, placedAreaId ?: defaultArea, explicitAreaId != null, parsed.checked,
+            areaIsDefault = defaultArea != null,
+        )
     }
 
     // ---- Duplicate detection / normalization ----
@@ -79,6 +110,11 @@ class SmartInput(
     fun findMatchingItem(items: List<ItemModel>, name: String): ItemModel? {
         val normalized = normalizeName(name)
         return items.firstOrNull { !it.checked && normalizeName(it.name) == normalized }
+    }
+
+    fun findCheckedMatch(items: List<ItemModel>, name: String): ItemModel? {
+        val normalized = normalizeName(name)
+        return items.firstOrNull { it.checked && normalizeName(it.name) == normalized }
     }
 
     fun normalizeName(name: String): String {
@@ -288,6 +324,19 @@ class SmartInput(
     fun parseIngredient(line: String): ParsedIngredient {
         val markup = readListMarkup(line)
         return parseLine(markup.rest).copy(checked = markup.checked)
+    }
+
+    /**
+     * What the add box filters the list by: the name it would add, folded the way [detectArea]
+     * matches, so "2 l Milk" finds "milk". Blank when there's no name to look for — including
+     * an amount typed first ("2", "2 l"), where the parser falls back to the whole line as the
+     * name, so the list doesn't blank out while the name is still to come.
+     */
+    fun searchKey(input: String): String {
+        val line = stripListMarkup(input)
+        val parsed = parseLine(line)
+        if (parsed.quantity != null && parsed.name == cleanName(line)) return ""
+        return fold(parsed.name).trim()
     }
 
     /** The quantity and name logic, on a line whose list markup is already gone. */

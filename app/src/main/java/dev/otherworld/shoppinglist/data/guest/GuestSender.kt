@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
+import dev.otherworld.shoppinglist.data.remote.dto.updateItemBody
 import dev.otherworld.shoppinglist.data.sync.CheckPayload
 import dev.otherworld.shoppinglist.data.sync.ItemCreatePayload
 import dev.otherworld.shoppinglist.data.sync.ItemUpdatePayload
@@ -36,6 +37,10 @@ sealed interface GuestSendResult {
         val updatedAt: String?,
         val detectedAreaId: Long?,
         val tickPending: Boolean = false,
+        /** The amount the server gave it, the remembered one for a name added on its own. */
+        val quantity: String? = null,
+        /** The area the server gave it, as this phone's id for it: the list's default when none was sent. */
+        val serverAreaId: Long? = null,
     ) : GuestSendResult
 }
 
@@ -88,13 +93,18 @@ class GuestSender @Inject constructor(
                 val areaId = areaForQueuedCreate(p, if (p.detectArea) areasFor(m.listId, share, localAreas) else localAreas, smartInput)
                 val created = api.createItem(
                     PublicUrls.items(s, t),
-                    CreateItemRequest(p.name, p.quantity, p.unit, areaId?.let { ids.remoteId(it) }, guestName = nameToSend()),
+                    CreateItemRequest(
+                        p.name, p.quantity, p.unit, areaId?.let { ids.remoteId(it) },
+                        guestName = nameToSend(), quantityExplicit = p.quantityExplicit,
+                    ),
                 ).ocs.data
                 return GuestSendResult.Created(
                     localId = ids.localId(share.id, GuestIdKind.ITEM, created.id),
                     updatedAt = created.updatedAt,
                     detectedAreaId = areaId.takeIf { p.detectArea },
                     tickPending = p.checked,
+                    quantity = created.quantity,
+                    serverAreaId = created.shopAreaId?.let { ids.localId(share.id, GuestIdKind.AREA, it) },
                 )
             }
             MutationTypes.UPDATE -> {
@@ -102,7 +112,14 @@ class GuestSender @Inject constructor(
                 val p = json.decodeFromString<ItemUpdatePayload>(m.payload)
                 api.updateItem(
                     PublicUrls.item(s, t, remote),
-                    UpdateItemRequest(name = p.name, quantity = p.quantity, unit = p.unit, shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }),
+                    updateItemBody(
+                        json,
+                        UpdateItemRequest(
+                            name = p.name, quantity = p.quantity, unit = p.unit,
+                            shopAreaId = p.shopAreaId?.let { ids.remoteId(it) }, quantityExplicit = p.quantityExplicit,
+                        ),
+                        p.clearArea,
+                    ),
                 )
             }
             MutationTypes.CHECK -> {

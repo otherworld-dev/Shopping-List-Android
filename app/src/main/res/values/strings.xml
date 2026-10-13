@@ -32,6 +32,8 @@
     <!-- Content descriptions -->
     <string name="cd_back">Back</string>
     <string name="cd_more">More</string>
+    <string name="cd_add_item">Add item</string>
+    <string name="cd_clear_input">Clear</string>
     <string name="cd_refresh">Refresh</string>
     <string name="cd_delete">Delete</string>
     <string name="cd_item_photo">Photo of the item</string>
@@ -156,6 +158,13 @@
     <string name="settings_guest_name">Your name on shared lists (optional)</string>
     <string name="settings_guest_name_hint">Shown to others beside what you add and tick on lists you opened from a link.</string>
     <string name="settings_theme">Theme</string>
+    <string name="settings_startup">Start-up</string>
+    <string name="settings_open_last_list">Open the last list on start</string>
+    <string name="settings_text_size">Text size</string>
+    <string name="text_size_small">Small</string>
+    <string name="text_size_default">Default</string>
+    <string name="text_size_large">Large</string>
+    <string name="text_size_larger">Larger</string>
     <string name="settings_item_images">Item images</string>
     <string name="settings_show_item_images">Show item images</string>
     <string name="settings_item_images_hint">Add a photo to an item from its edit window. Photos are part of the list, so everyone with access can see them. This switch only changes what you see on this phone.</string>
@@ -194,10 +203,11 @@
     <string name="a11y_move_up">Move up</string>
     <string name="a11y_move_down">Move down</string>
     <string name="items_empty_writable">Nothing here yet — add an item above.</string>
+    <string name="items_no_matches">No items match. Tap + to add it.</string>
     <string name="items_empty_readonly">No items yet.</string>
     <string name="section_other">Other</string>
     <string name="section_checked">Checked</string>
-    <string name="item_add_placeholder">Add an item to list…</string>
+    <string name="item_add_placeholder">Add or search items…</string>
     <string name="dialog_edit_item_title">Edit item</string>
     <string name="field_name">Name</string>
     <string name="field_quantity">Quantity</string>
@@ -208,6 +218,9 @@
     <!-- Shop areas -->
     <string name="areas_title">Shop areas</string>
     <string name="menu_copy_from_list">Copy from another list</string>
+    <string name="default_area_title">Default area</string>
+    <string name="default_area_none">None</string>
+    <string name="default_area_hint">Items that match no keyword go here.</string>
     <string name="menu_load_keywords">Load keywords for my language</string>
     <string name="fab_new_area">New area</string>
     <string name="area_no_keywords">No keywords</string>

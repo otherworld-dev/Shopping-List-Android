@@ -82,6 +82,8 @@ data class ItemsUiState(
     /** This user's Nextcloud id, to tell their own items apart; null on a guest list (no ids there). */
     val me: String? = null,
     val showOwnName: Boolean = false,
+    /** The list's default area, for items no keyword places; null for none (and on older servers). */
+    val defaultAreaId: Long? = null,
 )
 
 @HiltViewModel
@@ -155,6 +157,7 @@ class ItemsViewModel @Inject constructor(
             droppedChanges = share?.droppedChanges ?: 0,
             me = if (isGuest) null else listSettings.ownUserIdOrLogin(values[12] as String?),
             showOwnName = values[11] as Boolean,
+            defaultAreaId = lists.firstOrNull { it.id == listId }?.defaultAreaId,
         )
     }.stateIn(
         viewModelScope,
@@ -192,6 +195,8 @@ class ItemsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PhotoUiState())
 
     init {
+        // Remembered whichever way the list was opened, for reopening it on the next start.
+        displayPrefs.setLastListId(listId)
         refresh()
         // Push events come from the user's own server, which knows nothing of a guest list.
         if (!isGuest) {
@@ -226,10 +231,14 @@ class ItemsViewModel @Inject constructor(
         }
     }
 
+    /** What the add box's [text] filters the list by; see [SmartInput.searchKey]. */
+    fun searchKey(text: String): String = smartInput.searchKey(text)
+
     /**
      * Adds [rawInput] with the web app's smart behaviour: parse quantity out of the text,
      * auto-detect a shop area (unless [explicitAreaId] is set), and merge into an existing
-     * unchecked item of the same name instead of creating a duplicate.
+     * unchecked item of the same name instead of creating a duplicate, or else untick a
+     * ticked-off one.
      *
      * Multi-line input (a pasted list) becomes one item per non-blank line, processed in order
      * so a later line merges into an item an earlier line just created — the same as the web
@@ -244,7 +253,7 @@ class ItemsViewModel @Inject constructor(
             // creates/merges locally for duplicate detection.
             var existing = current.items
             for (line in lines) {
-                when (val plan = smartInput.planAdd(line, current.areas, existing, explicitAreaId)) {
+                when (val plan = smartInput.planAdd(line, current.areas, existing, explicitAreaId, current.defaultAreaId)) {
                     null -> Unit
                     is SmartInput.AddPlan.Create -> {
                         val created = repository.createItem(
@@ -256,6 +265,7 @@ class ItemsViewModel @Inject constructor(
                             checked = plan.checked,
                             // With no areas known yet there was nothing to detect against.
                             detectAreaOnSync = current.areas.isEmpty(),
+                            areaIsListDefault = plan.areaIsDefault,
                         )
                         existing = existing + created
                     }
@@ -263,6 +273,16 @@ class ItemsViewModel @Inject constructor(
                         repository.updateItem(plan.target, name = plan.newName, quantity = plan.quantity)
                         existing = existing.map {
                             if (it.id == plan.target.id) it.copy(name = plan.newName ?: it.name, quantity = plan.quantity) else it
+                        }
+                    }
+                    is SmartInput.AddPlan.Recycle -> {
+                        // A typed amount is the one the name gets next time; a bare name keeps the old one.
+                        if (plan.quantity != null) {
+                            repository.updateItem(plan.target, quantity = plan.quantity, quantityExplicit = true)
+                        }
+                        repository.check(plan.target, checked = false)
+                        existing = existing.map {
+                            if (it.id == plan.target.id) it.copy(checked = false, quantity = plan.quantity ?: it.quantity) else it
                         }
                     }
                 }
@@ -275,13 +295,19 @@ class ItemsViewModel @Inject constructor(
     }
 
     fun editItem(item: ItemModel, name: String, quantity: String?, shopAreaId: Long?) {
+        val newQuantity = quantity?.trim()?.ifBlank { null }
+        // "No area" picked for an item that has one. Like the web app, it counts as a choice.
+        val clearArea = shopAreaId == null && item.shopAreaId != null
         viewModelScope.launch {
             repository.updateItem(
                 item,
                 name = name.trim(),
-                quantity = quantity?.trim()?.ifBlank { null },
+                quantity = newQuantity,
                 shopAreaId = shopAreaId,
-                areaExplicit = if (shopAreaId != null) true else null,
+                clearArea = clearArea,
+                areaExplicit = if (shopAreaId != null || clearArea) true else null,
+                // An amount the user changed becomes the one the name gets next time.
+                quantityExplicit = if (newQuantity != null && newQuantity != item.quantity) true else null,
             )
         }
     }
@@ -393,10 +419,12 @@ class ItemsViewModel @Inject constructor(
         viewModelScope.launch { repository.reorder(listId, orderedIds) }
     }
 
-    /** Reassigns an item to [areaId] (e.g. when dragged into another area's group). */
+    /** Reassigns an item to [areaId] (when dragged into another area's group); null takes it out of its area. */
     fun moveToArea(item: ItemModel, areaId: Long?) {
-        if (item.shopAreaId == areaId || areaId == null) return
-        viewModelScope.launch { repository.updateItem(item, shopAreaId = areaId, areaExplicit = true) }
+        if (item.shopAreaId == areaId) return
+        viewModelScope.launch {
+            repository.updateItem(item, shopAreaId = areaId, clearArea = areaId == null, areaExplicit = true)
+        }
     }
 
     /** Persists a new ordering of the shop-area groups (drag-and-drop). */

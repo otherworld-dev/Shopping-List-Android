@@ -66,3 +66,6 @@ fun CapabilitiesBlock.supportsInviteCodes(): Boolean = shoppingList?.features?.c
 
 /** Whether the server keeps who added and ticked items, guests' names too (server app 1.10.0 and later). */
 fun CapabilitiesBlock.supportsGuestNames(): Boolean = shoppingList?.features?.contains("guest-names") == true
+
+/** Whether a list can have a default area for items no keyword places (server app 1.12.0 and later). */
+fun CapabilitiesBlock.supportsDefaultArea(): Boolean = shoppingList?.features?.contains("default-area") == true

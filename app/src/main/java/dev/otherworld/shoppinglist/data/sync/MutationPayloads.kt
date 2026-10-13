@@ -14,6 +14,8 @@ data class ItemCreatePayload(
     val checked: Boolean = false,
     /** Added before the list's areas reached the phone, so detect the area when sending. */
     val detectArea: Boolean = false,
+    /** The amount was typed, so the server remembers it for the name. */
+    val quantityExplicit: Boolean = false,
 )
 
 @Serializable
@@ -24,6 +26,9 @@ data class ItemUpdatePayload(
     val shopAreaId: Long? = null,
     val sortOrder: Int? = null,
     val areaExplicit: Boolean? = null,
+    val quantityExplicit: Boolean? = null,
+    /** The item was taken out of its area: a null [shopAreaId] alone means the area is left as it is. */
+    val clearArea: Boolean = false,
 )
 
 @Serializable

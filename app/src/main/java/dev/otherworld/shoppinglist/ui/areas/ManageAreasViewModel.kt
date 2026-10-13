@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.repo.AreaRepository
 import dev.otherworld.shoppinglist.data.repo.ListRepository
+import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.ui.common.UiText
@@ -14,6 +15,7 @@ import dev.otherworld.shoppinglist.ui.common.errorText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -23,7 +25,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ManageAreasViewModel @Inject constructor(
     private val areaRepository: AreaRepository,
-    listRepository: ListRepository,
+    private val listRepository: ListRepository,
+    listSettings: ListSettingsRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -40,6 +43,30 @@ class ManageAreasViewModel @Inject constructor(
     val otherLists: StateFlow<List<ShoppingListModel>> = listRepository.observeLists()
         .map { lists -> lists.filter { it.id != listId && !it.isGuest } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * The list's default area, or null when one can't be chosen here (see [canSetDefaultArea])
+     * or there are no areas to choose from. A default that isn't among the areas reads as none:
+     * it was just deleted, and the server has dropped it too.
+     */
+    val defaultArea: StateFlow<DefaultAreaState?> = combine(
+        listRepository.observeLists(),
+        areaRepository.observeAreas(listId),
+        listSettings.defaultAreaSupported,
+    ) { lists, areas, supported ->
+        val list = lists.firstOrNull { it.id == listId }
+        if (areas.isEmpty() || !canSetDefaultArea(supported, list)) {
+            null
+        } else {
+            DefaultAreaState(areas.firstOrNull { it.id == list?.defaultAreaId })
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    init {
+        // The lists are otherwise only fetched from the lists screen, so a default changed on
+        // another device since then would show its old value here. Offline, what's known stays.
+        viewModelScope.launch { runCatching { listRepository.refresh() } }
+    }
 
     private val _error = MutableStateFlow<UiText?>(null)
     val error: StateFlow<UiText?> = _error
@@ -65,6 +92,12 @@ class ManageAreasViewModel @Inject constructor(
     fun deleteArea(id: Long) {
         viewModelScope.launch {
             runCatching { areaRepository.deleteArea(listId, id) }.onFailure { reportError(it) }
+        }
+    }
+
+    fun setDefaultArea(areaId: Long?) {
+        viewModelScope.launch {
+            runCatching { listRepository.setDefaultArea(listId, areaId) }.onFailure { reportError(it) }
         }
     }
 

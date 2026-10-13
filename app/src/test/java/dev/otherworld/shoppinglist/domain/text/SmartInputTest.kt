@@ -3,6 +3,7 @@ package dev.otherworld.shoppinglist.domain.text
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,6 +67,30 @@ class SmartInputTest {
         val p = smart.parseIngredient("3 eggs")
         assertEquals("Eggs", p.name)
         assertEquals("3", p.quantity)
+    }
+
+    @Test
+    fun `reads the short forms of piece and pack (#15)`() {
+        assertEquals(SmartInput.ParsedIngredient("Eggs", "3 pcs"), smart.parseIngredient("3 pcs eggs"))
+        assertEquals(SmartInput.ParsedIngredient("Avocado", "1 pc"), smart.parseIngredient("1 pc avocado"))
+        assertEquals(SmartInput.ParsedIngredient("Noodles", "2 pkg"), smart.parseIngredient("2 pkg noodles"))
+    }
+
+    @Test
+    fun `reads decagrams (#15)`() {
+        assertEquals(SmartInput.ParsedIngredient("Ham", "25 dag"), smart.parseIngredient("25 dag ham"))
+        assertEquals(SmartInput.ParsedIngredient("Cheese", "10 dkg"), smart.parseIngredient("10 dkg cheese"))
+        assertEquals(SmartInput.ParsedIngredient("Ham", "25 dag"), smart.parseIngredient("25dag ham"))
+    }
+
+    @Test
+    fun `reads German amounts on a German phone (#15)`() {
+        val de = SmartInput.forLanguage("de")
+        assertEquals(SmartInput.ParsedIngredient("Schinken", "25 dag"), de.parseIngredient("25 dag Schinken"))
+        assertEquals(SmartInput.ParsedIngredient("Käse", "10 dkg"), de.parseIngredient("10 dkg Käse"))
+        assertEquals(SmartInput.ParsedIngredient("Eier", "3 stk"), de.parseIngredient("3 Stk Eier"))
+        assertEquals(SmartInput.ParsedIngredient("Eier", "3 stk."), de.parseIngredient("3 Stk. Eier"))
+        assertEquals(SmartInput.ParsedIngredient("Nudeln", "2 pkg"), de.parseIngredient("2 Pkg Nudeln"))
     }
 
     @Test
@@ -232,10 +257,52 @@ class SmartInputTest {
     }
 
     @Test
-    fun `plan ignores checked items when matching`() {
+    fun `plan leaves the amount off a name on its own, for the server to fill in (#15)`() {
+        val plan = smart.planAdd("rice", emptyList(), emptyList(), explicitAreaId = null) as SmartInput.AddPlan.Create
+        assertEquals("Rice", plan.name)
+        assertNull(plan.quantity)
+    }
+
+    @Test
+    fun `plan still counts a name on its own as one more when merging`() {
+        val existing = listOf(item(5, "Rice", quantity = "500 g"))
+        val plan = smart.planAdd("rice", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Merge
+        assertEquals("500 g + 1", plan.quantity)
+    }
+
+    @Test
+    fun `merging adds up the short forms of a unit with the long ones (#15)`() {
+        assertEquals("5 pcs", smart.mergeQuantities("3 pcs", "2 pieces"))
+        assertEquals("35 dag", smart.mergeQuantities("25 dag", "10 dkg"))
+        assertEquals("3 pkg", smart.mergeQuantities("2 pkg", "1 pack"))
+    }
+
+    @Test
+    fun `plan brings back a ticked item rather than adding another`() {
         val existing = listOf(item(5, "Apple", quantity = "2", checked = true))
-        val plan = smart.planAdd("apple", emptyList(), existing, explicitAreaId = null)
-        assertTrue(plan is SmartInput.AddPlan.Create)
+        val plan = smart.planAdd("apples", emptyList(), existing, explicitAreaId = null)
+        assertEquals(SmartInput.AddPlan.Recycle(existing.single(), quantity = null), plan)
+    }
+
+    @Test
+    fun `plan gives a brought back item the amount typed`() {
+        val existing = listOf(item(5, "Rice", quantity = "1 kg", checked = true))
+        val plan = smart.planAdd("500 g rice", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Recycle
+        assertEquals("500 g", plan.quantity)
+    }
+
+    @Test
+    fun `plan merges into an open item before bringing back a ticked one`() {
+        val existing = listOf(item(5, "Milk", checked = true), item(6, "Milk", quantity = "1"))
+        val plan = smart.planAdd("milk", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Merge
+        assertEquals(6L, plan.target.id)
+    }
+
+    @Test
+    fun `plan brings back the first of several ticked copies`() {
+        val existing = listOf(item(5, "Milk", checked = true), item(6, "Milk", checked = true))
+        val plan = smart.planAdd("milk", emptyList(), existing, explicitAreaId = null) as SmartInput.AddPlan.Recycle
+        assertEquals(5L, plan.target.id)
     }
 
     // ---- List markup (web app 1.7.0: stripListMarkup) ----
@@ -429,8 +496,93 @@ class SmartInputTest {
     }
 
     @Test
+    fun `a checked line never brings back a ticked item`() {
+        val existing = listOf(item(5, "Milk", checked = true))
+        val plan = smart.planAdd("[x] milk", emptyList(), existing, explicitAreaId = null)
+        assertTrue(plan is SmartInput.AddPlan.Create)
+    }
+
+    @Test
     fun `an unchecked line still merges`() {
         val existing = listOf(item(5, "Milk", quantity = "1"))
         assertTrue(smart.planAdd("[ ] milk", emptyList(), existing, explicitAreaId = null) is SmartInput.AddPlan.Merge)
+    }
+
+    @Test
+    fun `the search key is the name it would add, without the amount`() {
+        assertEquals("milk", smart.searchKey("2 l milk"))
+    }
+
+    @Test
+    fun `the search key folds case and accents like area matching`() {
+        assertEquals("creme fraiche", smart.searchKey("Crème Fraîche"))
+    }
+
+    @Test
+    fun `a blank box has no search key`() {
+        assertEquals("", smart.searchKey("   "))
+        assertEquals("", smart.searchKey(""))
+    }
+
+    @Test
+    fun `an amount with no name yet has no search key`() {
+        assertEquals("", smart.searchKey("2"))
+        assertEquals("", smart.searchKey("2 l"))
+        assertEquals("", smart.searchKey("1.5 kg"))
+    }
+
+    @Test
+    fun `a name that starts with digits is still searched for`() {
+        assertEquals("7up", smart.searchKey("7up"))
+    }
+
+    // ---- A list's default area (server app 1.12.0) ----
+
+    private val defaultAreas = listOf(area(1, "Produce", listOf("banana"), 0), area(2, "Other", emptyList(), 1))
+
+    @Test
+    fun `a name no keyword matches goes to the list's default area`() {
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 2L)
+        plan as SmartInput.AddPlan.Create
+        assertEquals(2L, plan.shopAreaId)
+        // Nobody chose it, so the server mustn't learn a keyword from it.
+        assertFalse(plan.areaExplicit)
+        // And it is only where the phone shows the item: the server applies its own default.
+        assertTrue(plan.areaIsDefault)
+    }
+
+    @Test
+    fun `an area from a keyword or a pick is not marked as the default`() {
+        val detected = smart.planAdd("bananas", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 1L)
+        val picked = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = 2L, defaultAreaId = 2L)
+        assertFalse((detected as SmartInput.AddPlan.Create).areaIsDefault)
+        assertFalse((picked as SmartInput.AddPlan.Create).areaIsDefault)
+    }
+
+    @Test
+    fun `a keyword match beats the default area`() {
+        val plan = smart.planAdd("bananas", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 2L)
+        assertEquals(1L, (plan as SmartInput.AddPlan.Create).shopAreaId)
+    }
+
+    @Test
+    fun `a picked area beats the default area`() {
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = 1L, defaultAreaId = 2L)
+        plan as SmartInput.AddPlan.Create
+        assertEquals(1L, plan.shopAreaId)
+        assertTrue(plan.areaExplicit)
+    }
+
+    @Test
+    fun `a list with no default area leaves the item uncategorised`() {
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = null)
+        assertNull((plan as SmartInput.AddPlan.Create).shopAreaId)
+    }
+
+    @Test
+    fun `a default that is no longer one of the list's areas is ignored`() {
+        // The area was deleted and this copy of the list hasn't caught up yet.
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 99L)
+        assertNull((plan as SmartInput.AddPlan.Create).shopAreaId)
     }
 }

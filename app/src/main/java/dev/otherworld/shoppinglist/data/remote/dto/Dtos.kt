@@ -1,6 +1,11 @@
 package dev.otherworld.shoppinglist.data.remote.dto
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 @Serializable
 data class ListDto(
@@ -13,6 +18,8 @@ data class ListDto(
     val isPinned: Boolean? = null,
     // Since server app 1.10.0: this user's own place in the Custom order.
     val position: Int? = null,
+    // Since server app 1.12.0: the area a new item goes to when no keyword places it.
+    val defaultShopAreaId: Long? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
@@ -69,6 +76,14 @@ data class CreateListRequest(val title: String)
 @Serializable
 data class UpdateListRequest(val title: String)
 
+/**
+ * The body for PUT …/lists/{id}/default-area. Built by hand rather than as a request class:
+ * those leave null fields out, and here "none" has to be sent as an explicit null, because the
+ * server refuses a request without the field so that leaving it out can never clear the setting.
+ */
+fun defaultAreaBody(shopAreaId: Long?): JsonObject =
+    JsonObject(mapOf("shopAreaId" to (shopAreaId?.let { JsonPrimitive(it) } ?: JsonNull)))
+
 /** Per-user list preferences (PATCH …/lists/{id}/preferences); pinning is the only one so far. */
 @Serializable
 data class ListPreferencesRequest(val isPinned: Boolean)
@@ -84,6 +99,9 @@ data class CreateItemRequest(
     val checked: Boolean = false,
     // Public link API only, since server app 1.10.0: the guest's name, left out when null.
     val guestName: String? = null,
+    // Since server app 1.11.0: a typed amount, which the server remembers for the name. A null
+    // quantity gets the remembered one back (older servers give it "1", as they always have).
+    val quantityExplicit: Boolean = false,
 )
 
 @Serializable
@@ -94,7 +112,20 @@ data class UpdateItemRequest(
     val shopAreaId: Long? = null,
     val sortOrder: Int? = null,
     val areaExplicit: Boolean? = null,
+    // Since server app 1.11.0: the user changed the amount, so the server remembers it. Never
+    // sent for a merged total.
+    val quantityExplicit: Boolean? = null,
 )
+
+/**
+ * An item update as it is sent. The server only changes a field that is in the request, and a
+ * request class leaves its null fields out, so taking an item out of its area ([clearArea])
+ * has to put the null in by hand, as [defaultAreaBody] does.
+ */
+fun updateItemBody(json: Json, request: UpdateItemRequest, clearArea: Boolean = false): JsonObject {
+    val fields = json.encodeToJsonElement(UpdateItemRequest.serializer(), request).jsonObject
+    return if (clearArea) JsonObject(fields + ("shopAreaId" to JsonNull)) else fields
+}
 
 @Serializable
 data class CheckRequest(
