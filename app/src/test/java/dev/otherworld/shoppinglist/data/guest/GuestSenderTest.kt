@@ -9,6 +9,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.ItemDto
 import dev.otherworld.shoppinglist.data.remote.dto.ReorderRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
+import dev.otherworld.shoppinglist.data.remote.dto.updateItemBody
 import dev.otherworld.shoppinglist.data.sync.CheckPayload
 import dev.otherworld.shoppinglist.data.sync.ItemCreatePayload
 import dev.otherworld.shoppinglist.data.sync.ItemUpdatePayload
@@ -23,6 +24,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -73,11 +75,26 @@ class GuestSenderTest {
     }
 
     @Test
+    fun `an item sent with no area comes back with the list's default area, as this phone's id for it`() = runTest {
+        api.defaultAreaId = 30
+        val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Batteries")))
+        val result = sender.send(m, share, emptyList()) as GuestSendResult.Created
+        assertEquals(CreateItemRequest("Batteries"), api.bodies.single())
+        assertEquals(ids.localId(4, GuestIdKind.AREA, 30), result.serverAreaId)
+    }
+
+    @Test
+    fun `an item on a list with no default area comes back with none`() = runTest {
+        val m = mutation(MutationTypes.CREATE, -5, json.encodeToString(ItemCreatePayload.serializer(), ItemCreatePayload("Batteries")))
+        assertNull((sender.send(m, share, emptyList()) as GuestSendResult.Created).serverAreaId)
+    }
+
+    @Test
     fun `an amount changed on a guest list is sent for the server to remember (#15)`() = runTest {
         val item = ids.localId(4, GuestIdKind.ITEM, 12)
         val payload = ItemUpdatePayload(quantity = "500 g", quantityExplicit = true)
         sender.send(mutation(MutationTypes.UPDATE, item, json.encodeToString(ItemUpdatePayload.serializer(), payload)), share, emptyList())
-        assertEquals(UpdateItemRequest(quantity = "500 g", quantityExplicit = true), api.bodies.single())
+        assertEquals(updateItemBody(json, UpdateItemRequest(quantity = "500 g", quantityExplicit = true)), api.bodies.single())
     }
 
     @Test
@@ -85,7 +102,7 @@ class GuestSenderTest {
         val item = ids.localId(4, GuestIdKind.ITEM, 12)
         val payload = ItemUpdatePayload(quantity = "500 g + 1")
         sender.send(mutation(MutationTypes.UPDATE, item, json.encodeToString(ItemUpdatePayload.serializer(), payload)), share, emptyList())
-        assertEquals(UpdateItemRequest(quantity = "500 g + 1"), api.bodies.single())
+        assertEquals(updateItemBody(json, UpdateItemRequest(quantity = "500 g + 1")), api.bodies.single())
     }
 
     @Test
@@ -139,8 +156,23 @@ class GuestSenderTest {
             ),
             api.calls,
         )
-        assertEquals(UpdateItemRequest(name = "Oat milk", shopAreaId = 30), api.bodies[0])
+        assertEquals(updateItemBody(json, UpdateItemRequest(name = "Oat milk", shopAreaId = 30)), api.bodies[0])
         assertEquals(ReorderRequest(listOf(12)), api.bodies[2])
+    }
+
+    @Test
+    fun `taking an item out of its area on a guest list sends the area as null`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        val payload = ItemUpdatePayload(clearArea = true, areaExplicit = true)
+        sender.send(mutation(MutationTypes.UPDATE, item, json.encodeToString(ItemUpdatePayload.serializer(), payload)), share, emptyList())
+        assertEquals("""{"shopAreaId":null}""", api.bodies.single().toString())
+    }
+
+    @Test
+    fun `an edit that leaves the area alone on a guest list does not send it`() = runTest {
+        val item = ids.localId(4, GuestIdKind.ITEM, 12)
+        sender.send(mutation(MutationTypes.UPDATE, item, """{"name":"Oat milk"}"""), share, emptyList())
+        assertEquals("""{"name":"Oat milk"}""", api.bodies.single().toString())
     }
 
     @Test

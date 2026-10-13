@@ -29,6 +29,8 @@ data class ListEntity(
     val guestShareId: Long? = null,
     /** Kept on this phone only: its changes are never queued, until it's uploaded to an account. */
     val isLocal: Boolean = false,
+    /** The area a new item goes to when no keyword places it (server app 1.12.0 and later); null for none. */
+    val defaultAreaId: Long? = null,
 )
 
 @Entity(

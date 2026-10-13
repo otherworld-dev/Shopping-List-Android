@@ -109,20 +109,33 @@ internal fun planReorder(rows: List<Row>): ReorderPlan {
     val orderedIds = mutableListOf<Long>()
     val areaMoves = mutableListOf<Pair<ItemModel, Long?>>()
     var currentAreaId: Long? = null
+    // Only a row under an area's header takes that header's area (none, for the header of the
+    // items with no area). Above the first header or down among the ticked items a drop says
+    // nothing about the area, so the item keeps its own.
+    var underHeader = false
     rows.forEach { row ->
         when (row) {
             is Row.AreaHeaderRow -> {
                 currentAreaId = row.area?.id
+                underHeader = true
                 // A folded area's items aren't on screen, but they keep their place — and
                 // their order — in the list the server stores.
                 orderedIds += row.hiddenIds
             }
             is Row.ItemRowData -> if (row.draggable) {
                 orderedIds += row.item.id
-                if (row.item.shopAreaId != currentAreaId) areaMoves += row.item to currentAreaId
+                if (underHeader && row.item.shopAreaId != currentAreaId) areaMoves += row.item to currentAreaId
             }
-            is Row.CheckedHeaderRow -> currentAreaId = null
+            is Row.CheckedHeaderRow -> underHeader = false
         }
     }
     return ReorderPlan(orderedIds, areaMoves)
 }
+
+/**
+ * Whether a drop left the list as [shown] has it: the same order and no item in another area.
+ * Nothing new is stored then, so the list never updates and the screen has to put the dragged
+ * row back itself.
+ */
+internal fun ReorderPlan.changesNothing(shown: List<Row>): Boolean =
+    areaMoves.isEmpty() && orderedIds == planReorder(shown).orderedIds

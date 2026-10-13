@@ -218,6 +218,9 @@
     <!-- Shop areas -->
     <string name="areas_title">Shop areas</string>
     <string name="menu_copy_from_list">Copy from another list</string>
+    <string name="default_area_title">Default area</string>
+    <string name="default_area_none">None</string>
+    <string name="default_area_hint">Items that match no keyword go here.</string>
     <string name="menu_load_keywords">Load keywords for my language</string>
     <string name="fab_new_area">New area</string>
     <string name="area_no_keywords">No keywords</string>

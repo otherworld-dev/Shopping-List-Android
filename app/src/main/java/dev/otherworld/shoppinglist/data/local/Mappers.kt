@@ -19,6 +19,7 @@ fun ListEntity.toModel() = ShoppingListModel(
     updatedAt = updatedAt,
     guestShareId = guestShareId,
     isLocal = isLocal,
+    defaultAreaId = defaultAreaId,
 )
 
 fun ItemEntity.toModel() = ItemModel(
@@ -61,6 +62,7 @@ fun ListDto.toEntity(sortOrder: Int) = ListEntity(
     updatedAt = updatedAt,
     isPinned = isPinned == true,
     position = position,
+    defaultAreaId = defaultShopAreaId,
 )
 
 fun ItemDto.toEntity() = ItemEntity(

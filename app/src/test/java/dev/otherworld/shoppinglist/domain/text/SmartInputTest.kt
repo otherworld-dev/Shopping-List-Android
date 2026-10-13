@@ -3,6 +3,7 @@ package dev.otherworld.shoppinglist.domain.text
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -533,5 +534,55 @@ class SmartInputTest {
     @Test
     fun `a name that starts with digits is still searched for`() {
         assertEquals("7up", smart.searchKey("7up"))
+    }
+
+    // ---- A list's default area (server app 1.12.0) ----
+
+    private val defaultAreas = listOf(area(1, "Produce", listOf("banana"), 0), area(2, "Other", emptyList(), 1))
+
+    @Test
+    fun `a name no keyword matches goes to the list's default area`() {
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 2L)
+        plan as SmartInput.AddPlan.Create
+        assertEquals(2L, plan.shopAreaId)
+        // Nobody chose it, so the server mustn't learn a keyword from it.
+        assertFalse(plan.areaExplicit)
+        // And it is only where the phone shows the item: the server applies its own default.
+        assertTrue(plan.areaIsDefault)
+    }
+
+    @Test
+    fun `an area from a keyword or a pick is not marked as the default`() {
+        val detected = smart.planAdd("bananas", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 1L)
+        val picked = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = 2L, defaultAreaId = 2L)
+        assertFalse((detected as SmartInput.AddPlan.Create).areaIsDefault)
+        assertFalse((picked as SmartInput.AddPlan.Create).areaIsDefault)
+    }
+
+    @Test
+    fun `a keyword match beats the default area`() {
+        val plan = smart.planAdd("bananas", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 2L)
+        assertEquals(1L, (plan as SmartInput.AddPlan.Create).shopAreaId)
+    }
+
+    @Test
+    fun `a picked area beats the default area`() {
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = 1L, defaultAreaId = 2L)
+        plan as SmartInput.AddPlan.Create
+        assertEquals(1L, plan.shopAreaId)
+        assertTrue(plan.areaExplicit)
+    }
+
+    @Test
+    fun `a list with no default area leaves the item uncategorised`() {
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = null)
+        assertNull((plan as SmartInput.AddPlan.Create).shopAreaId)
+    }
+
+    @Test
+    fun `a default that is no longer one of the list's areas is ignored`() {
+        // The area was deleted and this copy of the list hasn't caught up yet.
+        val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 99L)
+        assertNull((plan as SmartInput.AddPlan.Create).shopAreaId)
     }
 }

@@ -122,6 +122,71 @@ class ItemRowsTest {
     }
 
     @Test
+    fun `a drop under the no-area header takes the item out of its area`() {
+        val milk = item("milk", dairy.id)
+        val tape = item("tape")
+        val shown = rows(listOf(milk, tape))
+        // Drag milk down to the end, under the header of the items with no area.
+        val dropped = shown.toMutableList().apply { add(3, removeAt(1)) }
+        assertEquals(listOf("#Dairy", "#other", "tape", "milk"), labels(dropped))
+        assertEquals(listOf(milk to null), planReorder(dropped).areaMoves)
+    }
+
+    @Test
+    fun `a drop above the first header leaves the item's area alone`() {
+        val milk = item("milk", dairy.id)
+        val apples = item("apples", produce.id)
+        val shown = rows(listOf(milk, apples))
+        // Drag apples to the very top, above the Dairy header.
+        val dropped = shown.toMutableList().apply { add(0, removeAt(3)) }
+        val plan = planReorder(dropped)
+        assertEquals(listOf(apples.id, milk.id), plan.orderedIds)
+        assertEquals(emptyList<Pair<ItemModel, Long?>>(), plan.areaMoves)
+    }
+
+    @Test
+    fun `a drop among the ticked items leaves the item's area alone`() {
+        val milk = item("milk", dairy.id)
+        val butter = item("butter", dairy.id, checked = true)
+        val shown = rows(listOf(milk, butter))
+        // Drag milk down past the ticked items' header.
+        val dropped = shown.toMutableList().apply { add(2, removeAt(1)) }
+        assertEquals(listOf("#Dairy", "#checked", "milk", "butter"), labels(dropped))
+        assertEquals(emptyList<Pair<ItemModel, Long?>>(), planReorder(dropped).areaMoves)
+    }
+
+    @Test
+    fun `a drop that leaves the order and the areas as they were changes nothing`() {
+        val milk = item("milk", dairy.id)
+        val apples = item("apples", produce.id)
+        val butter = item("butter", dairy.id, checked = true)
+        val shown = rows(listOf(milk, apples, butter))
+        assertEquals(listOf("#Dairy", "milk", "#Produce", "apples", "#checked", "butter"), labels(shown))
+        // Drag milk, already first, above its own header.
+        val aboveFirstHeader = shown.toMutableList().apply { add(0, removeAt(1)) }
+        assertTrue(planReorder(aboveFirstHeader).changesNothing(shown))
+        // Drag apples, already last, down among the ticked items.
+        val amongTicked = shown.toMutableList().apply { add(4, removeAt(3)) }
+        assertEquals(listOf("#Dairy", "milk", "#Produce", "#checked", "apples", "butter"), labels(amongTicked))
+        assertTrue(planReorder(amongTicked).changesNothing(shown))
+    }
+
+    @Test
+    fun `a drop that changes the order or an area is a change`() {
+        val milk = item("milk", dairy.id)
+        val cheese = item("cheese", dairy.id)
+        val apples = item("apples", produce.id)
+        val shown = rows(listOf(milk, cheese, apples))
+        // Drag cheese above milk: a new order.
+        val reordered = shown.toMutableList().apply { add(1, removeAt(2)) }
+        assertFalse(planReorder(reordered).changesNothing(shown))
+        // Drag apples up to the end of Dairy: the same order, another area.
+        val moved = shown.toMutableList().apply { add(3, removeAt(4)) }
+        assertEquals(listOf("#Dairy", "milk", "cheese", "apples", "#Produce"), labels(moved))
+        assertFalse(planReorder(moved).changesNothing(shown))
+    }
+
+    @Test
     fun `a filter keeps only the items whose name contains it`() {
         val list = listOf(item("milk", dairy.id), item("oat milk"), item("apples", produce.id))
         assertEquals(listOf("#Dairy", "milk", "#other", "oat milk"), labels(rows(list, filter = "milk")))
