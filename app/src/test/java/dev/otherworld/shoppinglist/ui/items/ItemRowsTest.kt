@@ -199,6 +199,24 @@ class ItemRowsTest {
     }
 
     @Test
+    fun `a filter of several words finds them in any order`() {
+        val list = listOf(item("TP Toilet Paper", checked = true), item("paper plates"), item("apples", produce.id))
+        assertEquals(listOf("#checked", "TP Toilet Paper"), labels(rows(list, filter = "paper toilet")))
+    }
+
+    @Test
+    fun `a filter's words can be apart in the name`() {
+        val list = listOf(item("pickles small cornichons"), item("pickles"))
+        assertEquals(listOf("pickles small cornichons"), labels(rows(list, filter = "pickles  cornichons")))
+    }
+
+    @Test
+    fun `a filter needs every one of its words in the name`() {
+        val list = listOf(item("TP Toilet Paper"), item("toilet brush"))
+        assertEquals(listOf("toilet brush"), labels(rows(list, filter = "toilet brush")))
+    }
+
+    @Test
     fun `a filter finds ticked items so they can be unticked`() {
         val list = listOf(item("milk", dairy.id, checked = true), item("apples", produce.id))
         assertEquals(listOf("#checked", "milk"), labels(rows(list, filter = "milk")))

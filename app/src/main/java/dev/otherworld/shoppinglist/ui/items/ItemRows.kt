@@ -39,11 +39,14 @@ internal sealed interface Row {
     }
 }
 
+private val WHITESPACE = Regex("\\s+")
+
 /**
  * The list as display rows. A non-blank [filter] (a [dev.otherworld.shoppinglist.domain.text.SmartInput.searchKey])
- * keeps only the items whose folded name contains it, ticked ones too, so one can be found and
- * unticked. While filtering, folded areas show their matches and nothing can be dragged: the
- * rows aren't the whole list, so a drop couldn't say where an item belongs.
+ * keeps only the items whose folded name contains every word of it, in any order ("paper toilet"
+ * finds "TP Toilet Paper"), ticked ones too, so one can be found and unticked. While filtering,
+ * folded areas show their matches and nothing can be dragged: the rows aren't the whole list, so
+ * a drop couldn't say where an item belongs.
  */
 internal fun buildRows(
     items: List<ItemModel>,
@@ -55,7 +58,8 @@ internal fun buildRows(
     filter: String = "",
 ): List<Row> {
     val filtering = filter.isNotBlank()
-    val shown = if (filtering) items.filter { fold(it.name).contains(filter) } else items
+    val words = filter.split(WHITESPACE).filter { it.isNotEmpty() }
+    val shown = if (filtering) items.filter { item -> fold(item.name).let { name -> words.all(name::contains) } } else items
     val rows = mutableListOf<Row>()
     val orderedAreas = areas.sortedWith(compareBy({ it.sortOrder }, { it.id }))
     val unchecked = shown.filterNot { it.checked }.sortedBy { it.sortOrder }
