@@ -156,6 +156,37 @@ class ItemRowsTest {
     }
 
     @Test
+    fun `a drop that leaves the order and the areas as they were changes nothing`() {
+        val milk = item("milk", dairy.id)
+        val apples = item("apples", produce.id)
+        val butter = item("butter", dairy.id, checked = true)
+        val shown = rows(listOf(milk, apples, butter))
+        assertEquals(listOf("#Dairy", "milk", "#Produce", "apples", "#checked", "butter"), labels(shown))
+        // Drag milk, already first, above its own header.
+        val aboveFirstHeader = shown.toMutableList().apply { add(0, removeAt(1)) }
+        assertTrue(planReorder(aboveFirstHeader).changesNothing(shown))
+        // Drag apples, already last, down among the ticked items.
+        val amongTicked = shown.toMutableList().apply { add(4, removeAt(3)) }
+        assertEquals(listOf("#Dairy", "milk", "#Produce", "#checked", "apples", "butter"), labels(amongTicked))
+        assertTrue(planReorder(amongTicked).changesNothing(shown))
+    }
+
+    @Test
+    fun `a drop that changes the order or an area is a change`() {
+        val milk = item("milk", dairy.id)
+        val cheese = item("cheese", dairy.id)
+        val apples = item("apples", produce.id)
+        val shown = rows(listOf(milk, cheese, apples))
+        // Drag cheese above milk: a new order.
+        val reordered = shown.toMutableList().apply { add(1, removeAt(2)) }
+        assertFalse(planReorder(reordered).changesNothing(shown))
+        // Drag apples up to the end of Dairy: the same order, another area.
+        val moved = shown.toMutableList().apply { add(3, removeAt(4)) }
+        assertEquals(listOf("#Dairy", "milk", "cheese", "apples", "#Produce"), labels(moved))
+        assertFalse(planReorder(moved).changesNothing(shown))
+    }
+
+    @Test
     fun `a filter keeps only the items whose name contains it`() {
         val list = listOf(item("milk", dairy.id), item("oat milk"), item("apples", produce.id))
         assertEquals(listOf("#Dairy", "milk", "#other", "oat milk"), labels(rows(list, filter = "milk")))

@@ -131,3 +131,11 @@ internal fun planReorder(rows: List<Row>): ReorderPlan {
     }
     return ReorderPlan(orderedIds, areaMoves)
 }
+
+/**
+ * Whether a drop left the list as [shown] has it: the same order and no item in another area.
+ * Nothing new is stored then, so the list never updates and the screen has to put the dragged
+ * row back itself.
+ */
+internal fun ReorderPlan.changesNothing(shown: List<Row>): Boolean =
+    areaMoves.isEmpty() && orderedIds == planReorder(shown).orderedIds

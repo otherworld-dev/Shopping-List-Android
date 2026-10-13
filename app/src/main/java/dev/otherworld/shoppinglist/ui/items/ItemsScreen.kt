@@ -221,6 +221,10 @@ fun ItemsScreen(
         val plan = planReorder(rows)
         plan.areaMoves.forEach { (item, areaId) -> viewModel.moveToArea(item, areaId) }
         viewModel.reorder(plan.orderedIds)
+        // A drop that changes nothing (above the first header, say) never updates the list, so
+        // the row would stay where it was let go.
+        val shown = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter)
+        if (plan.changesNothing(shown)) rows = shown
     }
 
     Box(Modifier.fillMaxSize().systemBarsPadding(), contentAlignment = Alignment.TopCenter) {
