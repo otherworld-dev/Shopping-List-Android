@@ -43,6 +43,7 @@ import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.guest.PendingLinks
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
+import dev.otherworld.shoppinglist.data.prefs.StartList
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
@@ -105,16 +106,14 @@ class AppViewModel @Inject constructor(
     val hasGuests: StateFlow<Boolean?> =
         guests.observeHasShares().stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val pendingLink: StateFlow<String?> = pendingLinks.link
-    val openLastList: StateFlow<Boolean> = displayPrefs.openLastList
+    val startList: StateFlow<StartList> = displayPrefs.startList
     private val transitions = SignInTransitions()
 
     fun lastListId(): Long? = displayPrefs.lastListId
 
-    /** The list to reopen at start-up if it's still on the phone; one that's gone is forgotten. */
-    suspend fun lastList(): ShoppingListModel? {
-        val id = displayPrefs.lastListId ?: return null
-        return lists.getList(id) ?: null.also { displayPrefs.clearLastList() }
-    }
+    /** The list to open at start-up if it's still on the phone; one that's gone is forgotten. */
+    suspend fun startListModel(id: Long): ShoppingListModel? =
+        lists.getList(id) ?: null.also { displayPrefs.forgetList(id) }
 
     private val _uploadOffer = MutableStateFlow<UploadOffer?>(null)
     val uploadOffer: StateFlow<UploadOffer?> = _uploadOffer.asStateFlow()
@@ -154,7 +153,7 @@ class AppViewModel @Inject constructor(
                     // Only on a real logout: at start-up with no account the sort is local mode's own.
                     if (previous == true) {
                         listSettings.clear()
-                        displayPrefs.clearLastList()
+                        displayPrefs.forgetAccountLists()
                         forgetPhotos()
                     }
                     certAlerts.onLoggedOut()
@@ -208,7 +207,7 @@ fun AppRoot(
     val start = rememberSaveable { if (signedIn) Routes.HOME else Routes.LOGIN }
     val navController = rememberNavController()
     // Saved, so a rotation or restored process (whose back stack comes back by itself) skips it.
-    var lastListChecked by rememberSaveable { mutableStateOf(false) }
+    var startListChecked by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize()) {
         // Persistent banner when the user dismissed a changed-certificate prompt but sync is
@@ -362,18 +361,18 @@ fun AppRoot(
         navController.navigate("join?url=${Uri.encode(link)}")
     }
 
-    // Reopen the list used last, on top of the lists screen so Back goes there.
+    // Open the chosen list or the one used last, on top of the lists screen so Back goes there.
     LaunchedEffect(Unit) {
-        val restore = shouldRestoreLastList(
-            alreadyChecked = lastListChecked,
+        val id = listToOpenAtStart(
+            alreadyChecked = startListChecked,
             startRoute = start,
             hasPendingLink = pendingLink != null,
-            enabled = viewModel.openLastList.value,
+            startList = viewModel.startList.value,
             lastListId = viewModel.lastListId(),
         )
-        lastListChecked = true
-        if (!restore) return@LaunchedEffect
-        val list = viewModel.lastList() ?: return@LaunchedEffect
+        startListChecked = true
+        if (id == null) return@LaunchedEffect
+        val list = viewModel.startListModel(id) ?: return@LaunchedEffect
         navController.navigate("items/${list.id}?title=${Uri.encode(list.title)}&canWrite=${list.canWrite}")
     }
 }
