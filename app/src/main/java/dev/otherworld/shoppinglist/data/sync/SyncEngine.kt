@@ -11,6 +11,7 @@ import dev.otherworld.shoppinglist.data.local.GuestShareState
 import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.local.toEntity
 import dev.otherworld.shoppinglist.data.local.toModel
+import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.remote.dto.CheckRequest
 import dev.otherworld.shoppinglist.data.remote.dto.CreateItemRequest
@@ -67,6 +68,7 @@ class SyncEngine @Inject constructor(
     private val guestSender: GuestSender,
     private val shareMarks: GuestShareMarks,
     private val credentialStore: CredentialStore,
+    private val displayPrefs: DisplayPrefs,
 ) {
     private val itemDao = db.itemDao()
     private val listDao = db.listDao()
@@ -357,6 +359,7 @@ class SyncEngine @Inject constructor(
             mutationDao.remapListId(tempId, realId)
             remapListOrderIds(tempId, realId)
         }
+        displayPrefs.remapList(tempId, realId)
     }
 
     /** Rewrite any queued reorder payloads that reference the old (temp) item id. */

@@ -159,7 +159,11 @@
     <string name="settings_guest_name_hint">Shown to others beside what you add and tick on lists you opened from a link.</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_startup">Start-up</string>
-    <string name="settings_open_last_list">Open the last list on start</string>
+    <string name="start_all_lists">Show all lists</string>
+    <string name="start_last_list">Open the last list used</string>
+    <string name="start_chosen_list">Open a chosen list</string>
+    <string name="start_list_title">Open on start</string>
+    <string name="start_list_none">There are no lists yet.</string>
     <string name="settings_text_size">Text size</string>
     <string name="text_size_small">Small</string>
     <string name="text_size_default">Default</string>
