@@ -1,0 +1,1 @@
+A list's ⋮ menu has a new Display… option that brings the sort order, row size and item images together, item images having moved there from Settings. It can also hide the area headings, so the items keep their area order and show their area on each row but the list takes less room. Settings → Start-up can now open a chosen list every time instead of the last one used.
