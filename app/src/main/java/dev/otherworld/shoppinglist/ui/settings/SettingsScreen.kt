@@ -87,7 +87,6 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     val themeMode = displayPrefs.themeMode
     val listSort = listSettings.listSort
-    val showImages = displayPrefs.showImages
     val startList = displayPrefs.startList
     val textScale = displayPrefs.textScale
 
@@ -96,12 +95,6 @@ class SettingsViewModel @Inject constructor(
         lists.observeLists(), guests.observeShares(), credentialStore.accountFlow,
     ) { all, shares, account -> startListChoices(all, shares.map { it.id }.toSet(), account != null, Locale.getDefault()) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** Signed in to a server too old for photos (before 1.9.0), so none can be added there. */
-    val imagesUnsupported: StateFlow<Boolean> = combine(
-        listSettings.itemImagesSupported, credentialStore.accountFlow,
-    ) { supported, account -> account != null && !supported }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** A server that keeps list orders (1.10.0 or later), or no account and the phone's own lists. */
     val canSortLists: StateFlow<Boolean> = combine(
@@ -144,8 +137,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setThemeMode(mode: ThemeMode) = displayPrefs.setThemeMode(mode)
 
-    fun setShowImages(show: Boolean) = displayPrefs.setShowImages(show)
-
     fun setStartList(start: StartList) = displayPrefs.setStartList(start)
 
     fun setTextScale(scale: TextScale) = displayPrefs.setTextScale(scale)
@@ -161,8 +152,6 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val listSort by viewModel.listSort.collectAsStateWithLifecycle()
     val canSortLists by viewModel.canSortLists.collectAsStateWithLifecycle()
-    val showImages by viewModel.showImages.collectAsStateWithLifecycle()
-    val imagesUnsupported by viewModel.imagesUnsupported.collectAsStateWithLifecycle()
     val canShowOwnName by viewModel.canShowOwnName.collectAsStateWithLifecycle()
     val showOwnName by viewModel.showOwnName.collectAsStateWithLifecycle()
     val ownNameError by viewModel.ownNameError.collectAsStateWithLifecycle()
@@ -198,22 +187,6 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     Choice(stringResource(R.string.sort_recently_updated), listSort == ListSortMode.UPDATED) { viewModel.setListSort(ListSortMode.UPDATED) }
                     Choice(stringResource(R.string.sort_a_to_z), listSort == ListSortMode.ALPHA) { viewModel.setListSort(ListSortMode.ALPHA) }
                     Choice(stringResource(R.string.sort_custom), listSort == ListSortMode.CUSTOM) { viewModel.setListSort(ListSortMode.CUSTOM) }
-                }
-            }
-            Section(stringResource(R.string.settings_item_images)) {
-                Toggle(stringResource(R.string.settings_show_item_images), showImages, viewModel::setShowImages)
-                Text(
-                    stringResource(R.string.settings_item_images_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (imagesUnsupported) {
-                    Text(
-                        stringResource(R.string.settings_item_images_old_server),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
                 }
             }
             if (canShowOwnName || hasGuestLists) {

@@ -169,7 +169,6 @@
     <string name="text_size_default">Default</string>
     <string name="text_size_large">Large</string>
     <string name="text_size_larger">Larger</string>
-    <string name="settings_item_images">Item images</string>
     <string name="settings_show_item_images">Show item images</string>
     <string name="settings_item_images_hint">Add a photo to an item from its edit window. Photos are part of the list, so everyone with access can see them. This switch only changes what you see on this phone.</string>
     <string name="settings_item_images_old_server">Your server needs Shopping List 1.9.0 or later to add photos.</string>
@@ -189,8 +188,13 @@
     <string name="menu_reorder_areas">Reorder areas</string>
     <string name="menu_restore_checked">Restore checked</string>
     <string name="menu_clear_checked">Clear checked</string>
-    <string name="menu_rows_compact">Compact rows</string>
-    <string name="menu_rows_comfortable">Comfortable rows</string>
+    <string name="menu_display">Display…</string>
+    <string name="display_title">Display</string>
+    <string name="display_rows">Rows</string>
+    <string name="display_rows_comfortable">Comfortable</string>
+    <string name="display_rows_compact">Compact</string>
+    <string name="display_area_headings">Show area headings</string>
+    <string name="display_area_headings_hint">Folding an area and dragging an item to another area need the headings.</string>
     <string name="menu_copy_as_text">Copy list as text</string>
     <string name="list_copied">List copied to clipboard</string>
     <string name="menu_sort_items">Sort items</string>

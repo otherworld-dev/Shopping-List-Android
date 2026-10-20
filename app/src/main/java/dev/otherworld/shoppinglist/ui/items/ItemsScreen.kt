@@ -49,7 +49,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -95,9 +94,7 @@ import dev.otherworld.shoppinglist.domain.guest.bylineFor
 import dev.otherworld.shoppinglist.domain.model.ItemModel
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
-import dev.otherworld.shoppinglist.domain.sort.BoughtSort
 import dev.otherworld.shoppinglist.domain.sort.CollapsedAreas
-import dev.otherworld.shoppinglist.domain.sort.OpenSort
 import dev.otherworld.shoppinglist.domain.sort.groupOpenItems
 import dev.otherworld.shoppinglist.domain.sort.sortBought
 import android.content.ActivityNotFoundException
@@ -131,6 +128,7 @@ fun ItemsScreen(
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
     var showReorderAreas by rememberSaveable { mutableStateOf(false) }
+    var showDisplay by rememberSaveable { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
     // The add box doubles as a search: what's typed narrows the list until it's added or cleared.
     var addText by rememberSaveable { mutableStateOf("") }
@@ -204,11 +202,11 @@ fun ItemsScreen(
     val areaById = remember(state.areas) { state.areas.associateBy { it.id } }
     val locale = Locale.getDefault()
     var rows by remember {
-        mutableStateOf(buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter))
+        mutableStateOf(buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter, state.showAreaHeadings))
     }
     var dragging by remember { mutableStateOf(false) }
-    LaunchedEffect(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, filter) {
-        if (!dragging) rows = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter)
+    LaunchedEffect(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, filter, state.showAreaHeadings) {
+        if (!dragging) rows = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter, state.showAreaHeadings)
     }
 
     val lazyListState = rememberLazyListState()
@@ -218,12 +216,18 @@ fun ItemsScreen(
 
     fun commitReorder() {
         dragging = false
+        val shown = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter, state.showAreaHeadings)
+        // With the headings hidden there's no header to take an item into another area, so a
+        // drop among another area's items goes back where it was and nothing is saved (#24).
+        if (!state.showAreaHeadings && movesBetweenAreas(rows, shown)) {
+            rows = shown
+            return
+        }
         val plan = planReorder(rows)
         plan.areaMoves.forEach { (item, areaId) -> viewModel.moveToArea(item, areaId) }
         viewModel.reorder(plan.orderedIds)
         // A drop that changes nothing (above the first header, say) never updates the list, so
         // the row would stay where it was let go.
-        val shown = buildRows(state.items, state.areas, state.openSort, state.boughtSort, state.collapsedAreas, locale, filter)
         if (plan.changesNothing(shown)) rows = shown
     }
 
@@ -254,19 +258,6 @@ fun ItemsScreen(
                 }
                 DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_refresh)) }, onClick = { overflow = false; viewModel.refresh() })
-                    // Display-only, so available even in read-only lists. Labelled by what it
-                    // switches to, matching the app's other menu-verb entries.
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (state.density == Density.COMPACT) R.string.menu_rows_comfortable
-                                    else R.string.menu_rows_compact,
-                                ),
-                            )
-                        },
-                        onClick = { overflow = false; viewModel.toggleDensity() },
-                    )
                     // Read-only, so offered on shared read-only lists too. Writes the outstanding
                     // items in the same shape the add box parses, so a list round-trips through
                     // a chat message (mirrors the web app's "Copy list as text").
@@ -282,30 +273,9 @@ fun ItemsScreen(
                             }
                         },
                     )
-                    // Display-only, like density, so offered on read-only lists too. One
-                    // choice for all lists, remembered on this device (mirrors the web app).
-                    HorizontalDivider()
-                    MenuCaption(stringResource(R.string.menu_sort_items))
-                    SortRadioItem(stringResource(R.string.sort_by_area), state.openSort == OpenSort.AREA) {
-                        overflow = false; viewModel.setOpenSort(OpenSort.AREA)
-                    }
-                    SortRadioItem(stringResource(R.string.sort_by_area_a_to_z), state.openSort == OpenSort.AREA_ALPHA) {
-                        overflow = false; viewModel.setOpenSort(OpenSort.AREA_ALPHA)
-                    }
-                    SortRadioItem(stringResource(R.string.sort_a_to_z), state.openSort == OpenSort.ALPHA) {
-                        overflow = false; viewModel.setOpenSort(OpenSort.ALPHA)
-                    }
-                    HorizontalDivider()
-                    MenuCaption(stringResource(R.string.menu_sort_checked))
-                    SortRadioItem(stringResource(R.string.sort_by_area), state.boughtSort == BoughtSort.AREA) {
-                        overflow = false; viewModel.setBoughtSort(BoughtSort.AREA)
-                    }
-                    SortRadioItem(stringResource(R.string.sort_a_to_z), state.boughtSort == BoughtSort.ALPHA) {
-                        overflow = false; viewModel.setBoughtSort(BoughtSort.ALPHA)
-                    }
-                    SortRadioItem(stringResource(R.string.sort_most_recent), state.boughtSort == BoughtSort.RECENT) {
-                        overflow = false; viewModel.setBoughtSort(BoughtSort.RECENT)
-                    }
+                    // How lists look (rows, headings, images, sorts) lives in one sheet (#24).
+                    // Display-only, so offered on read-only and link lists too.
+                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_display)) }, onClick = { overflow = false; showDisplay = true })
                     if (state.canWrite) {
                         HorizontalDivider()
                         // Areas live on the server: not for a guest list or one kept on the phone.
@@ -463,6 +433,25 @@ fun ItemsScreen(
         )
     }
 
+    if (showDisplay) {
+        DisplaySheet(
+            choices = DisplayChoices(
+                density = state.density,
+                showAreaHeadings = state.showAreaHeadings,
+                showImages = photos.show,
+                imagesServerTooOld = photos.serverTooOld,
+                openSort = state.openSort,
+                boughtSort = state.boughtSort,
+            ),
+            onDensity = viewModel::setDensity,
+            onShowAreaHeadings = viewModel::setShowAreaHeadings,
+            onShowImages = viewModel::setShowImages,
+            onOpenSort = viewModel::setOpenSort,
+            onBoughtSort = viewModel::setBoughtSort,
+            onDismiss = { showDisplay = false },
+        )
+    }
+
     if (showReorderAreas) {
         ReorderAreasSheet(
             areas = state.areas,
@@ -586,25 +575,6 @@ private fun ReorderAreasSheet(
 @Composable
 private fun RowDivider() {
     Box(Modifier.fillMaxWidth().size(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)))
-}
-
-@Composable
-private fun MenuCaption(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-    )
-}
-
-@Composable
-private fun SortRadioItem(label: String, selected: Boolean, onSelect: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(label) },
-        leadingIcon = { RadioButton(selected = selected, onClick = null) },
-        onClick = onSelect,
-    )
 }
 
 /**
