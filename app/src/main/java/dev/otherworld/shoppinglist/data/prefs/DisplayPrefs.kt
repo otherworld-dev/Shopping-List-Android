@@ -86,6 +86,10 @@ class DisplayPrefs @Inject constructor(
     private val _showImages = MutableStateFlow(prefs.getBoolean(KEY_SHOW_IMAGES, false))
     val showImages: StateFlow<Boolean> = _showImages.asStateFlow()
 
+    // On until turned off: the headings are what fold an area and take an item dragged to another (#24).
+    private val _showAreaHeadings = MutableStateFlow(prefs.getBoolean(KEY_AREA_HEADINGS, true))
+    val showAreaHeadings: StateFlow<Boolean> = _showAreaHeadings.asStateFlow()
+
     // The last list until something else is chosen: most people go back to the same list.
     private val _startList = MutableStateFlow(
         StartList.fromStorage(
@@ -118,6 +122,13 @@ class DisplayPrefs @Inject constructor(
     fun setShowImages(show: Boolean) {
         _showImages.value = show
         prefs.edit().putBoolean(KEY_SHOW_IMAGES, show).apply()
+    }
+
+    fun setShowAreaHeadings(show: Boolean) {
+        _showAreaHeadings.value = show
+        prefs.edit().apply {
+            if (show) remove(KEY_AREA_HEADINGS) else putBoolean(KEY_AREA_HEADINGS, false)
+        }.apply()
     }
 
     @Synchronized
@@ -160,10 +171,9 @@ class DisplayPrefs @Inject constructor(
         if (_startList.value is StartList.Chosen) setStartList(StartList.AllLists)
     }
 
-    fun toggleDensity() {
-        val next = if (_density.value == Density.COMPACT) Density.COMFY else Density.COMPACT
-        _density.value = next
-        prefs.edit().putBoolean(KEY_COMPACT, next == Density.COMPACT).apply()
+    fun setDensity(density: Density) {
+        _density.value = density
+        prefs.edit().putBoolean(KEY_COMPACT, density == Density.COMPACT).apply()
     }
 
     fun setOpenSort(sort: OpenSort) {
@@ -225,6 +235,7 @@ class DisplayPrefs @Inject constructor(
         private const val KEY_OPEN_LAST_LIST = "open_last_list"
         private const val KEY_LAST_LIST = "last_list_id"
         private const val KEY_START_LIST = "start_list_id"
+        private const val KEY_AREA_HEADINGS = "area_headings"
         private const val KEY_TEXT_SCALE = "text_scale"
     }
 }

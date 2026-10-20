@@ -33,7 +33,8 @@ class ItemRowsTest {
         openSort: OpenSort = OpenSort.AREA,
         collapsed: Set<String> = emptySet(),
         filter: String = "",
-    ) = buildRows(items, areas, openSort, BoughtSort.AREA, collapsed, Locale.ENGLISH, filter)
+        headings: Boolean = true,
+    ) = buildRows(items, areas, openSort, BoughtSort.AREA, collapsed, Locale.ENGLISH, filter, headings)
 
     /** Rows as short labels: "#Dairy", "milk", "#checked". */
     private fun labels(rows: List<Row>) = rows.map {
@@ -245,5 +246,68 @@ class ItemRowsTest {
     fun `a blank filter changes nothing`() {
         val list = listOf(item("milk", dairy.id), item("apples", produce.id, checked = true))
         assertEquals(rows(list), rows(list, filter = "  "))
+    }
+
+    @Test
+    fun `hidden headings keep the area order with each item's area on its row`() {
+        val list = listOf(item("apples", produce.id), item("milk", dairy.id), item("tape"))
+        val result = rows(list, headings = false)
+        assertEquals(listOf("milk", "apples", "tape"), labels(result))
+        assertTrue(result.filterIsInstance<Row.ItemRowData>().all { it.showAreaName })
+    }
+
+    @Test
+    fun `hidden headings still head the ticked items`() {
+        val list = listOf(item("milk", dairy.id), item("bread", checked = true))
+        assertEquals(listOf("milk", "#checked", "bread"), labels(rows(list, headings = false)))
+    }
+
+    @Test
+    fun `hidden headings show the items of a folded area`() {
+        val list = listOf(item("apples", produce.id), item("milk", dairy.id))
+        assertEquals(listOf("milk", "apples"), labels(rows(list, collapsed = setOf("2"), headings = false)))
+    }
+
+    @Test
+    fun `with hidden headings a drop among another area's items keeps the item's area`() {
+        val apples = item("apples", produce.id)
+        val milk = item("milk", dairy.id)
+        val eggs = item("eggs", dairy.id)
+        val shown = rows(listOf(apples, milk, eggs), headings = false)
+        assertEquals(listOf("milk", "eggs", "apples"), labels(shown))
+        // apples dragged up between milk and eggs
+        val plan = planReorder(listOf(shown[0], shown[2], shown[1]))
+        assertEquals(listOf(milk.id, apples.id, eggs.id), plan.orderedIds)
+        assertTrue(plan.areaMoves.isEmpty())
+    }
+
+    @Test
+    fun `with hidden headings the stripes run on from one area to the next`() {
+        val list = listOf(item("milk", dairy.id), item("eggs", dairy.id), item("butter", dairy.id), item("apples", produce.id))
+        val stripes = rows(list, headings = false).filterIsInstance<Row.ItemRowData>().map { it.alt }
+        assertEquals(listOf(false, true, false, true), stripes)
+    }
+
+    @Test
+    fun `with hidden headings a drop among another area's items moves between areas`() {
+        val shown = rows(listOf(item("apples", produce.id), item("milk", dairy.id), item("eggs", dairy.id)), headings = false)
+        assertEquals(listOf("milk", "eggs", "apples"), labels(shown))
+        // apples dropped between milk and eggs
+        assertTrue(movesBetweenAreas(listOf(shown[0], shown[2], shown[1]), shown))
+    }
+
+    @Test
+    fun `with hidden headings a drop within its own area doesn't`() {
+        val shown = rows(listOf(item("milk", dairy.id), item("eggs", dairy.id), item("apples", produce.id)), headings = false)
+        // eggs dropped above milk
+        assertFalse(movesBetweenAreas(listOf(shown[1], shown[0], shown[2]), shown))
+    }
+
+    @Test
+    fun `an area's only item dropped beside another area moves between areas`() {
+        val shown = rows(listOf(item("milk", dairy.id), item("eggs", dairy.id), item("apples", produce.id), item("tape")), headings = false)
+        assertEquals(listOf("milk", "eggs", "apples", "tape"), labels(shown))
+        // apples dropped above milk: its area stays in one piece, but out of the areas' order
+        assertTrue(movesBetweenAreas(listOf(shown[2], shown[0], shown[1], shown[3]), shown))
     }
 }

@@ -55,6 +55,8 @@ data class PhotoUiState(
     val urls: Map<Long, ItemPhotoUrls> = emptyMap(),
     /** Items whose photo is being added or removed right now. */
     val busy: Set<Long> = emptySet(),
+    /** The user's own server is too old for photos (before 1.9.0), so none can be added on this list. */
+    val serverTooOld: Boolean = false,
 )
 
 data class ItemsUiState(
@@ -73,6 +75,8 @@ data class ItemsUiState(
     val boughtSort: BoughtSort = BoughtSort.AREA,
     /** Folded area groups on this list, as [dev.otherworld.shoppinglist.domain.sort.CollapsedAreas] keys. */
     val collapsedAreas: Set<String> = emptySet(),
+    /** Off to list the open items in area order with no heading rows between them (#24). */
+    val showAreaHeadings: Boolean = true,
     val isGuest: Boolean = false,
     /** Kept on this phone only, so no areas, sharing or moves. */
     val isLocal: Boolean = false,
@@ -126,6 +130,7 @@ class ItemsViewModel @Inject constructor(
         guests.observeShareForList(listId),
         listSettings.showOwnName,
         listSettings.ownUserId,
+        displayPrefs.showAreaHeadings,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val share = values[10] as GuestShareEntity?
@@ -151,6 +156,7 @@ class ItemsViewModel @Inject constructor(
             openSort = values[7] as OpenSort,
             boughtSort = values[8] as BoughtSort,
             collapsedAreas = values[9] as Set<String>,
+            showAreaHeadings = values[13] as Boolean,
             isGuest = isGuest,
             isLocal = isLocal,
             guestState = share?.state,
@@ -168,6 +174,7 @@ class ItemsViewModel @Inject constructor(
             canWrite = canWrite,
             loading = true,
             density = displayPrefs.density.value,
+            showAreaHeadings = displayPrefs.showAreaHeadings.value,
             isGuest = isGuest,
         ),
     )
@@ -191,6 +198,7 @@ class ItemsViewModel @Inject constructor(
             canEdit = show && supported && st.canWrite && !st.isGuest && !st.isLocal,
             urls = if (show) urls else emptyMap(),
             busy = busy,
+            serverTooOld = !supported && !st.isGuest && !st.isLocal,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PhotoUiState())
 
@@ -443,8 +451,14 @@ class ItemsViewModel @Inject constructor(
         viewModelScope.launch { repository.uncheckAll(listId) }
     }
 
-    /** Flips the item list between comfy and compact row spacing (persists locally). */
-    fun toggleDensity() = displayPrefs.toggleDensity()
+    /** Comfy or compact row spacing (persists locally, one choice for all lists). */
+    fun setDensity(density: Density) = displayPrefs.setDensity(density)
+
+    /** Heads each area's items, or lists them in area order without (persists locally, one choice for all lists). */
+    fun setShowAreaHeadings(show: Boolean) = displayPrefs.setShowAreaHeadings(show)
+
+    /** Shows photos on items (persists locally, one choice for all lists). */
+    fun setShowImages(show: Boolean) = displayPrefs.setShowImages(show)
 
     /** Orders the open items (persists locally, one choice for all lists — like the web app). */
     fun setOpenSort(sort: OpenSort) = displayPrefs.setOpenSort(sort)
