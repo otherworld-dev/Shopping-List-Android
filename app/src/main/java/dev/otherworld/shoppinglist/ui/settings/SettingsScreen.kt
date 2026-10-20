@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +25,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -48,12 +50,15 @@ import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.guest.GuestNameStore
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.prefs.DisplayPrefs
+import dev.otherworld.shoppinglist.data.prefs.StartList
 import dev.otherworld.shoppinglist.data.auth.CredentialStore
 import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.prefs.TextScale
 import dev.otherworld.shoppinglist.data.prefs.ThemeMode
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
+import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
+import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.ListSortMode
 import dev.otherworld.shoppinglist.ui.common.UiText
 import dev.otherworld.shoppinglist.ui.common.asString
@@ -66,6 +71,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -77,18 +83,18 @@ class SettingsViewModel @Inject constructor(
     localMode: LocalMode,
     private val guestNameStore: GuestNameStore,
     guests: GuestRepository,
+    lists: ListRepository,
 ) : ViewModel() {
     val themeMode = displayPrefs.themeMode
     val listSort = listSettings.listSort
-    val showImages = displayPrefs.showImages
-    val openLastList = displayPrefs.openLastList
+    val startList = displayPrefs.startList
     val textScale = displayPrefs.textScale
 
-    /** Signed in to a server too old for photos (before 1.9.0), so none can be added there. */
-    val imagesUnsupported: StateFlow<Boolean> = combine(
-        listSettings.itemImagesSupported, credentialStore.accountFlow,
-    ) { supported, account -> account != null && !supported }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    /** The lists that can be picked to open on start. */
+    val startChoices: StateFlow<List<ShoppingListModel>> = combine(
+        lists.observeLists(), guests.observeShares(), credentialStore.accountFlow,
+    ) { all, shares, account -> startListChoices(all, shares.map { it.id }.toSet(), account != null, Locale.getDefault()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** A server that keeps list orders (1.10.0 or later), or no account and the phone's own lists. */
     val canSortLists: StateFlow<Boolean> = combine(
@@ -131,9 +137,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setThemeMode(mode: ThemeMode) = displayPrefs.setThemeMode(mode)
 
-    fun setShowImages(show: Boolean) = displayPrefs.setShowImages(show)
-
-    fun setOpenLastList(open: Boolean) = displayPrefs.setOpenLastList(open)
+    fun setStartList(start: StartList) = displayPrefs.setStartList(start)
 
     fun setTextScale(scale: TextScale) = displayPrefs.setTextScale(scale)
 
@@ -148,14 +152,14 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val listSort by viewModel.listSort.collectAsStateWithLifecycle()
     val canSortLists by viewModel.canSortLists.collectAsStateWithLifecycle()
-    val showImages by viewModel.showImages.collectAsStateWithLifecycle()
-    val imagesUnsupported by viewModel.imagesUnsupported.collectAsStateWithLifecycle()
     val canShowOwnName by viewModel.canShowOwnName.collectAsStateWithLifecycle()
     val showOwnName by viewModel.showOwnName.collectAsStateWithLifecycle()
     val ownNameError by viewModel.ownNameError.collectAsStateWithLifecycle()
     val hasGuestLists by viewModel.hasGuestLists.collectAsStateWithLifecycle()
-    val openLastList by viewModel.openLastList.collectAsStateWithLifecycle()
+    val startList by viewModel.startList.collectAsStateWithLifecycle()
+    val startChoices by viewModel.startChoices.collectAsStateWithLifecycle()
     val textScale by viewModel.textScale.collectAsStateWithLifecycle()
+    var pickingStartList by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -185,22 +189,6 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     Choice(stringResource(R.string.sort_custom), listSort == ListSortMode.CUSTOM) { viewModel.setListSort(ListSortMode.CUSTOM) }
                 }
             }
-            Section(stringResource(R.string.settings_item_images)) {
-                Toggle(stringResource(R.string.settings_show_item_images), showImages, viewModel::setShowImages)
-                Text(
-                    stringResource(R.string.settings_item_images_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (imagesUnsupported) {
-                    Text(
-                        stringResource(R.string.settings_item_images_old_server),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-            }
             if (canShowOwnName || hasGuestLists) {
                 Section(stringResource(R.string.settings_names)) {
                     if (canShowOwnName) {
@@ -226,10 +214,56 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 Choice(stringResource(R.string.text_size_larger), textScale == TextScale.LARGER) { viewModel.setTextScale(TextScale.LARGER) }
             }
             Section(stringResource(R.string.settings_startup)) {
-                Toggle(stringResource(R.string.settings_open_last_list), openLastList, viewModel::setOpenLastList)
+                val chosenId = (startList as? StartList.Chosen)?.listId
+                Choice(stringResource(R.string.start_all_lists), startList == StartList.AllLists) { viewModel.setStartList(StartList.AllLists) }
+                Choice(stringResource(R.string.start_last_list), startList == StartList.LastUsed) { viewModel.setStartList(StartList.LastUsed) }
+                Choice(
+                    stringResource(R.string.start_chosen_list),
+                    selected = chosenId != null,
+                    detail = startChoices.firstOrNull { it.id == chosenId }?.title,
+                ) { pickingStartList = true }
             }
         }
     }
+
+    if (pickingStartList) {
+        StartListDialog(
+            lists = startChoices,
+            selectedId = (startList as? StartList.Chosen)?.listId,
+            onSelect = {
+                viewModel.setStartList(StartList.Chosen(it))
+                pickingStartList = false
+            },
+            onDismiss = { pickingStartList = false },
+        )
+    }
+}
+
+/** Each list that can open on start; choosing one saves it and closes. */
+@Composable
+private fun StartListDialog(
+    lists: List<ShoppingListModel>,
+    selectedId: Long?,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.start_list_title)) },
+        text = {
+            if (lists.isEmpty()) {
+                Text(stringResource(R.string.start_list_none), style = MaterialTheme.typography.bodyLarge)
+            } else {
+                Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+                    lists.forEach { list ->
+                        Choice(list.title, selectedId == list.id) { onSelect(list.id) }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
 }
 
 /** Kept as typed while editing; the store keeps it tidied (trimmed, at most 40 characters). */
@@ -282,7 +316,7 @@ private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit)
 }
 
 @Composable
-private fun Choice(label: String, selected: Boolean, onSelect: () -> Unit) {
+private fun Choice(label: String, selected: Boolean, detail: String? = null, onSelect: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -292,6 +326,11 @@ private fun Choice(label: String, selected: Boolean, onSelect: () -> Unit) {
     ) {
         RadioButton(selected = selected, onClick = null)
         Spacer(Modifier.width(12.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Column {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            if (detail != null) {
+                Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }

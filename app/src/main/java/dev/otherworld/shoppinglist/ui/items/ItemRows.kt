@@ -56,6 +56,7 @@ internal fun buildRows(
     collapsedKeys: Set<String>,
     locale: Locale,
     filter: String = "",
+    showHeadings: Boolean = true,
 ): List<Row> {
     val filtering = filter.isNotBlank()
     val words = filter.split(WHITESPACE).filter { it.isNotEmpty() }
@@ -67,10 +68,15 @@ internal fun buildRows(
     // Dragging sets the order and area by hand, which only means something when the list
     // shows that order. In the A-to-Z modes the sort decides where an item goes.
     val draggable = openSort == OpenSort.AREA && !filtering
+    // Stripes start again under each header; with no headers they run on, or two rows of the
+    // same shade would meet where one area ends and the next begins.
+    var stripe = 0
     groups.forEach { group ->
         // A lone uncategorized group gets no header: nothing to name and nothing to fold —
-        // the flat A-to-Z sort, and lists whose open items all have no area.
-        val hasHeader = group.area != null || groups.size > 1
+        // the flat A-to-Z sort, and lists whose open items all have no area. With the headings
+        // turned off (#24) the groups keep their order but nothing heads them, so a folded area
+        // shows its items, as there is no header left to unfold it from.
+        val hasHeader = showHeadings && (group.area != null || groups.size > 1)
         val collapsed = !filtering && hasHeader && CollapsedAreas.areaKey(group.area?.id) in collapsedKeys
         if (hasHeader) {
             rows += Row.AreaHeaderRow(
@@ -80,11 +86,13 @@ internal fun buildRows(
                 hiddenIds = if (collapsed) group.items.map { it.id } else emptyList(),
             )
         }
+        if (hasHeader) stripe = 0
         if (!collapsed) {
-            group.items.forEachIndexed { i, item ->
-                // Grouped rows sit under their area's header; only the flat A-to-Z list
-                // needs the area's name on each row.
-                rows += Row.ItemRowData(item, draggable = draggable, alt = i % 2 == 1, showAreaName = openSort == OpenSort.ALPHA)
+            group.items.forEach { item ->
+                // Grouped rows sit under their area's header; only the flat A-to-Z list, or
+                // one with the headings off, needs the area's name on each row.
+                val showAreaName = openSort == OpenSort.ALPHA || !showHeadings
+                rows += Row.ItemRowData(item, draggable = draggable, alt = stripe++ % 2 == 1, showAreaName = showAreaName)
             }
         }
     }
@@ -143,3 +151,23 @@ internal fun planReorder(rows: List<Row>): ReorderPlan {
  */
 internal fun ReorderPlan.changesNothing(shown: List<Row>): Boolean =
     areaMoves.isEmpty() && orderedIds == planReorder(shown).orderedIds
+
+/**
+ * Whether a drop took an item out among another area's items. With the headings hidden (#24)
+ * nothing can say which area such an item belongs to now, so the screen puts it back rather
+ * than saving an order that would only send it to one end of its own area. Within its own area
+ * the areas still run in the same order, each in one piece; any other drop changes that.
+ */
+internal fun movesBetweenAreas(dropped: List<Row>, shown: List<Row>): Boolean = areaRuns(dropped) != areaRuns(shown)
+
+/** The areas of the draggable items from top to bottom, with each run of one area counted once. */
+private fun areaRuns(rows: List<Row>): List<Long?> {
+    val runs = mutableListOf<Long?>()
+    rows.forEach { row ->
+        if (row is Row.ItemRowData && row.draggable) {
+            val areaId = row.item.shopAreaId
+            if (runs.isEmpty() || runs.last() != areaId) runs += areaId
+        }
+    }
+    return runs
+}

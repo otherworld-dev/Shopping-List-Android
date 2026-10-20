@@ -86,9 +86,18 @@ class DisplayPrefs @Inject constructor(
     private val _showImages = MutableStateFlow(prefs.getBoolean(KEY_SHOW_IMAGES, false))
     val showImages: StateFlow<Boolean> = _showImages.asStateFlow()
 
-    // On until turned off: most people go back to the same list.
-    private val _openLastList = MutableStateFlow(prefs.getBoolean(KEY_OPEN_LAST_LIST, true))
-    val openLastList: StateFlow<Boolean> = _openLastList.asStateFlow()
+    // On until turned off: the headings are what fold an area and take an item dragged to another (#24).
+    private val _showAreaHeadings = MutableStateFlow(prefs.getBoolean(KEY_AREA_HEADINGS, true))
+    val showAreaHeadings: StateFlow<Boolean> = _showAreaHeadings.asStateFlow()
+
+    // The last list until something else is chosen: most people go back to the same list.
+    private val _startList = MutableStateFlow(
+        StartList.fromStorage(
+            openLastList = prefs.getBoolean(KEY_OPEN_LAST_LIST, true),
+            chosenListId = if (prefs.contains(KEY_START_LIST)) prefs.getLong(KEY_START_LIST, 0L) else null,
+        ),
+    )
+    val startList: StateFlow<StartList> = _startList.asStateFlow()
 
     /** The list opened last on this phone (any kind: own, shared, link or phone-only), or null. */
     val lastListId: Long?
@@ -115,10 +124,23 @@ class DisplayPrefs @Inject constructor(
         prefs.edit().putBoolean(KEY_SHOW_IMAGES, show).apply()
     }
 
-    fun setOpenLastList(open: Boolean) {
-        _openLastList.value = open
+    fun setShowAreaHeadings(show: Boolean) {
+        _showAreaHeadings.value = show
         prefs.edit().apply {
-            if (open) remove(KEY_OPEN_LAST_LIST) else putBoolean(KEY_OPEN_LAST_LIST, false)
+            if (show) remove(KEY_AREA_HEADINGS) else putBoolean(KEY_AREA_HEADINGS, false)
+        }.apply()
+    }
+
+    @Synchronized
+    fun setStartList(start: StartList) {
+        _startList.value = start
+        // The last list, the default, removes both entries.
+        prefs.edit().apply {
+            when (start) {
+                StartList.LastUsed -> remove(KEY_OPEN_LAST_LIST).remove(KEY_START_LIST)
+                StartList.AllLists -> putBoolean(KEY_OPEN_LAST_LIST, false).remove(KEY_START_LIST)
+                is StartList.Chosen -> remove(KEY_OPEN_LAST_LIST).putLong(KEY_START_LIST, start.listId)
+            }
         }.apply()
     }
 
@@ -126,14 +148,32 @@ class DisplayPrefs @Inject constructor(
         prefs.edit().putLong(KEY_LAST_LIST, id).apply()
     }
 
-    fun clearLastList() {
-        prefs.edit().remove(KEY_LAST_LIST).apply()
+    /** Follows a list made offline or on the phone to its server id, so it's still the one opened. */
+    @Synchronized
+    fun remapList(oldId: Long, newId: Long) {
+        if (lastListId == oldId) setLastListId(newId)
+        val next = _startList.value.remapped(oldId, newId)
+        if (next != _startList.value) setStartList(next)
     }
 
-    fun toggleDensity() {
-        val next = if (_density.value == Density.COMPACT) Density.COMFY else Density.COMPACT
-        _density.value = next
-        prefs.edit().putBoolean(KEY_COMPACT, next == Density.COMPACT).apply()
+    /** Forgets [listId] once it's gone from the phone. */
+    @Synchronized
+    fun forgetList(listId: Long) {
+        if (lastListId == listId) prefs.edit().remove(KEY_LAST_LIST).apply()
+        val next = _startList.value.forgetting(listId)
+        if (next != _startList.value) setStartList(next)
+    }
+
+    /** On logout: the lists opened or chosen here may have been that account's. */
+    @Synchronized
+    fun forgetAccountLists() {
+        prefs.edit().remove(KEY_LAST_LIST).apply()
+        if (_startList.value is StartList.Chosen) setStartList(StartList.AllLists)
+    }
+
+    fun setDensity(density: Density) {
+        _density.value = density
+        prefs.edit().putBoolean(KEY_COMPACT, density == Density.COMPACT).apply()
     }
 
     fun setOpenSort(sort: OpenSort) {
@@ -194,6 +234,8 @@ class DisplayPrefs @Inject constructor(
         private const val KEY_SHOW_IMAGES = "show_images"
         private const val KEY_OPEN_LAST_LIST = "open_last_list"
         private const val KEY_LAST_LIST = "last_list_id"
+        private const val KEY_START_LIST = "start_list_id"
+        private const val KEY_AREA_HEADINGS = "area_headings"
         private const val KEY_TEXT_SCALE = "text_scale"
     }
 }
