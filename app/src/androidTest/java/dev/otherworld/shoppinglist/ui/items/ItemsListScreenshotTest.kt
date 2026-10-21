@@ -185,11 +185,11 @@ class ItemsListScreenshotTest {
         val rows: List<Row> = buildList {
             add(Row.AreaHeaderRow(dairy, dairyItems.size))
             dairyItems.forEachIndexed { i, n ->
-                add(Row.ItemRowData(item(i + 1L, n, dairy), draggable = true, alt = i % 2 == 1))
+                add(Row.ItemRowData(item(i + 1L, n, dairy), draggable = true, alt = i % 2 == 1, showAreaName = false))
             }
             add(Row.AreaHeaderRow(produce, 2))
             listOf("Tomatoes", "Spinach").forEachIndexed { i, n ->
-                add(Row.ItemRowData(item(i + 20L, n, produce), draggable = true, alt = i % 2 == 1))
+                add(Row.ItemRowData(item(i + 20L, n, produce), draggable = true, alt = i % 2 == 1, showAreaName = false))
             }
         }
         composeRule.setContent {
@@ -219,7 +219,7 @@ class ItemsListScreenshotTest {
                                 }
                             }
                         }
-                        PinnedSectionHeader(rows, listState)
+                        PinnedSectionHeader(rows, listState, onToggleArea = {}, onToggleChecked = {})
                     }
                 }
             }
