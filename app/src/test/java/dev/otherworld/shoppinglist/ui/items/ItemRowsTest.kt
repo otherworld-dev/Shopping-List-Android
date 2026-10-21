@@ -310,4 +310,34 @@ class ItemRowsTest {
         // apples dropped above milk: its area stays in one piece, but out of the areas' order
         assertTrue(movesBetweenAreas(listOf(shown[2], shown[0], shown[1], shown[3]), shown))
     }
+
+    @Test
+    fun `the checked section folds under the checked key`() {
+        val list = listOf(item("milk", dairy.id), item("butter", dairy.id, checked = true), item("eggs", dairy.id, checked = true))
+        val result = rows(list, collapsed = setOf("checked"))
+        assertEquals(listOf("#Dairy", "milk", "#checked"), labels(result))
+        val header = result.last() as Row.CheckedHeaderRow
+        assertTrue(header.collapsed)
+        assertEquals(2, header.count)
+    }
+
+    @Test
+    fun `folding the checked section leaves the areas open`() {
+        val list = listOf(item("milk", dairy.id), item("butter", dairy.id, checked = true))
+        assertEquals(listOf("#Dairy", "milk", "#checked"), labels(rows(list, collapsed = setOf("checked"))))
+    }
+
+    @Test
+    fun `a filter shows the matches inside a folded checked section`() {
+        val list = listOf(item("milk", dairy.id, checked = true), item("apples", produce.id))
+        val result = rows(list, collapsed = setOf("checked"), filter = "milk")
+        assertEquals(listOf("#checked", "milk"), labels(result))
+        assertFalse((result.first() as Row.CheckedHeaderRow).collapsed)
+    }
+
+    @Test
+    fun `hidden headings still fold the checked section`() {
+        val list = listOf(item("milk", dairy.id), item("butter", dairy.id, checked = true))
+        assertEquals(listOf("milk", "#checked"), labels(rows(list, collapsed = setOf("checked"), headings = false)))
+    }
 }
