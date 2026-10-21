@@ -34,7 +34,7 @@ internal sealed interface Row {
         override val key get() = if (item.checked) "c-${item.id}" else "i-${item.id}"
     }
 
-    data class CheckedHeaderRow(val count: Int) : Row {
+    data class CheckedHeaderRow(val count: Int, val collapsed: Boolean = false) : Row {
         override val key get() = "checked-header"
     }
 }
@@ -98,10 +98,15 @@ internal fun buildRows(
     }
     val checked = sortBought(shown.filter { it.checked }, boughtSort, orderedAreas, locale)
     if (checked.isNotEmpty()) {
-        rows += Row.CheckedHeaderRow(checked.size)
+        // Folded away (#27) like an area, and like an area it shows its matches while filtering,
+        // so a ticked item can still be found and unticked.
+        val collapsed = !filtering && CollapsedAreas.CHECKED_KEY in collapsedKeys
+        rows += Row.CheckedHeaderRow(checked.size, collapsed)
         // Checked items are listed together across areas, so the area name still carries
         // meaning on each row.
-        checked.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = false, alt = i % 2 == 1, showAreaName = true) }
+        if (!collapsed) {
+            checked.forEachIndexed { i, item -> rows += Row.ItemRowData(item, draggable = false, alt = i % 2 == 1, showAreaName = true) }
+        }
     }
     return rows
 }

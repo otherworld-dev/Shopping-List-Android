@@ -205,6 +205,8 @@
     <string name="sort_most_recent">Most recent first</string>
     <string name="a11y_collapse_area">Fold this area away</string>
     <string name="a11y_expand_area">Show this area\'s items</string>
+    <string name="a11y_collapse_checked">Fold the checked items away</string>
+    <string name="a11y_expand_checked">Show the checked items</string>
     <string name="reorder_areas_title">Reorder areas</string>
     <string name="reorder_areas_hint">Drag to match the order of the store you\'re visiting.</string>
     <string name="cd_drag_reorder">Drag to reorder</string>

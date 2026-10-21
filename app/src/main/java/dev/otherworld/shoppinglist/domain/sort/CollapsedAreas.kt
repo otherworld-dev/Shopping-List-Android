@@ -14,9 +14,17 @@ object CollapsedAreas {
     /** A stable key for an area group. Items with no area form their own group. */
     fun areaKey(areaId: Long?): String = areaId?.toString() ?: "none"
 
+    /**
+     * The key for the checked-off section (#27), kept in the same per-list set. The web app's
+     * "Checked off" section folds too, though only for the page view; here it is remembered
+     * like the areas. No area key can clash with it: those are ids or "none".
+     */
+    const val CHECKED_KEY = "checked"
+
     /** The set with [areaId]'s group folded if it was open, unfolded if it was folded. */
-    fun toggled(current: Set<String>, areaId: Long?): Set<String> {
-        val key = areaKey(areaId)
-        return if (key in current) current - key else current + key
-    }
+    fun toggled(current: Set<String>, areaId: Long?): Set<String> = toggled(current, areaKey(areaId))
+
+    /** The set with [key] folded if it was open, unfolded if it was folded. */
+    fun toggled(current: Set<String>, key: String): Set<String> =
+        if (key in current) current - key else current + key
 }

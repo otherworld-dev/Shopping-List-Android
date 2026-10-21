@@ -194,9 +194,9 @@ class DisplayPrefs @Inject constructor(
     /** The area groups the viewer has folded away on [listId], as [CollapsedAreas] keys. */
     fun collapsedAreas(listId: Long): StateFlow<Set<String>> = collapsedFlow(listId).asStateFlow()
 
-    fun toggleCollapsed(listId: Long, areaId: Long?) {
+    fun toggleCollapsed(listId: Long, key: String) {
         val flow = collapsedFlow(listId)
-        val next = CollapsedAreas.toggled(flow.value, areaId)
+        val next = CollapsedAreas.toggled(flow.value, key)
         flow.value = next
         prefs.edit().apply {
             // An empty set removes the entry, so lists that are fully open leave nothing behind.
