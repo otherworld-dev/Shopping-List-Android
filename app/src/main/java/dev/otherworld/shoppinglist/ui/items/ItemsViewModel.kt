@@ -29,6 +29,7 @@ import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.domain.model.ShopAreaModel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.BoughtSort
+import dev.otherworld.shoppinglist.domain.sort.CollapsedAreas
 import dev.otherworld.shoppinglist.domain.sort.OpenSort
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import dev.otherworld.shoppinglist.ui.common.UiText
@@ -467,7 +468,10 @@ class ItemsViewModel @Inject constructor(
     fun setBoughtSort(sort: BoughtSort) = displayPrefs.setBoughtSort(sort)
 
     /** Folds or unfolds an area group on this list (persists locally, per list). */
-    fun toggleCollapsed(areaId: Long?) = displayPrefs.toggleCollapsed(listId, areaId)
+    fun toggleCollapsed(areaId: Long?) = displayPrefs.toggleCollapsed(listId, CollapsedAreas.areaKey(areaId))
+
+    /** Folds or unfolds the checked-off section on this list (persists locally, per list). */
+    fun toggleCheckedCollapsed() = displayPrefs.toggleCollapsed(listId, CollapsedAreas.CHECKED_KEY)
 
     fun consumeError() = _error.update { null }
 

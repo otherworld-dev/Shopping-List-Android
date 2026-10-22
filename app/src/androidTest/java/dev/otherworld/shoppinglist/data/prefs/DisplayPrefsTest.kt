@@ -27,18 +27,24 @@ class DisplayPrefsTest {
     }
 
     @Test
-    fun toggleFlipsAndEmits() {
+    fun setDensityEmits() {
         val prefs = DisplayPrefs(context)
-        prefs.toggleDensity()
+        prefs.setDensity(Density.COMPACT)
         assertEquals(Density.COMPACT, prefs.density.value)
-        prefs.toggleDensity()
+        prefs.setDensity(Density.COMFY)
         assertEquals(Density.COMFY, prefs.density.value)
     }
 
     @Test
     fun choiceSurvivesRestart() {
-        DisplayPrefs(context).toggleDensity() // -> COMPACT, persisted
+        DisplayPrefs(context).setDensity(Density.COMPACT) // persisted
         // A fresh instance models the next app launch reading from disk.
         assertEquals(Density.COMPACT, DisplayPrefs(context).density.value)
+    }
+
+    @Test
+    fun foldedSectionsSurviveRestart() {
+        DisplayPrefs(context).toggleCollapsed(1L, "checked")
+        assertEquals(setOf("checked"), DisplayPrefs(context).collapsedAreas(1L).value)
     }
 }

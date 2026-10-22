@@ -1,0 +1,1 @@
+The Checked section now folds away like an area: tap its heading to hide the ticked items, and the app remembers this for each list. Typing "2 pints of milk", "1 litre orange juice" or "3 tins of tomatoes" now reads the pint, litre, loaf, tin, box or carton as the amount instead of putting it in the item's name.

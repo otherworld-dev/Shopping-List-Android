@@ -353,7 +353,15 @@ fun ItemsScreen(
                                             collapsed = row.collapsed,
                                             onToggle = { viewModel.toggleCollapsed(row.area?.id) },
                                         )
-                                        is Row.CheckedHeaderRow -> SectionHeader(stringResource(R.string.section_checked), null, row.count)
+                                        is Row.CheckedHeaderRow -> SectionHeader(
+                                            name = stringResource(R.string.section_checked),
+                                            color = null,
+                                            count = row.count,
+                                            collapsed = row.collapsed,
+                                            onToggle = viewModel::toggleCheckedCollapsed,
+                                            collapseLabel = R.string.a11y_collapse_checked,
+                                            expandLabel = R.string.a11y_expand_checked,
+                                        )
                                         is Row.ItemRowData -> {
                                             val dragModifier = if (row.draggable && state.canWrite) {
                                                 Modifier.longPressDraggableHandle(
@@ -383,7 +391,12 @@ fun ItemsScreen(
                                 }
                             }
                         }
-                        PinnedSectionHeader(rows, lazyListState, onToggleArea = { viewModel.toggleCollapsed(it) })
+                        PinnedSectionHeader(
+                            rows,
+                            lazyListState,
+                            onToggleArea = { viewModel.toggleCollapsed(it) },
+                            onToggleChecked = viewModel::toggleCheckedCollapsed,
+                        )
                     }
                 }
             }
@@ -585,7 +598,12 @@ private fun RowDivider() {
  * header it was dropped under, so pulling them out of the list would break drag-to-recategorise.
  */
 @Composable
-internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState, onToggleArea: (Long?) -> Unit) {
+internal fun PinnedSectionHeader(
+    rows: List<Row>,
+    lazyListState: LazyListState,
+    onToggleArea: (Long?) -> Unit,
+    onToggleChecked: () -> Unit,
+) {
     val pinned by remember(rows) {
         derivedStateOf {
             rows.take(lazyListState.firstVisibleItemIndex + 1)
@@ -602,7 +620,15 @@ internal fun PinnedSectionHeader(rows: List<Row>, lazyListState: LazyListState, 
                 onToggle = { onToggleArea(header.area?.id) },
             )
         is Row.CheckedHeaderRow ->
-            SectionHeader(stringResource(R.string.section_checked), null, header.count)
+            SectionHeader(
+                name = stringResource(R.string.section_checked),
+                color = null,
+                count = header.count,
+                collapsed = header.collapsed,
+                onToggle = onToggleChecked,
+                collapseLabel = R.string.a11y_collapse_checked,
+                expandLabel = R.string.a11y_expand_checked,
+            )
         else -> Unit
     }
 }
@@ -614,6 +640,8 @@ internal fun SectionHeader(
     count: Int,
     collapsed: Boolean = false,
     onToggle: (() -> Unit)? = null,
+    collapseLabel: Int = R.string.a11y_collapse_area,
+    expandLabel: Int = R.string.a11y_expand_area,
 ) {
     Row(
         Modifier
@@ -626,7 +654,7 @@ internal fun SectionHeader(
             .let { modifier ->
                 if (onToggle == null) modifier
                 else modifier.clickable(
-                    onClickLabel = stringResource(if (collapsed) R.string.a11y_expand_area else R.string.a11y_collapse_area),
+                    onClickLabel = stringResource(if (collapsed) expandLabel else collapseLabel),
                     onClick = onToggle,
                 )
             }
