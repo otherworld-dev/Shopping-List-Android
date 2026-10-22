@@ -585,4 +585,28 @@ class SmartInputTest {
         val plan = smart.planAdd("batteries", defaultAreas, emptyList(), explicitAreaId = null, defaultAreaId = 99L)
         assertNull((plan as SmartInput.AddPlan.Create).shopAreaId)
     }
+
+    // Ported from the web app's 5bcd0ea7 (British and everyday units).
+
+    @Test
+    fun `reads British and everyday units`() {
+        listOf(
+            "2 pints of milk" to ("Milk" to "2 pints"),
+            "1 litre orange juice" to ("Orange juice" to "1 litre"),
+            "2 loaves bread" to ("Bread" to "2 loaves"),
+            "3 tins of tomatoes" to ("Tomatoes" to "3 tins"),
+            "1 box cereal" to ("Cereal" to "1 box"),
+            "2 cartons eggs" to ("Eggs" to "2 cartons"),
+        ).forEach { (line, expected) ->
+            val p = smart.parseIngredient(line)
+            assertEquals(line, expected, p.name to p.quantity)
+        }
+    }
+
+    @Test
+    fun `adds pints, litres and tins across singular and plural`() {
+        assertEquals("3 pint", smart.mergeQuantities("1 pint", "2 pints"))
+        assertEquals("2 litre", smart.mergeQuantities("1 litre", "1 liter"))
+        assertEquals("3 tins", smart.mergeQuantities("2 tins", "1 tin"))
+    }
 }
