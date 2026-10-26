@@ -49,8 +49,14 @@ interface ListDao {
     fun observeLocalCount(): Flow<Int>
 }
 
+data class ListItemCount(val listId: Long, val count: Int)
+
 @Dao
 interface ItemDao {
+    /** How many items each list still has to get; lists with none aren't in it. */
+    @Query("SELECT listId, COUNT(*) AS count FROM items WHERE checked = 0 GROUP BY listId")
+    fun observeUncheckedCounts(): Flow<List<ListItemCount>>
+
     @Query("SELECT * FROM items WHERE listId = :listId ORDER BY sortOrder, id")
     fun observeByList(listId: Long): Flow<List<ItemEntity>>
 

@@ -1,7 +1,10 @@
 package dev.otherworld.shoppinglist.ui.lists
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,9 +39,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -196,6 +202,7 @@ fun ListsScreen(
                                             }
                                             ListRow(
                                                 list = row.list,
+                                                count = state.uncheckedCounts[row.list.id] ?: 0,
                                                 alt = row.alt,
                                                 onClick = { onOpenList(row.list) },
                                                 onPin = { viewModel.setPinned(row.list, !row.list.isPinned) },
@@ -230,6 +237,7 @@ fun ListsScreen(
                                         }
                                         is ListsRow.Guest -> GuestListRow(
                                             entry = row.entry,
+                                            count = state.uncheckedCounts[row.entry.list.id] ?: 0,
                                             alt = row.alt,
                                             onClick = { onOpenList(row.entry.list) },
                                             onLeave = { leaveTarget = row.entry },
@@ -295,6 +303,7 @@ private fun ListsCaption(text: String) {
 @Composable
 private fun ListRow(
     list: ShoppingListModel,
+    count: Int,
     alt: Boolean,
     onClick: () -> Unit,
     onPin: () -> Unit,
@@ -327,38 +336,41 @@ private fun ListRow(
             else -> null
         },
         trailingContent = {
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    // Pinning works on shared lists too — the pin is this user's own.
-                    DropdownMenuItem(
-                        text = { Text(stringResource(if (list.isPinned) R.string.menu_unpin_list else R.string.menu_pin_list)) },
-                        onClick = { menu = false; onPin() },
-                    )
-                    onUpload?.let { upload ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_upload_to_account)) },
-                            onClick = { menu = false; upload() },
-                        )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                UncheckedCount(count)
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
                     }
-                    if (list.isOwner) {
-                        // Sharing lives on the server, which a phone-only list isn't on.
-                        if (!list.isLocal) {
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        // Pinning works on shared lists too — the pin is this user's own.
+                        DropdownMenuItem(
+                            text = { Text(stringResource(if (list.isPinned) R.string.menu_unpin_list else R.string.menu_pin_list)) },
+                            onClick = { menu = false; onPin() },
+                        )
+                        onUpload?.let { upload ->
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_share)) },
-                                onClick = { menu = false; onShare() },
+                                text = { Text(stringResource(R.string.action_upload_to_account)) },
+                                onClick = { menu = false; upload() },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_rename)) },
-                            onClick = { menu = false; onRename() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_delete)) },
-                            onClick = { menu = false; onDelete() },
-                        )
+                        if (list.isOwner) {
+                            // Sharing lives on the server, which a phone-only list isn't on.
+                            if (!list.isLocal) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_share)) },
+                                    onClick = { menu = false; onShare() },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_rename)) },
+                                onClick = { menu = false; onRename() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_delete)) },
+                                onClick = { menu = false; onDelete() },
+                            )
+                        }
                     }
                 }
             }
@@ -366,8 +378,29 @@ private fun ListRow(
     )
 }
 
+/** The web app's sidebar bubble: how many items are still to get, hidden when there are none. */
 @Composable
-private fun GuestListRow(entry: GuestListEntry, alt: Boolean, onClick: () -> Unit, onLeave: () -> Unit) {
+private fun UncheckedCount(count: Int) {
+    if (count <= 0) return
+    val description = pluralStringResource(R.plurals.list_unchecked_count, count, count)
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minWidth = 24.dp, minHeight = 24.dp)
+            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+            .padding(horizontal = 7.dp)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            count.toString(),
+            color = MaterialTheme.colorScheme.onPrimary,
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
+@Composable
+private fun GuestListRow(entry: GuestListEntry, count: Int, alt: Boolean, onClick: () -> Unit, onLeave: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val status = when (entry.state) {
         GuestShareState.DEAD -> stringResource(R.string.guest_link_dead_short)
@@ -383,15 +416,18 @@ private fun GuestListRow(entry: GuestListEntry, alt: Boolean, onClick: () -> Uni
         headlineContent = { Text(entry.list.title) },
         supportingContent = { Text(listOfNotNull(entry.host, status).joinToString(" · ")) },
         trailingContent = {
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.menu_leave_list)) },
-                        onClick = { menu = false; onLeave() },
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                UncheckedCount(count)
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
+                    }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_leave_list)) },
+                            onClick = { menu = false; onLeave() },
+                        )
+                    }
                 }
             }
         },

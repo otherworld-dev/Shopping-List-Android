@@ -53,6 +53,10 @@ class ListRepository @Inject constructor(
     fun observeLists(): Flow<List<ShoppingListModel>> =
         listDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
+    /** Each list's unticked item count, from the items on the phone; lists with none are left out. */
+    fun observeUncheckedCounts(): Flow<Map<Long, Int>> =
+        itemDao.observeUncheckedCounts().map { rows -> rows.associate { it.listId to it.count } }
+
     /** The list with [id] as it's kept on the phone, or null when it's gone. */
     suspend fun getList(id: Long): ShoppingListModel? = listDao.getById(id)?.toModel()
 

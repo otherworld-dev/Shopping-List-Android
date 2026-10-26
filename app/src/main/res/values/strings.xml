@@ -234,6 +234,10 @@
     <string name="menu_load_keywords">Load keywords for my language</string>
     <string name="fab_new_area">New area</string>
     <string name="area_no_keywords">No keywords</string>
+    <plurals name="list_unchecked_count">
+        <item quantity="one">%d item to get</item>
+        <item quantity="other">%d items to get</item>
+    </plurals>
     <plurals name="area_keywords_count">
         <item quantity="one">%1$d keyword</item>
         <item quantity="other">%1$d keywords</item>
