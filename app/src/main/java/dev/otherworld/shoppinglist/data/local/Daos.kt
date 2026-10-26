@@ -57,6 +57,9 @@ interface ItemDao {
     @Query("SELECT listId, COUNT(*) AS count FROM items WHERE checked = 0 GROUP BY listId")
     fun observeUncheckedCounts(): Flow<List<ListItemCount>>
 
+    @Query("SELECT listId, COUNT(*) AS count FROM items WHERE checked = 0 GROUP BY listId")
+    suspend fun uncheckedCounts(): List<ListItemCount>
+
     @Query("SELECT * FROM items WHERE listId = :listId ORDER BY sortOrder, id")
     fun observeByList(listId: Long): Flow<List<ItemEntity>>
 
@@ -174,6 +177,10 @@ interface MutationDao {
 
     @Query("SELECT DISTINCT targetId FROM mutations WHERE entity = 'list'")
     suspend fun pendingListIds(): List<Long>
+
+    /** Lists with item changes still waiting to go to the server. */
+    @Query("SELECT DISTINCT listId FROM mutations WHERE entity = 'item'")
+    suspend fun listsWithPendingItems(): List<Long>
 
     @Query("SELECT DISTINCT targetId FROM mutations WHERE entity = 'item' AND listId = :listId")
     suspend fun pendingItemIds(listId: Long): List<Long>

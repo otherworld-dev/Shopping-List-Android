@@ -31,6 +31,14 @@ import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Lists whose items on the phone are out of date: the server counts a different number of unticked
+ * items than the phone has (a list never opened here has none). Lists with changes still queued
+ * are left alone, as their count is meant to differ until the queue reaches the server.
+ */
+internal fun listsWithStaleItems(server: Map<Long, Int>, local: Map<Long, Int>, pending: Set<Long>): List<Long> =
+    server.filter { (id, count) -> id !in pending && count != (local[id] ?: 0) }.keys.toList()
+
 @Singleton
 class ItemRepository @Inject constructor(
     private val service: OcsService,
@@ -57,6 +65,17 @@ class ItemRepository @Inject constructor(
      * immediately even when the items request is slow. Runs un-cancellable so navigating away
      * mid-fetch still populates the cache for next time.
      */
+    /**
+     * Fetches the items of every list whose count from the server ([serverCounts], list id to
+     * unticked items) doesn't match the phone's, so the lists screen shows the right numbers.
+     */
+    suspend fun refreshStale(serverCounts: Map<Long, Int>) {
+        if (serverCounts.isEmpty()) return
+        val local = itemDao.uncheckedCounts().associate { it.listId to it.count }
+        val pending = mutationDao.listsWithPendingItems().toSet()
+        listsWithStaleItems(serverCounts, local, pending).forEach { refresh(it) }
+    }
+
     suspend fun refresh(listId: Long) {
         if (GuestIds.isGuest(listId)) {
             guests.refreshItems(listId)

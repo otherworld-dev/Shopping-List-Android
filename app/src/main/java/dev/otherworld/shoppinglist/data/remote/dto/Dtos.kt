@@ -20,6 +20,8 @@ data class ListDto(
     val position: Int? = null,
     // Since server app 1.12.0: the area a new item goes to when no keyword places it.
     val defaultShopAreaId: Long? = null,
+    // Since server app 1.14.0, on the list of lists only: how many items are unticked.
+    val uncheckedCount: Int? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )

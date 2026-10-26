@@ -63,7 +63,11 @@ class ListRepository @Inject constructor(
     suspend fun localListCount(): Int = listDao.localLists().size
 
     /** Fetches lists from the server and reconciles them into Room without clobbering pending edits. */
-    suspend fun refresh() {
+    /**
+     * Fetches the lists. Returns each list's unticked item count as the server counted it, for
+     * servers that send one.
+     */
+    suspend fun refresh(): Map<Long, Int> {
         // A reorder queued before the fetch, or made while it's in flight (even one sent and
         // dequeued before the response), must not be overwritten by the response's stale
         // positions. Both reads are transactions so neither lands midway through a local edit.
@@ -84,6 +88,7 @@ class ListRepository @Inject constructor(
             }
         }
         sync.requestSync()
+        return dtos.mapNotNull { dto -> dto.uncheckedCount?.let { dto.id to it } }.toMap()
     }
 
     /**

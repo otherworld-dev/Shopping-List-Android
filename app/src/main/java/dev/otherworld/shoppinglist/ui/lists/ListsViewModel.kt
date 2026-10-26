@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
+import dev.otherworld.shoppinglist.data.repo.ItemRepository
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
@@ -69,6 +70,7 @@ private data class ListSources(
 @HiltViewModel
 class ListsViewModel @Inject constructor(
     private val repository: ListRepository,
+    private val items: ItemRepository,
     private val credentialStore: CredentialStore,
     private val connectivity: ConnectivityObserver,
     private val listSettings: ListSettingsRepository,
@@ -133,8 +135,9 @@ class ListsViewModel @Inject constructor(
             _error.value = null
             try {
                 if (credentialStore.current() != null) {
-                    repository.refresh()
+                    val counts = repository.refresh()
                     runCatching { listSettings.refresh() }
+                    quietly { items.refreshStale(counts) }
                 }
             } catch (e: Exception) {
                 _error.value = errorText(e)
@@ -150,7 +153,7 @@ class ListsViewModel @Inject constructor(
         if (!connectivity.isOnline.value) return
         viewModelScope.launch {
             if (credentialStore.current() != null) {
-                quietly { repository.refresh() }
+                quietly { items.refreshStale(repository.refresh()) }
                 quietly { listSettings.refreshSort() }
             }
             quietly { guests.refreshShares(force = false) }
