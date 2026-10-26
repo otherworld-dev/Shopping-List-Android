@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.guest.GuestRepository
 import dev.otherworld.shoppinglist.data.local.GuestShareEntity
 import dev.otherworld.shoppinglist.data.repo.ListOrdering
+import dev.otherworld.shoppinglist.data.repo.ItemRepository
 import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
@@ -43,6 +44,8 @@ data class ListsUiState(
     val canReorder: Boolean = false,
     /** Lists opened from share links, A to Z. */
     val guestLists: List<GuestListEntry> = emptyList(),
+    /** Unticked items per list id, as the web app's sidebar counts them; lists with none are left out. */
+    val uncheckedCounts: Map<Long, Int> = emptyMap(),
     val loggedIn: Boolean = false,
     /** Logged in, or using the app without an account. */
     val canCreate: Boolean = false,
@@ -61,11 +64,13 @@ private data class ListSources(
     val shares: List<GuestShareEntity>,
     val loggedIn: Boolean,
     val localMode: Boolean,
+    val counts: Map<Long, Int>,
 )
 
 @HiltViewModel
 class ListsViewModel @Inject constructor(
     private val repository: ListRepository,
+    private val items: ItemRepository,
     private val credentialStore: CredentialStore,
     private val connectivity: ConnectivityObserver,
     private val listSettings: ListSettingsRepository,
@@ -84,12 +89,13 @@ class ListsViewModel @Inject constructor(
 
     private val listsAndGuests = combine(
         repository.observeLists(), guests.observeShares(), credentialStore.accountFlow, localMode.enabled,
-    ) { lists, shares, account, local -> ListSources(lists, shares, account != null, local) }
+        repository.observeUncheckedCounts(),
+    ) { lists, shares, account, local, counts -> ListSources(lists, shares, account != null, local, counts) }
 
     val state: StateFlow<ListsUiState> =
         combine(
             listsAndGuests, listSettings.listSort, listSettings.listOrderSupported, _loading, _error,
-        ) { (lists, shares, loggedIn, localMode), sort, supported, loading, error ->
+        ) { (lists, shares, loggedIn, localMode, counts), sort, supported, loading, error ->
             val own = ownListsShown(lists, loggedIn)
             // With no account the phone's lists sort and reorder on the phone alone.
             val sortable = supported || !loggedIn
@@ -107,6 +113,7 @@ class ListsViewModel @Inject constructor(
                 lists = own + guestLists.map { it.list },
                 sections = if (sortable) sortLists(own, sort, Locale.getDefault()) else splitLists(own),
                 guestLists = guestLists,
+                uncheckedCounts = counts,
                 loggedIn = loggedIn,
                 canCreate = loggedIn || localMode,
                 canReorder = sortable,
@@ -128,8 +135,9 @@ class ListsViewModel @Inject constructor(
             _error.value = null
             try {
                 if (credentialStore.current() != null) {
-                    repository.refresh()
+                    val counts = repository.refresh()
                     runCatching { listSettings.refresh() }
+                    quietly { items.refreshStale(counts) }
                 }
             } catch (e: Exception) {
                 _error.value = errorText(e)
@@ -145,7 +153,7 @@ class ListsViewModel @Inject constructor(
         if (!connectivity.isOnline.value) return
         viewModelScope.launch {
             if (credentialStore.current() != null) {
-                quietly { repository.refresh() }
+                quietly { items.refreshStale(repository.refresh()) }
                 quietly { listSettings.refreshSort() }
             }
             quietly { guests.refreshShares(force = false) }
