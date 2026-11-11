@@ -1,1 +1,1 @@
-A fast, offline-friendly shopping list that syncs with your Nextcloud server.
+Companion to the Shopping List app on your Nextcloud server. Works offline.

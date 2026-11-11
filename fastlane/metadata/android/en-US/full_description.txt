@@ -1,4 +1,4 @@
-The official Android client for the Shopping List server app for Nextcloud.
+The official Android companion to the Shopping List app on your Nextcloud server. Shopping List needs installing on the server first, from Apps in Nextcloud or by whoever runs it.
 
 This is a companion app for a self-hosted Nextcloud. It requires your own Nextcloud server (v30-35) with the free "Shopping List" server app installed (github.com/otherworld-dev/Shopping-List) — it will not work on its own.
 

@@ -4,7 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.repo.ShareRepository
+import dev.otherworld.shoppinglist.data.sync.isServerAppMissing
 import dev.otherworld.shoppinglist.domain.model.Permission
 import dev.otherworld.shoppinglist.domain.model.ShareModel
 import dev.otherworld.shoppinglist.domain.share.ShareeOption
@@ -64,7 +66,9 @@ class SharingViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = errorText(e)) }
+                // A 404 here is a list the server doesn't have: not synced yet, or no server app.
+                val error = if (isServerAppMissing(e)) UiText(R.string.share_error_not_on_server) else errorText(e)
+                _state.update { it.copy(loading = false, error = error) }
             }
         }
     }
