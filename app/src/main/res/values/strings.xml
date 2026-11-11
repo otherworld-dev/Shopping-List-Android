@@ -169,6 +169,8 @@
     <string name="text_size_default">Default</string>
     <string name="text_size_large">Large</string>
     <string name="text_size_larger">Larger</string>
+    <string name="settings_screen">Screen</string>
+    <string name="settings_keep_screen_on">Keep the screen on while the app is open</string>
     <string name="settings_show_item_images">Show item images</string>
     <string name="settings_item_images_hint">Add a photo to an item from its edit window. Photos are part of the list, so everyone with access can see them. This switch only changes what you see on this phone.</string>
     <string name="settings_item_images_old_server">Your server needs Shopping List 1.9.0 or later to add photos.</string>

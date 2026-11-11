@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -54,6 +55,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             displayPrefs.textScale.collect { if (it != appliedTextScale) recreate() }
+        }
+        // The flag only holds while this window is showing, so the screen still sleeps once the app is left.
+        lifecycleScope.launch {
+            displayPrefs.keepScreenOn.collect { keep ->
+                if (keep) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
         }
         // Only on a fresh start: a recreated activity (rotation) would offer the same link again,
         // and so would Recents, which relaunches with the intent the task was first opened with.
