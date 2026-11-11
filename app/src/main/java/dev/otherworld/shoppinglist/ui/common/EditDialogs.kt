@@ -18,17 +18,24 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import dev.otherworld.shoppinglist.R
 
-/** Generic single-field text-entry dialog used for creating/renaming lists and similar. */
+/**
+ * Generic single-field text-entry dialog used for creating/renaming lists and similar.
+ *
+ * With [blankValue] the field can be left empty: it's shown as the placeholder and used as the
+ * text, so a new list doesn't have to be named (#34).
+ */
 @Composable
 fun TextEntryDialog(
     title: String,
     label: String,
     initialValue: String = "",
     confirmLabel: String = stringResource(R.string.action_save),
+    blankValue: String? = null,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var text by rememberSaveable { mutableStateOf(initialValue) }
+    val result = text.trim().ifEmpty { blankValue.orEmpty() }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -37,18 +44,19 @@ fun TextEntryDialog(
                 value = text,
                 onValueChange = { text = it },
                 label = { Text(label) },
+                placeholder = blankValue?.let { { Text(it) } },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    if (text.isNotBlank()) onConfirm(text.trim())
+                    if (result.isNotBlank()) onConfirm(result)
                 }),
             )
         },
         confirmButton = {
             TextButton(
-                onClick = { if (text.isNotBlank()) onConfirm(text.trim()) },
-                enabled = text.isNotBlank(),
+                onClick = { if (result.isNotBlank()) onConfirm(result) },
+                enabled = result.isNotBlank(),
             ) { Text(confirmLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
