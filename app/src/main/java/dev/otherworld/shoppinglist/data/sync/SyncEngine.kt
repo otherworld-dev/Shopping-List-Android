@@ -24,6 +24,7 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.updateItemBody
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
+import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +70,7 @@ class SyncEngine @Inject constructor(
     private val shareMarks: GuestShareMarks,
     private val credentialStore: CredentialStore,
     private val displayPrefs: DisplayPrefs,
+    private val appStatus: ServerAppStatus,
 ) {
     private val itemDao = db.itemDao()
     private val listDao = db.listDao()
@@ -107,7 +109,12 @@ class SyncEngine @Inject constructor(
         try {
             val now = SystemClock.elapsedRealtime()
             val blocked = mutableSetOf<Destination>()
-            if (credentialStore.current() == null) blocked += Destination.Own
+            if (credentialStore.current() == null) {
+                blocked += Destination.Own
+            } else if (mutationDao.all().any { !GuestIds.isGuest(it.listId) } && !appStatus.readyToSync()) {
+                // Without the server app every change 404s and would be dropped as deleted elsewhere.
+                blocked += Destination.Own
+            }
             shareDao.all().filter { it.state != GuestShareState.OK }.forEach { blocked += Destination.Guest(it.id) }
             backoffs.forEach { (d, b) -> if (!b.isReady(now)) blocked += d }
             while (true) {

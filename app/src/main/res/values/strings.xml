@@ -73,6 +73,8 @@
     <string name="menu_manage_tags">Manage tags</string>
     <string name="menu_log_out">Log out</string>
     <string name="fab_new_list">New list</string>
+    <string name="server_app_missing_title">Shopping List isn\'t installed on your server</string>
+    <string name="server_app_missing_message">This app needs the Shopping List app on your Nextcloud server to sync your lists. Install it from Apps in Nextcloud (search for Shopping List), or ask whoever runs your server. Your lists are kept on this phone until then.</string>
     <string name="lists_empty">No lists yet. Tap “New list” to create one.</string>
     <string name="list_shared_with_you">Shared with you</string>
     <string name="list_shared_readonly">Shared (read-only)</string>
@@ -258,6 +260,7 @@
     <!-- Sharing -->
     <string name="share_title">Share “%1$s”</string>
     <string name="section_people_groups">People &amp; groups</string>
+    <string name="share_error_not_on_server">This list isn\'t on your Nextcloud server yet, so it can\'t be shared. Check the Shopping List app is installed on your server, then refresh your lists.</string>
     <string name="share_none_yet">Not shared with anyone yet.</string>
     <string name="section_public_link">Public link</string>
     <string name="share_search_placeholder">Search users or groups…</string>

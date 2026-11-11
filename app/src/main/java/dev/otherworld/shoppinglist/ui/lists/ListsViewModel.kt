@@ -13,6 +13,8 @@ import dev.otherworld.shoppinglist.data.repo.ListRepository
 import dev.otherworld.shoppinglist.data.repo.ListSettingsRepository
 import dev.otherworld.shoppinglist.data.sync.ConnectivityObserver
 import dev.otherworld.shoppinglist.data.sync.RealtimeController
+import dev.otherworld.shoppinglist.data.sync.ServerAppStatus
+import dev.otherworld.shoppinglist.data.sync.isServerAppMissing
 import dev.otherworld.shoppinglist.domain.guest.serverLabel
 import dev.otherworld.shoppinglist.domain.model.ShoppingListModel
 import dev.otherworld.shoppinglist.domain.sort.ListSections
@@ -78,7 +80,12 @@ class ListsViewModel @Inject constructor(
     private val guests: GuestRepository,
     localMode: LocalMode,
     realtime: RealtimeController,
+    appStatus: ServerAppStatus,
 ) : ViewModel() {
+
+    /** The server has no Shopping List app, so nothing syncs until it's installed (Shopping-List#60). */
+    val serverAppMissing: StateFlow<Boolean> = appStatus.missing
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _loading = MutableStateFlow(true)
     private val _error = MutableStateFlow<UiText?>(null)
@@ -140,7 +147,8 @@ class ListsViewModel @Inject constructor(
                     quietly { items.refreshStale(counts) }
                 }
             } catch (e: Exception) {
-                _error.value = errorText(e)
+                // The missing server app has its own message above the lists.
+                _error.value = if (isServerAppMissing(e)) null else errorText(e)
             } finally {
                 quietly { guests.refreshShares(force = true) }
                 _loading.value = false

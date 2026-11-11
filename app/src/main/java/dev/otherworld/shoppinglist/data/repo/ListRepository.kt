@@ -14,6 +14,7 @@ import dev.otherworld.shoppinglist.data.sync.localChangeWins
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
 import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.PinPayload
+import dev.otherworld.shoppinglist.data.sync.ServerAppStatus
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
 import dev.otherworld.shoppinglist.data.sync.TitlePayload
@@ -41,6 +42,7 @@ class ListRepository @Inject constructor(
     private val tempIds: TempIds,
     private val json: Json,
     private val credentialStore: CredentialStore,
+    private val appStatus: ServerAppStatus,
 ) {
     private val listDao = db.listDao()
     private val itemDao = db.itemDao()
@@ -72,7 +74,7 @@ class ListRepository @Inject constructor(
         // dequeued before the response), must not be overwritten by the response's stale
         // positions. Both reads are transactions so neither lands midway through a local edit.
         val (editsBefore, queuedBefore) = db.withTransaction { orderEdits.get() to reorderQueued() }
-        val dtos = service.getLists().ocs.data
+        val dtos = appStatus.watch { service.getLists() }.ocs.data
         db.withTransaction {
             val localOrderWins = localChangeWins(queuedBefore, editsBefore, orderEdits.get(), reorderQueued())
             val pending = mutationDao.pendingListIds().toSet()
