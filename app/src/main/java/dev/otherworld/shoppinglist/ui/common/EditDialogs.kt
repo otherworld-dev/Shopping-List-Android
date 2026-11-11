@@ -21,8 +21,9 @@ import dev.otherworld.shoppinglist.R
 /**
  * Generic single-field text-entry dialog used for creating/renaming lists and similar.
  *
- * With [blankValue] the field can be left empty: it's shown as the placeholder and used as the
- * text, so a new list doesn't have to be named (#34).
+ * With [blankValue] the field can be left empty and that is used as the text, so a new list
+ * doesn't have to be named (#34). It's shown under the field while it's empty, as a placeholder
+ * only shows once a labelled field has focus.
  */
 @Composable
 fun TextEntryDialog(
@@ -45,6 +46,9 @@ fun TextEntryDialog(
                 onValueChange = { text = it },
                 label = { Text(label) },
                 placeholder = blankValue?.let { { Text(it) } },
+                supportingText = blankValue?.takeIf { text.isBlank() }?.let {
+                    { Text(stringResource(R.string.field_blank_name, it)) }
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
