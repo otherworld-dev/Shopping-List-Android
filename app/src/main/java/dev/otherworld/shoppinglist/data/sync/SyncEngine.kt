@@ -24,7 +24,6 @@ import dev.otherworld.shoppinglist.data.remote.dto.UpdateItemRequest
 import dev.otherworld.shoppinglist.data.remote.dto.updateItemBody
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateListRequest
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
-import dev.otherworld.shoppinglist.domain.guest.GuestIds
 import dev.otherworld.shoppinglist.domain.text.SmartInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -109,18 +108,26 @@ class SyncEngine @Inject constructor(
         try {
             val now = SystemClock.elapsedRealtime()
             val blocked = mutableSetOf<Destination>()
-            if (credentialStore.current() == null) {
-                blocked += Destination.Own
-            } else if (mutationDao.all().any { !GuestIds.isGuest(it.listId) } && !appStatus.readyToSync()) {
-                // Without the server app every change 404s and would be dropped as deleted elsewhere.
-                blocked += Destination.Own
-            }
+            if (credentialStore.current() == null) blocked += Destination.Own
             shareDao.all().filter { it.state != GuestShareState.OK }.forEach { blocked += Destination.Guest(it.id) }
             backoffs.forEach { (d, b) -> if (!b.isReady(now)) blocked += d }
+            var ownChecked = false
             while (true) {
                 val guestListShares = listDao.guestLists().associate { it.id to it.guestShareId }
                 val m = firstRunnable(mutationDao.all(), { destinationOf(it, guestListShares) }, blocked) ?: break
-                when (val d = destinationOf(m, guestListShares)) {
+                val d = destinationOf(m, guestListShares)
+                // Without the server app every change 404s and would be dropped as deleted
+                // elsewhere, so the own server's first change waits until it's known to be there.
+                // Asked here rather than up front, so guest changes ahead of it aren't held up.
+                if (d == Destination.Own && !ownChecked) {
+                    ownChecked = true
+                    if (!appStatus.readyToSync()) {
+                        backoff(d).recordFailure(SystemClock.elapsedRealtime())
+                        blocked += d
+                        continue
+                    }
+                }
+                when (d) {
                     Destination.Orphan -> mutationDao.deleteBySeq(m.seq)
                     else -> if (!sendOne(m, d)) blocked += d
                 }
@@ -151,7 +158,14 @@ class SyncEngine @Inject constructor(
                 if (action.backoff) backoff(d).recordFailure(now)
                 false
             }
-            FailureAction.Discard -> { mutationDao.deleteBySeq(m.seq); true } // gone on server — benign
+            // Gone on the server, benign; unless the server app itself has gone, which 404s too.
+            FailureAction.Discard -> if (d == Destination.Own && !appStatus.check()) {
+                backoff(d).recordFailure(now)
+                false
+            } else {
+                mutationDao.deleteBySeq(m.seq)
+                true
+            }
             // Server trouble, not this mutation's fault: cool down with the attempt count untouched.
             FailureAction.Transient -> { backoff(d).recordFailure(now); false }
             FailureAction.CountAttempt -> {

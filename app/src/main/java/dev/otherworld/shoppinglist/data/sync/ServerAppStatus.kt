@@ -69,15 +69,17 @@ class ServerAppStatus @Inject constructor(
     /** Whether the own server's queue can be sent; asks the server if it isn't known for this account. */
     suspend fun readyToSync(): Boolean {
         val account = credentialStore.current()?.let(ServerAppState::key) ?: return false
-        if (state.value.installed(account)) return true
-        return try {
-            watch { service.getLists() }
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Missing, offline or down: the queue waits either way and the next drain asks again.
-            false
-        }
+        return state.value.installed(account) || check()
+    }
+
+    /** Asks the server now; true only when the lists call answered. */
+    suspend fun check(): Boolean = try {
+        watch { service.getLists() }
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Missing, offline or down: the queue waits either way and a later drain asks again.
+        false
     }
 }
