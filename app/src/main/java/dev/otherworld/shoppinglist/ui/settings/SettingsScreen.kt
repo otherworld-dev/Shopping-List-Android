@@ -89,6 +89,7 @@ class SettingsViewModel @Inject constructor(
     val listSort = listSettings.listSort
     val startList = displayPrefs.startList
     val textScale = displayPrefs.textScale
+    val keepScreenOn = displayPrefs.keepScreenOn
 
     /** The lists that can be picked to open on start. */
     val startChoices: StateFlow<List<ShoppingListModel>> = combine(
@@ -141,6 +142,8 @@ class SettingsViewModel @Inject constructor(
 
     fun setTextScale(scale: TextScale) = displayPrefs.setTextScale(scale)
 
+    fun setKeepScreenOn(keep: Boolean) = displayPrefs.setKeepScreenOn(keep)
+
     fun setListSort(mode: ListSortMode) {
         viewModelScope.launch { ordering.setListSort(mode) }
     }
@@ -159,6 +162,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     val startList by viewModel.startList.collectAsStateWithLifecycle()
     val startChoices by viewModel.startChoices.collectAsStateWithLifecycle()
     val textScale by viewModel.textScale.collectAsStateWithLifecycle()
+    val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
     var pickingStartList by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
@@ -212,6 +216,9 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 Choice(stringResource(R.string.text_size_default), textScale == TextScale.DEFAULT) { viewModel.setTextScale(TextScale.DEFAULT) }
                 Choice(stringResource(R.string.text_size_large), textScale == TextScale.LARGE) { viewModel.setTextScale(TextScale.LARGE) }
                 Choice(stringResource(R.string.text_size_larger), textScale == TextScale.LARGER) { viewModel.setTextScale(TextScale.LARGER) }
+            }
+            Section(stringResource(R.string.settings_screen)) {
+                Toggle(stringResource(R.string.settings_keep_screen_on), keepScreenOn, viewModel::setKeepScreenOn)
             }
             Section(stringResource(R.string.settings_startup)) {
                 val chosenId = (startList as? StartList.Chosen)?.listId

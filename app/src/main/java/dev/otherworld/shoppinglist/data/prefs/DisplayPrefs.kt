@@ -90,6 +90,10 @@ class DisplayPrefs @Inject constructor(
     private val _showAreaHeadings = MutableStateFlow(prefs.getBoolean(KEY_AREA_HEADINGS, true))
     val showAreaHeadings: StateFlow<Boolean> = _showAreaHeadings.asStateFlow()
 
+    // Off until turned on: the phone's own screen timeout applies unless asked otherwise (#33).
+    private val _keepScreenOn = MutableStateFlow(prefs.getBoolean(KEY_KEEP_SCREEN_ON, false))
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+
     // The last list until something else is chosen: most people go back to the same list.
     private val _startList = MutableStateFlow(
         StartList.fromStorage(
@@ -122,6 +126,13 @@ class DisplayPrefs @Inject constructor(
     fun setShowImages(show: Boolean) {
         _showImages.value = show
         prefs.edit().putBoolean(KEY_SHOW_IMAGES, show).apply()
+    }
+
+    fun setKeepScreenOn(keep: Boolean) {
+        _keepScreenOn.value = keep
+        prefs.edit().apply {
+            if (keep) putBoolean(KEY_KEEP_SCREEN_ON, true) else remove(KEY_KEEP_SCREEN_ON)
+        }.apply()
     }
 
     fun setShowAreaHeadings(show: Boolean) {
@@ -237,5 +248,6 @@ class DisplayPrefs @Inject constructor(
         private const val KEY_START_LIST = "start_list_id"
         private const val KEY_AREA_HEADINGS = "area_headings"
         private const val KEY_TEXT_SCALE = "text_scale"
+        private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
     }
 }
