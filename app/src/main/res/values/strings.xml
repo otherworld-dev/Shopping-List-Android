@@ -191,6 +191,9 @@
     <string name="menu_reorder_areas">Reorder areas</string>
     <string name="menu_restore_checked">Restore checked</string>
     <string name="menu_clear_checked">Clear checked</string>
+    <string name="dialog_restore_checked_message">Put all checked-off items back on the list?</string>
+    <string name="dialog_clear_checked_message">Delete all checked-off items? This cannot be undone.</string>
+    <string name="action_restore">Restore</string>
     <string name="menu_display">Display…</string>
     <string name="display_title">Display</string>
     <string name="display_rows">Rows</string>
