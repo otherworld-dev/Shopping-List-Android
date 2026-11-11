@@ -130,6 +130,9 @@ fun ItemsScreen(
     var showReorderAreas by rememberSaveable { mutableStateOf(false) }
     var showDisplay by rememberSaveable { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
+    // Restore checked and Clear checked act on every ticked item at once, so they ask first (#62).
+    var confirmUncheckAll by remember { mutableStateOf(false) }
+    var confirmClearChecked by remember { mutableStateOf(false) }
     // The add box doubles as a search: what's typed narrows the list until it's added or cleared.
     var addText by rememberSaveable { mutableStateOf("") }
     val filter = remember(addText) { viewModel.searchKey(addText) }
@@ -287,8 +290,8 @@ fun ItemsScreen(
                                 onClick = { overflow = false; showReorderAreas = true },
                             )
                         }
-                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; viewModel.uncheckAll() })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; viewModel.clearChecked() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; confirmUncheckAll = true })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; confirmClearChecked = true })
                     }
                     if (state.isGuest) {
                         HorizontalDivider()
@@ -480,6 +483,25 @@ fun ItemsScreen(
             confirmLabel = stringResource(R.string.action_leave),
             onConfirm = { confirmLeave = false; viewModel.leave(onLeft) },
             onDismiss = { confirmLeave = false },
+        )
+    }
+
+    if (confirmUncheckAll) {
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.menu_restore_checked),
+            message = stringResource(R.string.dialog_restore_checked_message),
+            confirmLabel = stringResource(R.string.action_restore),
+            onConfirm = { confirmUncheckAll = false; viewModel.uncheckAll() },
+            onDismiss = { confirmUncheckAll = false },
+        )
+    }
+
+    if (confirmClearChecked) {
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.menu_clear_checked),
+            message = stringResource(R.string.dialog_clear_checked_message),
+            onConfirm = { confirmClearChecked = false; viewModel.clearChecked() },
+            onDismiss = { confirmClearChecked = false },
         )
     }
 }
