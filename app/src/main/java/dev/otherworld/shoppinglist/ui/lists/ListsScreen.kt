@@ -60,6 +60,8 @@ import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
 import dev.otherworld.shoppinglist.ui.common.asString
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import java.time.LocalDate
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -257,6 +259,8 @@ fun ListsScreen(
             title = stringResource(R.string.dialog_new_list_title),
             label = stringResource(R.string.dialog_list_name_label),
             confirmLabel = stringResource(R.string.action_create),
+            // Left empty, a new list is named after today, like a dated paper list (#34).
+            blankValue = remember { defaultListName(LocalDate.now(), Locale.getDefault()) },
             onConfirm = { showCreate = false; viewModel.createList(it) },
             onDismiss = { showCreate = false },
         )
