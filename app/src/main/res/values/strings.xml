@@ -51,6 +51,9 @@
     <string name="login_error_unreachable">Couldn\'t reach the server. Check the address and your connection, then try again.</string>
     <string name="login_error_cert_mismatch">The server\'s certificate doesn\'t match the address you entered.</string>
     <string name="login_error_tls">Couldn\'t make a secure connection. Check the server\'s TLS configuration and try again.</string>
+    <string name="login_error_client_cert_needed">This server asks for a client certificate. Install yours on this phone, then choose it here.</string>
+    <string name="login_error_client_cert_refused">The server didn\'t accept that certificate.</string>
+    <string name="login_choose_client_cert">Choose a certificate</string>
     <string name="login_error_failed">Couldn\'t log in, check the address and try again.</string>
 
     <!-- Certificate approval prompt -->

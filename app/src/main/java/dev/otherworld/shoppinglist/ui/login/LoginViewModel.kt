@@ -9,6 +9,8 @@ import dev.otherworld.shoppinglist.data.auth.LocalMode
 import dev.otherworld.shoppinglist.data.auth.LoginFlowV2Client
 import dev.otherworld.shoppinglist.data.tls.AcceptedCertStore
 import dev.otherworld.shoppinglist.data.tls.CertInfo
+import dev.otherworld.shoppinglist.data.tls.ClientCertRequests
+import dev.otherworld.shoppinglist.data.tls.TofuTls
 import dev.otherworld.shoppinglist.data.tls.UntrustedCertHolder
 import dev.otherworld.shoppinglist.data.tls.describeCert
 import dev.otherworld.shoppinglist.ui.common.UiText
@@ -30,7 +32,15 @@ data class LoginUiState(
     val launchUrl: String? = null,
     val error: UiText? = null,
     val pendingCert: CertInfo? = null,
+    /** The server asked for a client certificate and the sign-in failed: offer the system picker. */
+    val clientCert: ClientCertPrompt? = null,
 )
+
+/**
+ * A server behind mutual TLS. [open] asks the screen to open the picker straight away, which it
+ * does the first time; after a refusal or a cancelled picker the user opens it from a button.
+ */
+data class ClientCertPrompt(val host: String, val port: Int, val current: String?, val open: Boolean)
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -39,6 +49,8 @@ class LoginViewModel @Inject constructor(
     private val acceptedCerts: AcceptedCertStore,
     private val certHolder: UntrustedCertHolder,
     private val localModeStore: LocalMode,
+    private val clientCertRequests: ClientCertRequests,
+    private val tofuTls: TofuTls,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
@@ -58,7 +70,8 @@ class LoginViewModel @Inject constructor(
         lastServer = server
         pendingRaw = null
         certHolder.consume() // drop any stale record from a previous attempt
-        _state.update { it.copy(connecting = true, error = null, pendingCert = null) }
+        clientCertRequests.consume()
+        _state.update { it.copy(connecting = true, error = null, pendingCert = null, clientCert = null) }
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             try {
@@ -97,6 +110,7 @@ class LoginViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 val untrusted = certHolder.consume()
+                val certRequest = clientCertRequests.consume()
                 if (untrusted != null && e is javax.net.ssl.SSLException) {
                     // The server presented a certificate the device doesn't trust (or one
                     // that doesn't cover this hostname): offer the accept prompt instead of
@@ -109,6 +123,19 @@ class LoginViewModel @Inject constructor(
                         it.copy(
                             connecting = false, awaiting = false, error = null,
                             pendingCert = describeCert(host, port, untrusted.certificate, untrusted.hostnameMismatch),
+                        )
+                    }
+                } else if (certRequest != null && (certRequest.sent == null || e is javax.net.ssl.SSLException)) {
+                    // The server asked for a client certificate. With none to give, open the
+                    // picker: a server turns that away with a TLS alert or with an HTTP error,
+                    // so any failure counts. When it turned down the one the app gave, which
+                    // only a TLS failure says, say so and let the user pick another.
+                    val refused = certRequest.sent != null
+                    _state.update {
+                        it.copy(
+                            connecting = false, awaiting = false,
+                            error = if (refused) UiText(R.string.login_error_client_cert_refused) else null,
+                            clientCert = ClientCertPrompt(certRequest.host, certRequest.port, certRequest.sent, open = !refused),
                         )
                     }
                 } else {
@@ -128,6 +155,21 @@ class LoginViewModel @Inject constructor(
         pendingRaw = null
         _state.update { it.copy(pendingCert = null) }
         login(lastServer)
+    }
+
+    fun onClientCertPickerOpened() = _state.update { s -> s.copy(clientCert = s.clientCert?.copy(open = false)) }
+
+    /** The system picker's answer, on a binder thread: an alias, or null when cancelled. */
+    fun onClientCertChosen(alias: String?) {
+        viewModelScope.launch {
+            val prompt = _state.value.clientCert ?: return@launch
+            if (alias == null) {
+                _state.update { it.copy(error = UiText(R.string.login_error_client_cert_needed)) }
+                return@launch
+            }
+            tofuTls.useClientCert(prompt.host, alias)
+            login(lastServer)
+        }
     }
 
     fun dismissPendingCert() {

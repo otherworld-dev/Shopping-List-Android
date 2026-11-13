@@ -1,5 +1,9 @@
 package dev.otherworld.shoppinglist.ui.login
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.security.KeyChain
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +49,22 @@ fun LoginScreen(onJoin: () -> Unit, viewModel: LoginViewModel = hiltViewModel())
     val localMode by viewModel.localMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var server by rememberSaveable { mutableStateOf("") }
+
+    // The system certificate picker, for a server behind mutual TLS. It names the server itself.
+    fun pickClientCert() {
+        val prompt = state.clientCert ?: return
+        val activity = context.findActivity() ?: return
+        KeyChain.choosePrivateKeyAlias(
+            activity, viewModel::onClientCertChosen, null, null, prompt.host, prompt.port, prompt.current,
+        )
+    }
+
+    LaunchedEffect(state.clientCert?.open) {
+        if (state.clientCert?.open == true) {
+            viewModel.onClientCertPickerOpened()
+            pickClientCert()
+        }
+    }
 
     // Open the Custom Tab once the login URL is issued.
     LaunchedEffect(state.launchUrl) {
@@ -103,6 +123,9 @@ fun LoginScreen(onJoin: () -> Unit, viewModel: LoginViewModel = hiltViewModel())
                     Spacer(Modifier.height(8.dp))
                     Text(it.asString(), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                 }
+                if (state.clientCert != null) {
+                    TextButton(onClick = ::pickClientCert) { Text(stringResource(R.string.login_choose_client_cert)) }
+                }
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = { viewModel.login(server) },
@@ -143,4 +166,10 @@ fun LoginScreen(onJoin: () -> Unit, viewModel: LoginViewModel = hiltViewModel())
             onDismiss = viewModel::dismissPendingCert,
         )
     }
+}
+
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
