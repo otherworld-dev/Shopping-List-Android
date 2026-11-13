@@ -124,6 +124,14 @@ interface OcsService {
         @Body body: MoveItemRequest,
     )
 
+    /** Puts a copy of the item on another list, which files it as a move does (#29). */
+    @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/copy")
+    suspend fun copyItem(
+        @Path("listId") listId: Long,
+        @Path("id") id: Long,
+        @Body body: MoveItemRequest,
+    )
+
     /** Attaches a photo, replacing any earlier one (since server 1.9.0); one file in "image". */
     @Multipart
     @POST("ocs/v2.php/apps/shopping_list/api/v1/lists/{listId}/items/{id}/image")

@@ -25,10 +25,14 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -49,6 +53,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -70,6 +75,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -124,12 +130,16 @@ fun ItemsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val copySupported by viewModel.copySupported.collectAsStateWithLifecycle()
     PollEffect { viewModel.poll() }
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
     var showReorderAreas by rememberSaveable { mutableStateOf(false) }
     var showDisplay by rememberSaveable { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
+    // Restore checked and Clear checked act on every ticked item at once, so they ask first (#62).
+    var confirmUncheckAll by remember { mutableStateOf(false) }
+    var confirmClearChecked by remember { mutableStateOf(false) }
     // The add box doubles as a search: what's typed narrows the list until it's added or cleared.
     var addText by rememberSaveable { mutableStateOf("") }
     val filter = remember(addText) { viewModel.searchKey(addText) }
@@ -287,8 +297,8 @@ fun ItemsScreen(
                                 onClick = { overflow = false; showReorderAreas = true },
                             )
                         }
-                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; viewModel.uncheckAll() })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; viewModel.clearChecked() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_restore_checked)) }, onClick = { overflow = false; confirmUncheckAll = true })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_clear_checked)) }, onClick = { overflow = false; confirmClearChecked = true })
                     }
                     if (state.isGuest) {
                         HorizontalDivider()
@@ -412,8 +422,10 @@ fun ItemsScreen(
             item = item,
             areas = state.areas,
             moveTargets = state.otherLists,
+            canCopy = copySupported,
             onSave = { name, qty, areaId -> editTarget = null; viewModel.editItem(item, name, qty, areaId) },
             onMove = { target -> editTarget = null; viewModel.moveItem(item, target) },
+            onCopy = { target -> editTarget = null; viewModel.copyItem(item, target) },
             onDelete = { editTarget = null; viewModel.deleteItem(item) },
             onDismiss = { editTarget = null },
             photo = if (photos.canEdit) {
@@ -480,6 +492,25 @@ fun ItemsScreen(
             confirmLabel = stringResource(R.string.action_leave),
             onConfirm = { confirmLeave = false; viewModel.leave(onLeft) },
             onDismiss = { confirmLeave = false },
+        )
+    }
+
+    if (confirmUncheckAll) {
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.menu_restore_checked),
+            message = stringResource(R.string.dialog_restore_checked_message),
+            confirmLabel = stringResource(R.string.action_restore),
+            onConfirm = { confirmUncheckAll = false; viewModel.uncheckAll() },
+            onDismiss = { confirmUncheckAll = false },
+        )
+    }
+
+    if (confirmClearChecked) {
+        dev.otherworld.shoppinglist.ui.common.ConfirmDialog(
+            title = stringResource(R.string.menu_clear_checked),
+            message = stringResource(R.string.dialog_clear_checked_message),
+            onConfirm = { confirmClearChecked = false; viewModel.clearChecked() },
+            onDismiss = { confirmClearChecked = false },
         )
     }
 }
@@ -903,8 +934,10 @@ private fun ItemEditDialog(
     item: ItemModel,
     areas: List<ShopAreaModel>,
     moveTargets: List<ShoppingListModel>,
+    canCopy: Boolean,
     onSave: (String, String?, Long?) -> Unit,
     onMove: (ShoppingListModel) -> Unit,
+    onCopy: (ShoppingListModel) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
     photo: (@Composable () -> Unit)? = null,
@@ -912,8 +945,9 @@ private fun ItemEditDialog(
     var name by rememberSaveable { mutableStateOf(item.name) }
     var quantity by rememberSaveable { mutableStateOf(item.quantity.orEmpty()) }
     var areaId by remember { mutableStateOf(item.shopAreaId) }
-    var areaMenu by remember { mutableStateOf(false) }
+    var pickingArea by remember { mutableStateOf(false) }
     var moveMenu by remember { mutableStateOf(false) }
+    var copyMenu by remember { mutableStateOf(false) }
     val areaName = areas.firstOrNull { it.id == areaId }?.name ?: stringResource(R.string.item_no_area)
 
     androidx.compose.material3.AlertDialog(
@@ -939,24 +973,28 @@ private fun ItemEditDialog(
                 Spacer(Modifier.size(8.dp))
                 // A list with no areas (always so for one kept on the phone) has nothing to pick.
                 if (areas.isNotEmpty()) {
-                    Box {
-                        TextButton(onClick = { areaMenu = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
-                        DropdownMenu(expanded = areaMenu, onDismissRequest = { areaMenu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.item_no_area)) }, onClick = { areaId = null; areaMenu = false })
-                            areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
-                                DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaMenu = false })
+                    TextButton(onClick = { pickingArea = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
+                }
+                // Moves or copies right away when a target is picked (online-only), like the web
+                // app's per-row "Move to list" and "Copy to list" menus; neither is part of Save.
+                if (moveTargets.isNotEmpty()) {
+                    Row {
+                        Box {
+                            TextButton(onClick = { moveMenu = true }) { Text(stringResource(R.string.item_move_to_list)) }
+                            DropdownMenu(expanded = moveMenu, onDismissRequest = { moveMenu = false }) {
+                                moveTargets.forEach { list ->
+                                    DropdownMenuItem(text = { Text(list.title) }, onClick = { moveMenu = false; onMove(list) })
+                                }
                             }
                         }
-                    }
-                }
-                // Moves right away when a target is picked (online-only), like the web app's
-                // per-row "Move to list" menu — it isn't part of Save.
-                if (moveTargets.isNotEmpty()) {
-                    Box {
-                        TextButton(onClick = { moveMenu = true }) { Text(stringResource(R.string.item_move_to_list)) }
-                        DropdownMenu(expanded = moveMenu, onDismissRequest = { moveMenu = false }) {
-                            moveTargets.forEach { list ->
-                                DropdownMenuItem(text = { Text(list.title) }, onClick = { moveMenu = false; onMove(list) })
+                        if (canCopy) {
+                            Box {
+                                TextButton(onClick = { copyMenu = true }) { Text(stringResource(R.string.item_copy_to_list)) }
+                                DropdownMenu(expanded = copyMenu, onDismissRequest = { copyMenu = false }) {
+                                    moveTargets.forEach { list ->
+                                        DropdownMenuItem(text = { Text(list.title) }, onClick = { copyMenu = false; onCopy(list) })
+                                    }
+                                }
                             }
                         }
                     }
@@ -976,6 +1014,61 @@ private fun ItemEditDialog(
             }
         },
     )
+
+    if (pickingArea) {
+        AreaPickerDialog(
+            areas = areas,
+            selectedId = areaId,
+            onSelect = {
+                areaId = it
+                pickingArea = false
+            },
+            onDismiss = { pickingArea = false },
+        )
+    }
+}
+
+/**
+ * The areas to put an item in, as a dialog rather than a drop-down: a long list of areas (#32)
+ * ran a drop-down off the bottom of the screen, where a dialog keeps clear of the system bars
+ * and scrolls.
+ */
+@Composable
+private fun AreaPickerDialog(
+    areas: List<ShopAreaModel>,
+    selectedId: Long?,
+    onSelect: (Long?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.item_area_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+                AreaChoice(stringResource(R.string.item_no_area), selectedId == null) { onSelect(null) }
+                areas.sortedWith(compareBy({ it.sortOrder }, { it.id })).forEach { area ->
+                    AreaChoice(area.name, selectedId == area.id) { onSelect(area.id) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+@Composable
+private fun AreaChoice(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+    }
 }
 
 @Composable

@@ -1,7 +1,10 @@
 package dev.otherworld.shoppinglist.ui.lists
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,9 +39,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +60,8 @@ import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
 import dev.otherworld.shoppinglist.ui.common.asString
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import java.time.LocalDate
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +76,7 @@ fun ListsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val accountLabel by viewModel.accountLabel.collectAsStateWithLifecycle()
+    val serverAppMissing by viewModel.serverAppMissing.collectAsStateWithLifecycle()
     dev.otherworld.shoppinglist.ui.common.PollEffect { viewModel.poll() }
     var menuOpen by remember { mutableStateOf(false) }
     var showCreate by rememberSaveable { mutableStateOf(false) }
@@ -140,100 +149,106 @@ fun ListsScreen(
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                state.loading && state.lists.isEmpty() -> {
-                    CircularProgressIndicator(Modifier.align(Alignment.Center))
-                }
-                state.error != null && state.lists.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(state.error!!.asString(), textAlign = TextAlign.Center)
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (serverAppMissing) ServerAppMissingBanner()
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                when {
+                    state.loading && state.lists.isEmpty() -> {
+                        CircularProgressIndicator(Modifier.align(Alignment.Center))
                     }
-                }
-                state.lists.isEmpty() -> {
-                    Text(
-                        stringResource(R.string.lists_empty),
-                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                else -> {
-                    androidx.compose.material3.Surface(
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .widthIn(max = 680.dp)
-                            .fillMaxHeight()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    ) {
-                        var rows by remember { mutableStateOf(buildListRows(state.sections, state.guestLists)) }
-                        var dragging by remember { mutableStateOf(false) }
-                        LaunchedEffect(state.sections, state.guestLists, dragging) {
-                            if (!dragging) rows = buildListRows(state.sections, state.guestLists)
+                    state.error != null && state.lists.isEmpty() -> {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(state.error!!.asString(), textAlign = TextAlign.Center)
                         }
-                        val lazyListState = rememberLazyListState()
-                        val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
-                            moveWithinSection(rows, from.index, to.index)?.let { rows = it }
-                        }
-                        val moveUpLabel = stringResource(R.string.a11y_move_up)
-                        val moveDownLabel = stringResource(R.string.a11y_move_down)
-                        LazyColumn(state = lazyListState, modifier = Modifier.fillMaxSize()) {
-                            items(rows, key = { it.key }) { row ->
-                                ReorderableItem(reorderState, key = row.key, enabled = row is ListsRow.Entry && state.canReorder) { _ ->
-                                    when (row) {
-                                        is ListsRow.Caption -> ListsCaption(stringResource(row.textRes))
-                                        is ListsRow.Entry -> {
-                                            val order = sectionOrder(rows, row.section)
-                                            val index = order.indexOf(row.list.id)
-                                            fun move(delta: Int) {
-                                                val moved = order.toMutableList().apply { add(index + delta, removeAt(index)) }
-                                                viewModel.reorderSection(row.section, moved)
+                    }
+                    state.lists.isEmpty() -> {
+                        Text(
+                            stringResource(R.string.lists_empty),
+                            modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    else -> {
+                        androidx.compose.material3.Surface(
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .widthIn(max = 680.dp)
+                                .fillMaxHeight()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            var rows by remember { mutableStateOf(buildListRows(state.sections, state.guestLists)) }
+                            var dragging by remember { mutableStateOf(false) }
+                            LaunchedEffect(state.sections, state.guestLists, dragging) {
+                                if (!dragging) rows = buildListRows(state.sections, state.guestLists)
+                            }
+                            val lazyListState = rememberLazyListState()
+                            val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+                                moveWithinSection(rows, from.index, to.index)?.let { rows = it }
+                            }
+                            val moveUpLabel = stringResource(R.string.a11y_move_up)
+                            val moveDownLabel = stringResource(R.string.a11y_move_down)
+                            LazyColumn(state = lazyListState, modifier = Modifier.fillMaxSize()) {
+                                items(rows, key = { it.key }) { row ->
+                                    ReorderableItem(reorderState, key = row.key, enabled = row is ListsRow.Entry && state.canReorder) { _ ->
+                                        when (row) {
+                                            is ListsRow.Caption -> ListsCaption(stringResource(row.textRes))
+                                            is ListsRow.Entry -> {
+                                                val order = sectionOrder(rows, row.section)
+                                                val index = order.indexOf(row.list.id)
+                                                fun move(delta: Int) {
+                                                    val moved = order.toMutableList().apply { add(index + delta, removeAt(index)) }
+                                                    viewModel.reorderSection(row.section, moved)
+                                                }
+                                                ListRow(
+                                                    list = row.list,
+                                                    count = state.uncheckedCounts[row.list.id] ?: 0,
+                                                    alt = row.alt,
+                                                    onClick = { onOpenList(row.list) },
+                                                    onPin = { viewModel.setPinned(row.list, !row.list.isPinned) },
+                                                    onRename = { renameTarget = row.list },
+                                                    onDelete = { deleteTarget = row.list },
+                                                    onShare = { onShareList(row.list) },
+                                                    canShare = !serverAppMissing,
+                                                    // A phone-only list can go to the account once there is one.
+                                                    onUpload = if (state.loggedIn && row.list.isLocal) {
+                                                        { viewModel.uploadList(row.list.id) }
+                                                    } else null,
+                                                    handleModifier = if (state.canReorder) {
+                                                        Modifier.longPressDraggableHandle(
+                                                            onDragStarted = { dragging = true },
+                                                            onDragStopped = {
+                                                                // Held until the save completes so the row can't flash
+                                                                // back to the pre-drop order while a sort switch to
+                                                                // Custom is still in flight.
+                                                                viewModel.reorderSection(row.section, sectionOrder(rows, row.section)) {
+                                                                    dragging = false
+                                                                }
+                                                            },
+                                                        )
+                                                    } else {
+                                                        Modifier
+                                                    },
+                                                    // Screen readers can't drag, so moving is also offered as actions.
+                                                    moveActions = if (state.canReorder) buildList {
+                                                        if (index > 0) add(CustomAccessibilityAction(moveUpLabel) { move(-1); true })
+                                                        if (index < order.size - 1) add(CustomAccessibilityAction(moveDownLabel) { move(1); true })
+                                                    } else emptyList(),
+                                                )
                                             }
-                                            ListRow(
-                                                list = row.list,
+                                            is ListsRow.Guest -> GuestListRow(
+                                                entry = row.entry,
+                                                count = state.uncheckedCounts[row.entry.list.id] ?: 0,
                                                 alt = row.alt,
-                                                onClick = { onOpenList(row.list) },
-                                                onPin = { viewModel.setPinned(row.list, !row.list.isPinned) },
-                                                onRename = { renameTarget = row.list },
-                                                onDelete = { deleteTarget = row.list },
-                                                onShare = { onShareList(row.list) },
-                                                // A phone-only list can go to the account once there is one.
-                                                onUpload = if (state.loggedIn && row.list.isLocal) {
-                                                    { viewModel.uploadList(row.list.id) }
-                                                } else null,
-                                                handleModifier = if (state.canReorder) {
-                                                    Modifier.longPressDraggableHandle(
-                                                        onDragStarted = { dragging = true },
-                                                        onDragStopped = {
-                                                            // Held until the save completes so the row can't flash
-                                                            // back to the pre-drop order while a sort switch to
-                                                            // Custom is still in flight.
-                                                            viewModel.reorderSection(row.section, sectionOrder(rows, row.section)) {
-                                                                dragging = false
-                                                            }
-                                                        },
-                                                    )
-                                                } else {
-                                                    Modifier
-                                                },
-                                                // Screen readers can't drag, so moving is also offered as actions.
-                                                moveActions = if (state.canReorder) buildList {
-                                                    if (index > 0) add(CustomAccessibilityAction(moveUpLabel) { move(-1); true })
-                                                    if (index < order.size - 1) add(CustomAccessibilityAction(moveDownLabel) { move(1); true })
-                                                } else emptyList(),
+                                                onClick = { onOpenList(row.entry.list) },
+                                                onLeave = { leaveTarget = row.entry },
                                             )
                                         }
-                                        is ListsRow.Guest -> GuestListRow(
-                                            entry = row.entry,
-                                            alt = row.alt,
-                                            onClick = { onOpenList(row.entry.list) },
-                                            onLeave = { leaveTarget = row.entry },
-                                        )
                                     }
                                 }
                             }
@@ -249,6 +264,8 @@ fun ListsScreen(
             title = stringResource(R.string.dialog_new_list_title),
             label = stringResource(R.string.dialog_list_name_label),
             confirmLabel = stringResource(R.string.action_create),
+            // Left empty, a new list is named after today, like a dated paper list (#34).
+            blankValue = remember { defaultListName(LocalDate.now(), Locale.getDefault()) },
             onConfirm = { showCreate = false; viewModel.createList(it) },
             onDismiss = { showCreate = false },
         )
@@ -292,15 +309,43 @@ private fun ListsCaption(text: String) {
     )
 }
 
+/** Nothing syncs until the server has the Shopping List app (Shopping-List#60). */
+@Composable
+private fun ServerAppMissingBanner() {
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                stringResource(R.string.server_app_missing_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                stringResource(R.string.server_app_missing_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ListRow(
     list: ShoppingListModel,
+    count: Int,
     alt: Boolean,
     onClick: () -> Unit,
     onPin: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onShare: () -> Unit,
+    canShare: Boolean = true,
     onUpload: (() -> Unit)? = null,
     handleModifier: Modifier = Modifier,
     moveActions: List<CustomAccessibilityAction> = emptyList(),
@@ -327,38 +372,42 @@ private fun ListRow(
             else -> null
         },
         trailingContent = {
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    // Pinning works on shared lists too — the pin is this user's own.
-                    DropdownMenuItem(
-                        text = { Text(stringResource(if (list.isPinned) R.string.menu_unpin_list else R.string.menu_pin_list)) },
-                        onClick = { menu = false; onPin() },
-                    )
-                    onUpload?.let { upload ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_upload_to_account)) },
-                            onClick = { menu = false; upload() },
-                        )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                UncheckedCount(count)
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
                     }
-                    if (list.isOwner) {
-                        // Sharing lives on the server, which a phone-only list isn't on.
-                        if (!list.isLocal) {
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        // Pinning works on shared lists too — the pin is this user's own.
+                        DropdownMenuItem(
+                            text = { Text(stringResource(if (list.isPinned) R.string.menu_unpin_list else R.string.menu_pin_list)) },
+                            onClick = { menu = false; onPin() },
+                        )
+                        onUpload?.let { upload ->
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_share)) },
-                                onClick = { menu = false; onShare() },
+                                text = { Text(stringResource(R.string.action_upload_to_account)) },
+                                onClick = { menu = false; upload() },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_rename)) },
-                            onClick = { menu = false; onRename() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_delete)) },
-                            onClick = { menu = false; onDelete() },
-                        )
+                        if (list.isOwner) {
+                            // Sharing lives on the server, which a phone-only list isn't on, and nor is
+                            // one still waiting to sync (a temporary id below zero).
+                            if (canShare && !list.isLocal && list.id > 0) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_share)) },
+                                    onClick = { menu = false; onShare() },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_rename)) },
+                                onClick = { menu = false; onRename() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_delete)) },
+                                onClick = { menu = false; onDelete() },
+                            )
+                        }
                     }
                 }
             }
@@ -366,8 +415,29 @@ private fun ListRow(
     )
 }
 
+/** The web app's sidebar bubble: how many items are still to get, hidden when there are none. */
 @Composable
-private fun GuestListRow(entry: GuestListEntry, alt: Boolean, onClick: () -> Unit, onLeave: () -> Unit) {
+private fun UncheckedCount(count: Int) {
+    if (count <= 0) return
+    val description = pluralStringResource(R.plurals.list_unchecked_count, count, count)
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minWidth = 24.dp, minHeight = 24.dp)
+            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+            .padding(horizontal = 7.dp)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            count.toString(),
+            color = MaterialTheme.colorScheme.onPrimary,
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
+@Composable
+private fun GuestListRow(entry: GuestListEntry, count: Int, alt: Boolean, onClick: () -> Unit, onLeave: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val status = when (entry.state) {
         GuestShareState.DEAD -> stringResource(R.string.guest_link_dead_short)
@@ -383,15 +453,18 @@ private fun GuestListRow(entry: GuestListEntry, alt: Boolean, onClick: () -> Uni
         headlineContent = { Text(entry.list.title) },
         supportingContent = { Text(listOfNotNull(entry.host, status).joinToString(" · ")) },
         trailingContent = {
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.menu_leave_list)) },
-                        onClick = { menu = false; onLeave() },
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                UncheckedCount(count)
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_list_options))
+                    }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_leave_list)) },
+                            onClick = { menu = false; onLeave() },
+                        )
+                    }
                 }
             }
         },

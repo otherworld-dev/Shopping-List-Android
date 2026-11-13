@@ -14,6 +14,7 @@ import dev.otherworld.shoppinglist.data.sync.localChangeWins
 import dev.otherworld.shoppinglist.data.sync.MutationEntities
 import dev.otherworld.shoppinglist.data.sync.MutationTypes
 import dev.otherworld.shoppinglist.data.sync.PinPayload
+import dev.otherworld.shoppinglist.data.sync.ServerAppStatus
 import dev.otherworld.shoppinglist.data.sync.SyncEngine
 import dev.otherworld.shoppinglist.data.sync.TempIds
 import dev.otherworld.shoppinglist.data.sync.TitlePayload
@@ -41,6 +42,7 @@ class ListRepository @Inject constructor(
     private val tempIds: TempIds,
     private val json: Json,
     private val credentialStore: CredentialStore,
+    private val appStatus: ServerAppStatus,
 ) {
     private val listDao = db.listDao()
     private val itemDao = db.itemDao()
@@ -53,18 +55,26 @@ class ListRepository @Inject constructor(
     fun observeLists(): Flow<List<ShoppingListModel>> =
         listDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
+    /** Each list's unticked item count, from the items on the phone; lists with none are left out. */
+    fun observeUncheckedCounts(): Flow<Map<Long, Int>> =
+        itemDao.observeUncheckedCounts().map { rows -> rows.associate { it.listId to it.count } }
+
     /** The list with [id] as it's kept on the phone, or null when it's gone. */
     suspend fun getList(id: Long): ShoppingListModel? = listDao.getById(id)?.toModel()
 
     suspend fun localListCount(): Int = listDao.localLists().size
 
     /** Fetches lists from the server and reconciles them into Room without clobbering pending edits. */
-    suspend fun refresh() {
+    /**
+     * Fetches the lists. Returns each list's unticked item count as the server counted it, for
+     * servers that send one.
+     */
+    suspend fun refresh(): Map<Long, Int> {
         // A reorder queued before the fetch, or made while it's in flight (even one sent and
         // dequeued before the response), must not be overwritten by the response's stale
         // positions. Both reads are transactions so neither lands midway through a local edit.
         val (editsBefore, queuedBefore) = db.withTransaction { orderEdits.get() to reorderQueued() }
-        val dtos = service.getLists().ocs.data
+        val dtos = appStatus.watch { service.getLists() }.ocs.data
         db.withTransaction {
             val localOrderWins = localChangeWins(queuedBefore, editsBefore, orderEdits.get(), reorderQueued())
             val pending = mutationDao.pendingListIds().toSet()
@@ -80,6 +90,7 @@ class ListRepository @Inject constructor(
             }
         }
         sync.requestSync()
+        return dtos.mapNotNull { dto -> dto.uncheckedCount?.let { dto.id to it } }.toMap()
     }
 
     /**

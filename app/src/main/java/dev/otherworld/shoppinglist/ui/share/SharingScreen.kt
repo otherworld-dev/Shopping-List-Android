@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +52,7 @@ import dev.otherworld.shoppinglist.domain.model.ShareType
 import dev.otherworld.shoppinglist.domain.share.ShareeOption
 import dev.otherworld.shoppinglist.ui.common.TextEntryDialog
 import dev.otherworld.shoppinglist.ui.common.asString
+import dev.otherworld.shoppinglist.ui.theme.AppSwitch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -226,7 +226,7 @@ private fun PersonShareRow(
             )
         }
         Text(stringResource(R.string.label_edit), style = MaterialTheme.typography.labelMedium)
-        Switch(checked = share.canWrite, onCheckedChange = onToggleWrite)
+        AppSwitch(checked = share.canWrite, onCheckedChange = onToggleWrite)
         IconButton(onClick = onRemove) {
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.cd_remove), tint = MaterialTheme.colorScheme.error)
         }
@@ -259,13 +259,13 @@ private fun LinkSection(
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.label_can_edit), modifier = Modifier.weight(1f))
-                Switch(checked = link.canWrite, onCheckedChange = onToggleWrite)
+                AppSwitch(checked = link.canWrite, onCheckedChange = onToggleWrite)
             }
             // Only from servers that offer the choice (1.10.0 and later); guests' names always show.
             link.showNames?.let { showNames ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.label_show_member_names), modifier = Modifier.weight(1f))
-                    Switch(checked = showNames, onCheckedChange = onToggleShowNames)
+                    AppSwitch(checked = showNames, onCheckedChange = onToggleShowNames)
                 }
             }
             if (code != null) {

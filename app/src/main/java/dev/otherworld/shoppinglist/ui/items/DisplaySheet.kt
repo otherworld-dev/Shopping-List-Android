@@ -20,7 +20,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,6 +32,7 @@ import dev.otherworld.shoppinglist.R
 import dev.otherworld.shoppinglist.data.prefs.Density
 import dev.otherworld.shoppinglist.domain.sort.BoughtSort
 import dev.otherworld.shoppinglist.domain.sort.OpenSort
+import dev.otherworld.shoppinglist.ui.theme.AppSwitch
 
 /** What the Display sheet shows: the phone's own choices for how every list looks. */
 internal data class DisplayChoices(
@@ -148,7 +148,7 @@ private fun SheetSwitch(label: String, checked: Boolean, enabled: Boolean = true
             color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
             modifier = Modifier.weight(1f),
         )
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+        AppSwitch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
