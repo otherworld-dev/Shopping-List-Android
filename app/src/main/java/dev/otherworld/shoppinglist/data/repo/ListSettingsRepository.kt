@@ -8,6 +8,7 @@ import dev.otherworld.shoppinglist.data.local.MutationEntity
 import dev.otherworld.shoppinglist.data.remote.OcsService
 import dev.otherworld.shoppinglist.data.remote.dto.ItemImagesCaps
 import dev.otherworld.shoppinglist.data.remote.dto.UpdateSettingsRequest
+import dev.otherworld.shoppinglist.data.remote.dto.supportsCopyItem
 import dev.otherworld.shoppinglist.data.remote.dto.supportsDefaultArea
 import dev.otherworld.shoppinglist.data.remote.dto.supportsGuestNames
 import dev.otherworld.shoppinglist.data.remote.dto.supportsItemImages
@@ -69,6 +70,11 @@ class ListSettingsRepository @Inject constructor(
     /** Whether a list can have a default area (server app 1.12.0 and later). */
     val defaultAreaSupported: StateFlow<Boolean> = _defaultAreaSupported.asStateFlow()
 
+    private val _copyItemSupported = MutableStateFlow(prefs.getBoolean(KEY_COPY_ITEM, false))
+
+    /** Whether the server can copy an item to another list (#29). */
+    val copyItemSupported: StateFlow<Boolean> = _copyItemSupported.asStateFlow()
+
     private val ownName = OptimisticSetting(prefs.getBoolean(KEY_SHOW_OWN_NAME, false)) {
         prefs.edit().putBoolean(KEY_SHOW_OWN_NAME, it).apply()
     }
@@ -98,15 +104,18 @@ class ListSettingsRepository @Inject constructor(
         val images = caps.supportsItemImages()
         val names = caps.supportsGuestNames()
         val defaultArea = caps.supportsDefaultArea()
+        val copyItem = caps.supportsCopyItem()
         _supported.value = supported
         _imagesSupported.value = images
         _guestNamesSupported.value = names
         _defaultAreaSupported.value = defaultArea
+        _copyItemSupported.value = copyItem
         prefs.edit()
             .putBoolean(KEY_SUPPORTED, supported)
             .putBoolean(KEY_IMAGES, images)
             .putBoolean(KEY_NAMES, names)
             .putBoolean(KEY_DEFAULT_AREA, defaultArea)
+            .putBoolean(KEY_COPY_ITEM, copyItem)
             .putLong(
                 KEY_MAX_UPLOAD,
                 caps.shoppingList?.itemImages?.maxUploadBytes ?: ItemImagesCaps.DEFAULT_MAX_UPLOAD_BYTES,
@@ -181,6 +190,7 @@ class ListSettingsRepository @Inject constructor(
         _imagesSupported.value = false
         _guestNamesSupported.value = false
         _defaultAreaSupported.value = false
+        _copyItemSupported.value = false
         ownName.reset()
         _ownUserId.value = null
     }
@@ -199,6 +209,7 @@ class ListSettingsRepository @Inject constructor(
         const val KEY_MAX_UPLOAD = "item_images_max_upload"
         const val KEY_NAMES = "guest_names_supported"
         const val KEY_DEFAULT_AREA = "default_area_supported"
+        const val KEY_COPY_ITEM = "copy_item_supported"
         const val KEY_SHOW_OWN_NAME = "show_own_name"
         const val KEY_USER_ID = "user_id"
     }

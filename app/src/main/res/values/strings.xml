@@ -20,6 +20,8 @@
     <string name="error_item_not_synced">This item hasn\'t synced yet, try again in a moment.</string>
     <string name="error_move_offline">You\'re offline, moving items needs a connection.</string>
     <string name="error_move_failed">Couldn\'t move the item.</string>
+    <string name="error_copy_offline">You\'re offline, copying items needs a connection.</string>
+    <string name="error_copy_failed">Couldn\'t copy the item.</string>
     <string name="error_photo_offline">You\'re offline, adding or removing photos needs a connection.</string>
     <string name="error_photo_too_large">That photo is too large.</string>
     <string name="error_photo_unsupported">That file isn\'t a picture the server can use.</string>
@@ -27,6 +29,7 @@
     <string name="error_photo_remove_failed">Couldn\'t remove the photo.</string>
     <string name="error_no_camera">There\'s no camera app on this phone.</string>
     <string name="notice_item_moved">Moved “%1$s” to %2$s</string>
+    <string name="notice_item_copied">Copied “%1$s” to %2$s</string>
     <string name="notice_keywords_added">Keywords for your language added</string>
 
     <!-- Content descriptions -->
@@ -236,6 +239,7 @@
     <string name="item_area_label">Area: %1$s</string>
     <string name="item_area_title">Area</string>
     <string name="item_move_to_list">Move to list</string>
+    <string name="item_copy_to_list">Copy to list</string>
 
     <!-- Shop areas -->
     <string name="areas_title">Shop areas</string>
