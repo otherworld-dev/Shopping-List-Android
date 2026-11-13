@@ -130,6 +130,7 @@ fun ItemsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val copySupported by viewModel.copySupported.collectAsStateWithLifecycle()
     PollEffect { viewModel.poll() }
     var overflow by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ItemModel?>(null) }
@@ -421,8 +422,10 @@ fun ItemsScreen(
             item = item,
             areas = state.areas,
             moveTargets = state.otherLists,
+            canCopy = copySupported,
             onSave = { name, qty, areaId -> editTarget = null; viewModel.editItem(item, name, qty, areaId) },
             onMove = { target -> editTarget = null; viewModel.moveItem(item, target) },
+            onCopy = { target -> editTarget = null; viewModel.copyItem(item, target) },
             onDelete = { editTarget = null; viewModel.deleteItem(item) },
             onDismiss = { editTarget = null },
             photo = if (photos.canEdit) {
@@ -931,8 +934,10 @@ private fun ItemEditDialog(
     item: ItemModel,
     areas: List<ShopAreaModel>,
     moveTargets: List<ShoppingListModel>,
+    canCopy: Boolean,
     onSave: (String, String?, Long?) -> Unit,
     onMove: (ShoppingListModel) -> Unit,
+    onCopy: (ShoppingListModel) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
     photo: (@Composable () -> Unit)? = null,
@@ -942,6 +947,7 @@ private fun ItemEditDialog(
     var areaId by remember { mutableStateOf(item.shopAreaId) }
     var pickingArea by remember { mutableStateOf(false) }
     var moveMenu by remember { mutableStateOf(false) }
+    var copyMenu by remember { mutableStateOf(false) }
     val areaName = areas.firstOrNull { it.id == areaId }?.name ?: stringResource(R.string.item_no_area)
 
     androidx.compose.material3.AlertDialog(
@@ -969,14 +975,26 @@ private fun ItemEditDialog(
                 if (areas.isNotEmpty()) {
                     TextButton(onClick = { pickingArea = true }) { Text(stringResource(R.string.item_area_label, areaName)) }
                 }
-                // Moves right away when a target is picked (online-only), like the web app's
-                // per-row "Move to list" menu — it isn't part of Save.
+                // Moves or copies right away when a target is picked (online-only), like the web
+                // app's per-row "Move to list" and "Copy to list" menus; neither is part of Save.
                 if (moveTargets.isNotEmpty()) {
-                    Box {
-                        TextButton(onClick = { moveMenu = true }) { Text(stringResource(R.string.item_move_to_list)) }
-                        DropdownMenu(expanded = moveMenu, onDismissRequest = { moveMenu = false }) {
-                            moveTargets.forEach { list ->
-                                DropdownMenuItem(text = { Text(list.title) }, onClick = { moveMenu = false; onMove(list) })
+                    Row {
+                        Box {
+                            TextButton(onClick = { moveMenu = true }) { Text(stringResource(R.string.item_move_to_list)) }
+                            DropdownMenu(expanded = moveMenu, onDismissRequest = { moveMenu = false }) {
+                                moveTargets.forEach { list ->
+                                    DropdownMenuItem(text = { Text(list.title) }, onClick = { moveMenu = false; onMove(list) })
+                                }
+                            }
+                        }
+                        if (canCopy) {
+                            Box {
+                                TextButton(onClick = { copyMenu = true }) { Text(stringResource(R.string.item_copy_to_list)) }
+                                DropdownMenu(expanded = copyMenu, onDismissRequest = { copyMenu = false }) {
+                                    moveTargets.forEach { list ->
+                                        DropdownMenuItem(text = { Text(list.title) }, onClick = { copyMenu = false; onCopy(list) })
+                                    }
+                                }
                             }
                         }
                     }

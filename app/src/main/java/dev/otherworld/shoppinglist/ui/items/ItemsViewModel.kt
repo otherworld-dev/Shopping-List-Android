@@ -345,6 +345,26 @@ class ItemsViewModel @Inject constructor(
         }
     }
 
+    /** Whether the server can copy an item to another list, so the dialog offers it (#29). */
+    val copySupported: StateFlow<Boolean> = listSettings.copyItemSupported
+
+    /** Puts a copy of [item] on [target], keeping this one. Online-direct, refused like a move. */
+    fun copyItem(item: ItemModel, target: ShoppingListModel) {
+        if (item.id < 0) {
+            _error.value = UiText(R.string.error_item_not_synced)
+            return
+        }
+        if (!connectivity.isOnline.value) {
+            _error.value = UiText(R.string.error_copy_offline)
+            return
+        }
+        viewModelScope.launch {
+            runCatching { repository.copyItem(item, target.id) }
+                .onSuccess { _notice.value = UiText(R.string.notice_item_copied, item.name, target.title) }
+                .onFailure { _error.value = UiText(R.string.error_copy_failed) }
+        }
+    }
+
     /** A file for the camera app to save a new photo into. */
     fun newCameraTarget(): Uri = photoRepository.newCameraTarget()
 

@@ -69,3 +69,6 @@ fun CapabilitiesBlock.supportsGuestNames(): Boolean = shoppingList?.features?.co
 
 /** Whether a list can have a default area for items no keyword places (server app 1.12.0 and later). */
 fun CapabilitiesBlock.supportsDefaultArea(): Boolean = shoppingList?.features?.contains("default-area") == true
+
+/** Whether the server can copy an item to another list (#29). */
+fun CapabilitiesBlock.supportsCopyItem(): Boolean = shoppingList?.features?.contains("copy-item") == true

@@ -236,6 +236,14 @@ class ItemRepository @Inject constructor(
         itemDao.deleteById(item.id)
     }
 
+    /**
+     * Puts a copy of an item on another list (#29), leaving this one as it is. Online-direct for
+     * the same reason as [moveItem]; the target list picks the copy up on its next refresh.
+     */
+    suspend fun copyItem(item: ItemModel, targetListId: Long) {
+        service.copyItem(item.listId, item.id, MoveItemRequest(targetListId))
+    }
+
     suspend fun clearChecked(listId: Long) {
         // The public link API has no bulk endpoints; each item is deleted on its own.
         if (GuestIds.isGuest(listId)) {
